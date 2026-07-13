@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Reports — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">Reports & Analytics Exporter</h2>
+        <p class="text-muted-custom">Extract, analyze, and download detailed operational and financial statements as CSV.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Filters Card -->
+    <div class="col-12 col-lg-3">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Report Queries</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <form action="{{ url_for('dashboard.reports') }}" method="POST" id="reportsForm">
+                    <div class="mb-3">
+                        <label for="report_type" class="form-label form-label-custom">Select Report Type</label>
+                        <select class="form-select form-control-custom" id="report_type" name="report_type" required>
+                            <option value="sales" {% if report_type == 'sales' %}selected{% endif %}>Sales History Log</option>
+                            <option value="profit" {% if report_type == 'profit' %}selected{% endif %}>Margin & Profits Summary</option>
+                            <option value="stock" {% if report_type == 'stock' %}selected{% endif %}>Stock Deliveries Log</option>
+                            <option value="due" {% if report_type == 'due' %}selected{% endif %}>Customer Due Balances</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3 date-range-group">
+                        <label for="start_date" class="form-label form-label-custom">Start Date</label>
+                        <input type="date" class="form-control form-control-custom" id="start_date" name="start_date" value="{{ start_date }}">
+                    </div>
+                    
+                    <div class="mb-3 date-range-group">
+                        <label for="end_date" class="form-label form-label-custom">End Date</label>
+                        <input type="date" class="form-control form-control-custom" id="end_date" name="end_date" value="{{ end_date }}">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary-custom w-100 mb-2">
+                        <i class="bi bi-play-circle me-1"></i> Run Report Query
+                    </button>
+                    
+                    <button type="button" id="exportCSVBtn" class="btn btn-outline-secondary w-100 border-0" style="background-color: rgba(94, 94, 94, 0.05); color: var(--text-primary);">
+                        <i class="bi bi-download me-1"></i> Download CSV File
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Data Preview Card -->
+    <div class="col-12 col-lg-9">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">Report Preview</h5>
+                <span class="badge bg-secondary">{{ preview_data | length }} Rows Returned</span>
+            </div>
+            
+            <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            {% for header in headers %}
+                            <th>{{ header }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if preview_data %}
+                            {% for row in preview_data %}
+                            <tr>
+                                {% for cell in row %}
+                                <td class="{% if loop.index == 1 %}fw-semibold{% endif %}">{{ cell }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="{{ headers | length if headers else 1 }}" class="empty-state text-center py-5">
+                                    <div class="empty-state-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
+                                    <p class="text-muted-custom mb-0">No records found for the selected criteria.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const reportTypeSelect = document.getElementById('report_type');
+        const dateRangeInputs = document.querySelectorAll('.date-range-group');
+        const exportCSVBtn = document.getElementById('exportCSVBtn');
+        const form = document.getElementById('reportsForm');
+        
+        // Hide date fields if report type is customer due aging (which doesn't require date filters)
+        const toggleDateVisibility = () => {
+            if (reportTypeSelect.value === 'due') {
+                dateRangeInputs.forEach(el => el.style.display = 'none');
+            } else {
+                dateRangeInputs.forEach(el => el.style.display = 'block');
+            }
+        };
+        
+        reportTypeSelect.addEventListener('change', toggleDateVisibility);
+        toggleDateVisibility(); // Initial check
+        
+        // CSV Export handler
+        exportCSVBtn.addEventListener('click', () => {
+            const formData = new FormData(form);
+            const queryParams = new URLSearchParams();
+            
+            queryParams.append('export', 'csv');
+            for (const [key, value] of formData.entries()) {
+                queryParams.append(key, value);
+            }
+            
+            // Redirect to download trigger
+            window.location.href = `{{ url_for('dashboard.reports') }}?${queryParams.toString()}`;
+        });
+    });
+</script>
+{% endblock %}

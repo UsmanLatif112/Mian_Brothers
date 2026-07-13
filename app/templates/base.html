@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Fuel Station Manager{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Tom Select (searchable dropdowns) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
+    <!-- Custom Theme Styling -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="{% if not current_user.is_authenticated %}no-navbar{% endif %}">
+
+    {% if current_user.is_authenticated %}
+    <!-- Sticky Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand navbar-brand-custom" href="{{ url_for('dashboard.index') }}">
+                <i class="bi bi-fuel-pump-fill text-primary"></i>
+                <span>OctaneFlow</span>
+            </a>
+            
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}">
+                            <i class="bi bi-cart3 me-1"></i> Sales
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}">
+                            <i class="bi bi-box-seam me-1"></i> Inventory
+                        </a>
+                    </li>
+                    {% if current_user.role == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}">
+                            <i class="bi bi-tags me-1"></i> Pricing
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}">
+                            <i class="bi bi-people me-1"></i> Customers
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'sms' %}active{% endif %}" href="{{ url_for('sms.index') }}">
+                            <i class="bi bi-chat-left-text me-1"></i> SMS
+                        </a>
+                    </li>
+                </ul>
+                
+                <div class="d-flex align-items-center gap-3">
+                    <!-- Light/Dark theme toggle button -->
+                    <button class="theme-toggle-btn" id="theme-toggle" title="Toggle theme">
+                        <i class="bi bi-moon-stars-fill"></i>
+                    </button>
+                    
+                    <!-- User Account Dropdown -->
+                    <div class="dropdown">
+                        <button class="btn dropdown-toggle d-flex align-items-center gap-2 p-1 border-0" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false" style="color: var(--text-primary);">
+                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white" style="width: 32px; height: 32px; font-weight: 600; font-size: 0.9rem;">
+                                {{ current_user.name[0] | upper }}
+                            </div>
+                            <div class="text-start d-none d-md-block">
+                                <small class="d-block lh-1" style="font-weight: 500;">{{ current_user.name }}</small>
+                                <span class="badge badge-custom {% if current_user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %}" style="font-size: 0.65rem; padding: 2px 6px;">{{ current_user.role | capitalize }}</span>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-2 mt-2" aria-labelledby="userMenu" style="background-color: var(--card-bg); border: var(--card-border) !important;">
+                            {% if current_user.role == 'admin' %}
+                            <li>
+                                <a class="dropdown-item rounded py-2 px-3" href="{{ url_for('auth.staff_accounts') }}" style="color: var(--text-primary); font-size: 0.9rem;">
+                                    <i class="bi bi-person-gear me-2"></i> Manage Staff
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider" style="border-color: var(--border-color);"></li>
+                            {% endif %}
+                            <li>
+                                <a class="dropdown-item rounded py-2 px-3 text-danger" href="{{ url_for('auth.logout') }}" style="font-size: 0.9rem;">
+                                    <i class="bi bi-box-arrow-right me-2"></i> Logout
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Main Content Grid -->
+    <div class="container py-4">
+        <!-- Flash notifications -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row mb-3 justify-content-center">
+                    <div class="col-12 col-lg-10">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category if category != 'danger' else 'danger' }} alert-dismissible fade show border-0 shadow-sm" role="alert" style="border-radius: 10px;">
+                                <i class="bi {% if category == 'success' %}bi-check-circle-fill{% elif category == 'danger' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Render page content -->
+        <main class="animate-fade-in">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Modals Block -->
+    {% block modals %}{% endblock %}
+
+    <!-- Bootstrap 5 Bundle JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <!-- Custom theme functionality -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

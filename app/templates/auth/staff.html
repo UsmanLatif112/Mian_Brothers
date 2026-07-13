@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Staff — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-12 col-md-6">
+        <h2 class="mb-1 fw-bold">Manage Staff Accounts</h2>
+        <p class="text-muted-custom mb-0">Create, modify, and monitor operator access permissions.</p>
+    </div>
+    <div class="col-12 col-md-6 text-md-end mt-3 mt-md-0">
+        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createStaffModal">
+            <i class="bi bi-person-plus me-2"></i> Add Staff Operator
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <span>Active Operators</span>
+                <span class="badge bg-secondary">{{ users | length }} total</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white" style="width: 32px; height: 32px; font-weight: 500;">
+                                        {{ user.name[0] | upper }}
+                                    </div>
+                                    <span class="fw-semibold">{{ user.name }}</span>
+                                </div>
+                            </td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.phone or '-' }}</td>
+                            <td>
+                                <span class="badge badge-custom {% if user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %}">
+                                    {{ user.role | capitalize }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-custom {% if user.status == 'active' %}badge-success-custom{% else %}badge-danger-custom{% endif %}">
+                                    {{ user.status | capitalize }}
+                                </span>
+                            </td>
+                            <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td class="text-end">
+                                <div class="btn-group gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary border-0 edit-user-btn" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#editStaffModal"
+                                            data-id="{{ user.id }}"
+                                            data-name="{{ user.name }}"
+                                            data-email="{{ user.email }}"
+                                            data-phone="{{ user.phone or '' }}"
+                                            data-role="{{ user.role }}">
+                                        <i class="bi bi-pencil-square" title="Edit"></i>
+                                    </button>
+                                    
+                                    {% if user.id != current_user.id %}
+                                    <form action="{{ url_for('auth.staff_accounts') }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to change this operator\'s access?');">
+                                        <input type="hidden" name="action" value="toggle_status">
+                                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                                        <button type="submit" class="btn btn-sm {% if user.status == 'active' %}btn-outline-danger{% else %}btn-outline-success{% endif %} border-0">
+                                            {% if user.status == 'active' %}
+                                            <i class="bi bi-person-x" title="Disable Account"></i>
+                                            {% else %}
+                                            <i class="bi bi-person-check" title="Enable Account"></i>
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- CREATE STAFF MODAL -->
+<div class="modal fade" id="createStaffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" style="background-color: var(--card-bg); border: var(--card-border); color: var(--text-primary);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Add Staff Operator</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(var(--theme-invert, 0));"></button>
+            </div>
+            <form action="{{ url_for('auth.staff_accounts') }}" method="POST">
+                <input type="hidden" name="action" value="create">
+                <div class="modal-body py-0">
+                    <div class="mb-3">
+                        <label for="create_name" class="form-label form-label-custom">Full Name</label>
+                        <input type="text" class="form-control form-control-custom" id="create_name" name="name" required placeholder="John Doe">
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_email" class="form-label form-label-custom">Email Address</label>
+                        <input type="email" class="form-control form-control-custom" id="create_email" name="email" required placeholder="john@fuel.com">
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_phone" class="form-label form-label-custom">Phone Number</label>
+                        <input type="text" class="form-control form-control-custom" id="create_phone" name="phone" placeholder="+1234567890">
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_role" class="form-label form-label-custom">Role</label>
+                        <select class="form-select form-control-custom" id="create_role" name="role">
+                            <option value="staff" selected>Staff Operator (Enter sales, inventory, readings)</option>
+                            <option value="admin">Administrator (Full Access)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_password" class="form-label form-label-custom">Password</label>
+                        <input type="password" class="form-control form-control-custom" id="create_password" name="password" required placeholder="••••••••">
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-secondary border-0" data-bs-dismiss="modal" style="background-color: rgba(94, 94, 94, 0.15); color: var(--text-primary);">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Create Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT STAFF MODAL -->
+<div class="modal fade" id="editStaffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" style="background-color: var(--card-bg); border: var(--card-border); color: var(--text-primary);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Edit Staff Operator</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(var(--theme-invert, 0));"></button>
+            </div>
+            <form action="{{ url_for('auth.staff_accounts') }}" method="POST">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="user_id" id="edit_user_id">
+                <div class="modal-body py-0">
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label form-label-custom">Full Name</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_email" class="form-label form-label-custom">Email Address (Cannot change)</label>
+                        <input type="email" class="form-control form-control-custom" id="edit_email" readonly disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_phone" class="form-label form-label-custom">Phone Number</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_phone" name="phone">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_role" class="form-label form-label-custom">Role</label>
+                        <select class="form-select form-control-custom" id="edit_role" name="role">
+                            <option value="staff">Staff Operator</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_password" class="form-label form-label-custom">Update Password (Leave blank to keep current)</label>
+                        <input type="password" class="form-control form-control-custom" id="edit_password" name="password" placeholder="••••••••">
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-secondary border-0" data-bs-dismiss="modal" style="background-color: rgba(94, 94, 94, 0.15); color: var(--text-primary);">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Wire up data injection into the Edit Staff Modal
+        const editButtons = document.querySelectorAll('.edit-user-btn');
+        editButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                const email = btn.getAttribute('data-email');
+                const phone = btn.getAttribute('data-phone');
+                const role = btn.getAttribute('data-role');
+                
+                document.getElementById('edit_user_id').value = id;
+                document.getElementById('edit_name').value = name;
+                document.getElementById('edit_email').value = email;
+                document.getElementById('edit_phone').value = phone;
+                document.getElementById('edit_role').value = role;
+                document.getElementById('edit_password').value = ''; // clear password field
+            });
+        });
+        
+        // Handle inverting closes on dark mode
+        const observer = new MutationObserver(() => {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.documentElement.style.setProperty('--theme-invert', isDark ? '1' : '0');
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        document.documentElement.style.setProperty('--theme-invert', document.documentElement.getAttribute('data-theme') === 'dark' ? '1' : '0');
+    });
+</script>
+{% endblock %}

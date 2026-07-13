@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">Price Management</h2>
+        <p class="text-muted-custom">Update sale prices for fuel and all inventory items. Changes are logged for history.</p>
+    </div>
+</div>
+
+<!-- Current Fuel Prices -->
+<div class="row g-4 mb-4">
+    {% for ft in fuel_types %}
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card card-premium metric-card {% if ft.name | lower == 'petrol' %}stock{% else %}profit{% endif %} h-100">
+            <div class="card-body card-body-premium d-flex align-items-center justify-content-between">
+                <div class="metric-content">
+                    <span class="metric-label text-muted-custom text-uppercase">Current {{ ft.name }}</span>
+                    <h2 class="metric-value fw-bold mb-0">{{ current_fuel_prices[ft.id] | money }} <span class="fs-6 fw-normal text-muted-custom">/ {{ ft.unit }}</span></h2>
+                </div>
+                <div class="metric-icon"><i class="bi bi-fuel-pump text-muted-custom"></i></div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row g-4">
+    <!-- Update Price Form -->
+    <div class="col-12 col-lg-4">
+        <div class="card card-premium h-100">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Update Price</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <form action="{{ url_for('pricing.index') }}" method="POST" id="price-form">
+                    <div class="mb-3">
+                        <label for="item_key" class="form-label form-label-custom">Select Item</label>
+                        <select class="form-select form-control-custom js-search-item" id="item_key" name="item_key" required
+                                data-placeholder="Search fuel or inventory item...">
+                            <option value="">Search fuel or inventory item...</option>
+                            <optgroup label="Fuel">
+                                {% for ft in fuel_types %}
+                                <option value="fuel:{{ ft.id }}" data-price="{{ current_fuel_prices[ft.id] }}" data-unit="{{ ft.unit }}">
+                                    Fuel — {{ ft.name }} ({{ current_fuel_prices[ft.id] | money }}/{{ ft.unit }})
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% if shop_items %}
+                            <optgroup label="Inventory Items">
+                                {% for item in shop_items %}
+                                <option value="item:{{ item.id }}" data-price="{{ item.sale_price }}" data-unit="unit">
+                                    {{ item.category | capitalize }} — {{ item.name }}{% if item.company %} ({{ item.company }}){% endif %} ({{ item.sale_price | money }})
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="price" class="form-label form-label-custom">New Sale Price <span id="price-unit-hint" class="text-muted-custom fw-normal"></span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="price" name="price" placeholder="0.00" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100 mt-2">
+                        <i class="bi bi-check-circle me-1"></i> Apply & Log Price
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Price History List -->
+    <div class="col-12 col-lg-8">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Price Revision Log</h5>
+            </div>
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Item</th>
+                            <th>Price</th>
+                            <th>Effective Date</th>
+                            <th>Updated By</th>
+                            <th>Logged At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if price_history %}
+                            {% for record in price_history %}
+                            <tr>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ record.category }}</span></td>
+                                <td class="fw-semibold">{{ record.item_name }}</td>
+                                <td class="fw-bold text-success">{{ record.price | money }}{% if record.unit and record.unit != 'unit' %} / {{ record.unit }}{% endif %}</td>
+                                <td>{{ record.effective_date.strftime('%Y-%m-%d') if record.effective_date else '-' }}</td>
+                                <td>{{ record.updated_by }}</td>
+                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ record.logged_at.strftime('%Y-%m-%d %H:%M:%S') if record.logged_at else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="empty-state text-center py-4">
+                                    <div class="empty-state-icon"><i class="bi bi-clock-history"></i></div>
+                                    <p class="text-muted-custom">No price revisions logged yet.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inventory Item Prices Table -->
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Inventory Item Prices</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Item Name</th>
+                            <th>Company</th>
+                            <th>Type</th>
+                            <th>Cost Price</th>
+                            <th>Sale Price</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if shop_items %}
+                            {% for item in shop_items %}
+                            <tr>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ item.category }}</span></td>
+                                <td class="fw-semibold">{{ item.name }}</td>
+                                <td>{{ item.company or '-' }}</td>
+                                <td>{{ item.item_type or '-' }}</td>
+                                <td>{{ item.cost_price | money }}</td>
+                                <td class="fw-bold text-success">{{ item.sale_price | money }}</td>
+                                <td>{{ item.quantity }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="empty-state text-center py-4">
+                                    <p class="text-muted-custom mb-0">No inventory items found.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const selectEl = document.getElementById('item_key');
+    const priceInput = document.getElementById('price');
+    const unitHint = document.getElementById('price-unit-hint');
+
+    const syncPriceFromSelection = () => {
+        const opt = selectEl.options[selectEl.selectedIndex];
+        if (!opt || !opt.value) {
+            priceInput.value = '';
+            unitHint.textContent = '';
+            return;
+        }
+        const price = opt.dataset.price;
+        const unit = opt.dataset.unit;
+        if (price !== undefined) priceInput.value = Number(price).toFixed(2);
+        unitHint.textContent = unit && unit !== 'unit' ? `(per ${unit})` : '(per unit)';
+    };
+
+    selectEl.addEventListener('change', syncPriceFromSelection);
+});
+</script>
+{% endblock %}

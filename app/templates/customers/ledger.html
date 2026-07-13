@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Ledger: {{ customer.name }} — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-12 col-md-8">
+        <div class="d-flex align-items-center gap-3">
+            <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary border-0 px-2 py-1" title="Back to Customers">
+                <i class="bi bi-arrow-left fs-4"></i>
+            </a>
+            <div>
+                <h2 class="mb-1 fw-bold">Customer Ledger Statement</h2>
+                <p class="text-muted-custom mb-0">Detailed accounting history for <strong>{{ customer.name }}</strong>.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Balance Due Stat Card -->
+    <div class="col-12 col-md-4">
+        <div class="card card-premium metric-card {% if customer.current_balance_due > 0 %}credit{% else %}profit{% endif %}">
+            <div class="card-body card-body-premium">
+                <h6 class="text-muted-custom text-uppercase mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Current Balance Due</h6>
+                <h2 class="fw-bold mb-0">
+                    {{ customer.current_balance_due | money }}
+                </h2>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Credit Limit Stat Card -->
+    <div class="col-12 col-md-4">
+        <div class="card card-premium metric-card stock">
+            <div class="card-body card-body-premium">
+                <h6 class="text-muted-custom text-uppercase mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Credit Limit Available</h6>
+                <h2 class="fw-bold mb-0">
+                    {% if customer.credit_limit %}
+                        {{ customer.credit_limit | money }}
+                        {% set remaining = customer.credit_limit - customer.current_balance_due %}
+                        <small class="d-block text-muted-custom fs-6 fw-normal mt-1">Remaining: {{ remaining | money }}</small>
+                    {% else %}
+                        No Limit
+                        <small class="d-block text-muted-custom fs-6 fw-normal mt-1">Unlimited credit access</small>
+                    {% endif %}
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact Info Card -->
+    <div class="col-12 col-md-4">
+        <div class="card card-premium h-100">
+            <div class="card-body card-body-premium d-flex flex-column justify-content-center">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-telephone text-muted-custom"></i>
+                    <span>{{ customer.phone or 'No Phone' }}</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-geo-alt text-muted-custom"></i>
+                    <span class="text-truncate">{{ customer.address or 'No Billing Address' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Record Payment Form -->
+    <div class="col-12 col-lg-4">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Record Payment / Credit Clear</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <form action="{{ url_for('customers.ledger', customer_id=customer.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="amount_paid" class="form-label form-label-custom">Payment Amount (PKR)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0.01" max="{{ customer.current_balance_due if customer.current_balance_due > 0 else '' }}" class="form-control form-control-custom" id="amount_paid" name="amount_paid" placeholder="500.00" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="method" class="form-label form-label-custom">Payment Method</label>
+                        <select class="form-select form-control-custom" id="method" name="method" required>
+                            <option value="Cash" selected>Cash Payment</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cheque">Bank Cheque</option>
+                            <option value="Mobile Wallet">UPI / Mobile Pay</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="note" class="form-label form-label-custom">Note / Remarks</label>
+                        <input type="text" class="form-control form-control-custom" id="note" name="note" placeholder="Check number, trans ref...">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary-custom w-100 mt-2">
+                        <i class="bi bi-wallet2 me-1"></i> Settle Balance
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Ledger Log Timeline -->
+    <div class="col-12 col-lg-8">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">Account Statement</h5>
+                <button class="btn btn-sm btn-outline-secondary border-0" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i> Print Ledger
+                </button>
+            </div>
+            
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date / Time</th>
+                            <th>Reference ID</th>
+                            <th>Description</th>
+                            <th class="text-end">Debit (+)</th>
+                            <th class="text-end">Credit (-)</th>
+                            <th class="text-end">Running Bal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if ledger_entries %}
+                            {% for entry in ledger_entries %}
+                            <tr>
+                                <td style="font-size: 0.85rem;" class="text-muted-custom">
+                                    {{ entry.date.strftime('%Y-%m-%d %H:%M') }}
+                                </td>
+                                <td class="fw-semibold">{{ entry.ref_id }}</td>
+                                <td>
+                                    {{ entry.desc }}
+                                    {% if entry.pay_type %}
+                                    <span class="badge bg-secondary ms-1 text-uppercase" style="font-size: 0.6rem;">{{ entry.pay_type }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-danger fw-semibold">
+                                    {% if entry.debit > 0 %}
+                                    +{{ entry.debit | money }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-success fw-semibold">
+                                    {% if entry.credit > 0 %}
+                                    -{{ entry.credit | money }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td class="text-end fw-bold">
+                                    {{ entry.running_balance | money }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="empty-state text-center py-5">
+                                    <div class="empty-state-icon"><i class="bi bi-journal-check"></i></div>
+                                    <p class="text-muted-custom">No transaction records registered for this account.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+
+{% block title %}Sales — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">Meter Sale</h2>
+        <p class="text-muted-custom mb-0">
+            Enter Reading 1 and Reading 2 for each machine. Stock updates from meter difference only.
+            Item Sale: fuel is ledger-only; shop items reduce stock (Paid or Unpaid).
+        </p>
+    </div>
+</div>
+
+<!-- Today's totals -->
+<div class="row g-4 mb-4 row-cols-1 row-cols-sm-2 row-cols-lg-4">
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Petrol Sale Today</span>
+                <h2 class="metric-value fw-bold mb-0">
+                    {% if petrol_total %}{{ "{:,.2f}".format(petrol_total.liters) }} L{% else %}0.00 L{% endif %}
+                </h2>
+                <small class="text-muted-custom">{{ (petrol_total.amount if petrol_total else 0) | money }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Diesel Sale Today</span>
+                <h2 class="metric-value fw-bold mb-0 text-success">
+                    {% if diesel_total %}{{ "{:,.2f}".format(diesel_total.liters) }} L{% else %}0.00 L{% endif %}
+                </h2>
+                <small class="text-muted-custom">{{ (diesel_total.amount if diesel_total else 0) | money }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card credit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Credit Today</span>
+                <h2 class="metric-value fw-bold mb-0 text-warning">{{ credit_total | money }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Cash Sale Today</span>
+                <h2 class="metric-value fw-bold mb-0">{{ cash_sale | money }}</h2>
+                <small class="text-muted-custom">Meter − Credit</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Meter Sale Form -->
+    <div class="col-12 col-lg-7">
+        <div class="card card-premium h-100">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Meter Sale Entry</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <form method="POST" action="{{ url_for('sales.index') }}" id="meter-sale-form">
+                    <input type="hidden" name="action" value="meter_sale">
+
+                    <div class="mb-4">
+                        <label for="fuel_type_id" class="form-label form-label-custom">Fuel Type</label>
+                        <select class="form-select form-control-custom js-search-item" id="fuel_type_id" name="fuel_type_id" required
+                                data-placeholder="Search fuel...">
+                            <option value="">Search fuel...</option>
+                            {% for ft in fuel_types %}
+                            <option value="{{ ft.id }}" data-rate="{{ fuel_prices[ft.id] }}">
+                                {{ ft.name }} ({{ fuel_prices[ft.id] | money }}/L)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% for ft in fuel_types %}
+                    <div class="machine-block d-none" data-fuel="{{ ft.id }}">
+                        <h6 class="fw-bold mb-3">{{ ft.name }} Machines</h6>
+                        <div class="row g-3 mb-2">
+                            {% for machine in machines_by_fuel[ft.id] %}
+                            {% set reading = today_readings.get(machine.id) %}
+                            <div class="col-12">
+                                <div class="p-3 rounded mb-2" style="background: rgba(94,94,94,0.05); border: 1px solid var(--border-color);">
+                                    <div class="fw-semibold mb-3">{{ machine.name }}</div>
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label form-label-custom">Reading 1 (Opening)</label>
+                                            <div class="input-group">
+                                                <input type="number" step="0.01" min="0"
+                                                       class="form-control form-control-custom meter-open"
+                                                       name="opening_{{ machine.id }}"
+                                                       data-machine="{{ machine.id }}"
+                                                       value="{{ '%.2f'|format(reading.opening_reading) if reading else '' }}"
+                                                       disabled>
+                                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label form-label-custom">Reading 2 (Closing)</label>
+                                            <div class="input-group">
+                                                <input type="number" step="0.01" min="0"
+                                                       class="form-control form-control-custom meter-close"
+                                                       name="closing_{{ machine.id }}"
+                                                       data-machine="{{ machine.id }}"
+                                                       value="{{ '%.2f'|format(reading.closing_reading) if reading and reading.closing_reading is not none else '' }}"
+                                                       disabled>
+                                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted-custom d-block mt-2">
+                                        Sold: <strong class="sold-line" data-machine="{{ machine.id }}">0.00</strong> L
+                                    </small>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="col-12">
+                                <p class="text-muted-custom mb-0">No machines for {{ ft.name }}.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <div class="p-3 rounded mb-3 d-none" id="meter-summary" style="background: rgba(2,132,199,0.08);">
+                        <div class="d-flex justify-content-between"><span class="text-muted-custom">Total Liters</span><strong><span id="total-liters">0.00</span> L</strong></div>
+                        <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Rate</span><strong>PKR <span id="fuel-rate">0.00</span>/L</strong></div>
+                        <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Total Sale</span><strong class="text-success">PKR <span id="total-amount">0.00</span></strong></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-custom w-100" id="meter-submit" disabled>
+                        <i class="bi bi-save me-1"></i> Save Meter Sale & Update Inventory
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Sale (fuel ledger-only; shop items decrease stock) -->
+    <div class="col-12 col-lg-5">
+        <div class="card card-premium h-100">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Item Sale</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
+                    <strong>Petrol / Diesel:</strong> ledger only (meters own stock). Customer required — no walk-in.<br>
+                    <strong>Other items:</strong> stock decreases. Walk-in customer allowed.
+                </div>
+                <form method="POST" action="{{ url_for('sales.index') }}" id="item-sale-form">
+                    <input type="hidden" name="action" value="credit_sale">
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="credit_customer">
+                            Customer <span class="text-muted-custom fw-normal" id="customer_hint">(required)</span>
+                        </label>
+                        <select class="form-select form-control-custom js-search-customer" id="credit_customer" name="customer_id"
+                                data-placeholder="Search by name or phone...">
+                            <option value="">Walk-in / search customer...</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
+                                {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="credit_item">Item</label>
+                        <select class="form-select form-control-custom js-search-item" id="credit_item" name="item_key" required
+                                data-placeholder="Search fuel or item...">
+                            <option value="">Search fuel or item...</option>
+                            <optgroup label="Fuel">
+                                {% for ft in fuel_types %}
+                                <option value="fuel:{{ ft.id }}" data-rate="{{ fuel_prices[ft.id] }}" data-unit="L">
+                                    {{ ft.name }} ({{ fuel_prices[ft.id] | money }}/L)
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% if shop_items %}
+                            <optgroup label="Shop Items">
+                                {% for item in shop_items %}
+                                <option value="item:{{ item.id }}" data-rate="{{ item.sale_price }}" data-unit="qty" data-stock="{{ item.quantity }}">
+                                    {{ item.category | capitalize }} — {{ item.display_name() }} ({{ item.sale_price | money }}) · {{ item.quantity }} left
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="credit_liters" id="credit_qty_label">Quantity</label>
+                        <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="liters" id="credit_liters" required>
+                        <small class="text-muted-custom" id="stock_hint"></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="payment_status">Payment Status</label>
+                        <select class="form-select form-control-custom" name="payment_status" id="payment_status">
+                            <option value="unpaid" selected>Unpaid (Credit)</option>
+                            <option value="paid">Paid (Cash / Debit)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Remarks</label>
+                        <input type="text" class="form-control form-control-custom" name="remarks" placeholder="Optional">
+                    </div>
+                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
+                        Amount: <strong class="text-warning">PKR <span id="credit_amount">0.00</span></strong>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">
+                        <i class="bi bi-journal-plus me-1"></i> Record Sale
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's item sales list -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Today’s Item Sales</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Customer</th>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if credit_sales %}
+                            {% for cs in credit_sales %}
+                            <tr>
+                                <td class="fw-semibold">#{{ cs.id }}</td>
+                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
+                                <td>{{ cs.item_name }}</td>
+                                <td>{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel %} L{% endif %}</td>
+                                <td class="fw-bold text-warning">{{ cs.amount | money }}</td>
+                                <td><span class="badge {% if cs.payment_status == 'paid' %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ cs.payment_status | upper }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="6" class="text-center text-muted-custom py-4">No item sales today.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const fuelSelect = document.getElementById('fuel_type_id');
+    const summaryBox = document.getElementById('meter-summary');
+    const submitBtn = document.getElementById('meter-submit');
+    const totalLitersEl = document.getElementById('total-liters');
+    const fuelRateEl = document.getElementById('fuel-rate');
+    const totalAmountEl = document.getElementById('total-amount');
+
+    const syncMeterBlocks = () => {
+        const fuelId = fuelSelect.value;
+        document.querySelectorAll('.machine-block').forEach(block => {
+            const match = block.dataset.fuel === fuelId;
+            block.classList.toggle('d-none', !match);
+            block.querySelectorAll('input').forEach(input => {
+                input.disabled = !match;
+                input.required = match;
+            });
+        });
+        summaryBox.classList.toggle('d-none', !fuelId);
+        submitBtn.disabled = !fuelId;
+        recalcTotals();
+    };
+
+    const recalcTotals = () => {
+        const fuelId = fuelSelect.value;
+        if (!fuelId) return;
+        const opt = fuelSelect.options[fuelSelect.selectedIndex];
+        const rate = opt && opt.dataset.rate ? Number(opt.dataset.rate) : 0;
+        let total = 0;
+        document.querySelectorAll(`.machine-block[data-fuel="${fuelId}"]`).forEach(block => {
+            block.querySelectorAll('.meter-open').forEach(openInput => {
+                const mid = openInput.dataset.machine;
+                const closeInput = block.querySelector(`.meter-close[data-machine="${mid}"]`);
+                const soldEl = block.querySelector(`.sold-line[data-machine="${mid}"]`);
+                const opening = Number(openInput.value || 0);
+                const closing = Number(closeInput?.value || 0);
+                const sold = closing >= opening ? closing - opening : 0;
+                if (soldEl) soldEl.textContent = sold.toFixed(2);
+                total += sold;
+            });
+        });
+        fuelRateEl.textContent = rate.toFixed(2);
+        totalLitersEl.textContent = total.toFixed(2);
+        totalAmountEl.textContent = (total * rate).toFixed(2);
+    };
+
+    fuelSelect.addEventListener('change', syncMeterBlocks);
+    document.querySelectorAll('.meter-open, .meter-close').forEach(el => {
+        el.addEventListener('input', recalcTotals);
+    });
+
+    // Petrol/Diesel: customer required. Other items: walk-in allowed.
+    const creditItem = document.getElementById('credit_item');
+    const creditLiters = document.getElementById('credit_liters');
+    const creditAmount = document.getElementById('credit_amount');
+    const creditQtyLabel = document.getElementById('credit_qty_label');
+    const creditCustomer = document.getElementById('credit_customer');
+    const paymentStatus = document.getElementById('payment_status');
+    const customerHint = document.getElementById('customer_hint');
+    const stockHint = document.getElementById('stock_hint');
+    const itemSaleForm = document.getElementById('item-sale-form');
+
+    const selectedItemKey = () => (creditItem && creditItem.value) || '';
+    const isFuelSelected = () => selectedItemKey().startsWith('fuel:');
+    const isShopSelected = () => selectedItemKey().startsWith('item:');
+
+    const syncCustomerRequirement = () => {
+        const fuel = isFuelSelected();
+        const shop = isShopSelected();
+        // Only petrol/diesel require a customer
+        const customerRequired = fuel || (!fuel && !shop);
+        if (customerHint) {
+            if (fuel) {
+                customerHint.textContent = '(required for petrol/diesel — no walk-in)';
+            } else if (shop) {
+                customerHint.textContent = '(optional — walk-in OK for other items)';
+            } else {
+                customerHint.textContent = '(required for fuel; optional for other items)';
+            }
+        }
+        if (creditCustomer) {
+            creditCustomer.required = !!customerRequired;
+        }
+    };
+
+    const syncCredit = () => {
+        const opt = creditItem && creditItem.options[creditItem.selectedIndex];
+        const rate = opt && opt.dataset.rate ? Number(opt.dataset.rate) : 0;
+        const unit = opt && opt.dataset.unit ? opt.dataset.unit : 'qty';
+        const qty = Number(creditLiters?.value || 0);
+        if (creditQtyLabel) {
+            creditQtyLabel.textContent = unit === 'L' ? 'Liters' : 'Quantity';
+        }
+        if (creditLiters) {
+            creditLiters.step = unit === 'L' ? '0.01' : '1';
+            creditLiters.min = unit === 'L' ? '0.01' : '1';
+        }
+        if (stockHint) {
+            if (opt && opt.dataset.stock !== undefined && unit === 'qty') {
+                stockHint.textContent = `In stock: ${opt.dataset.stock}`;
+            } else {
+                stockHint.textContent = unit === 'L' ? 'Fuel stock is updated by meters only.' : '';
+            }
+        }
+        if (creditAmount) creditAmount.textContent = (rate * qty).toFixed(2);
+        syncCustomerRequirement();
+    };
+
+    if (creditItem) creditItem.addEventListener('change', syncCredit);
+    if (creditLiters) creditLiters.addEventListener('input', syncCredit);
+    if (paymentStatus) paymentStatus.addEventListener('change', syncCustomerRequirement);
+    syncCustomerRequirement();
+    syncCredit();
+
+    if (itemSaleForm) {
+        itemSaleForm.addEventListener('submit', (e) => {
+            const hasCustomer = creditCustomer && creditCustomer.value;
+            if (isFuelSelected() && !hasCustomer) {
+                e.preventDefault();
+                alert('Customer is required for petrol/diesel sales (walk-in not allowed).');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

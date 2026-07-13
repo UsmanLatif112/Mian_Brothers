@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}SMS Control — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">SMS Communications</h2>
+        <p class="text-muted-custom">Configure automated alerts templates and dispatch manual accounts reminders or offers to customers.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Manual Dispatch Form -->
+    <div class="col-12 col-lg-4">
+        <div class="card card-premium mb-4">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Manual SMS Dispatch</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <form action="{{ url_for('sms.index') }}" method="POST">
+                    <input type="hidden" name="action" value="send_manual">
+                    
+                    <div class="mb-3">
+                        <label for="customer_id" class="form-label form-label-custom">Select Customer</label>
+                        <select class="form-select form-control-custom js-search-customer" id="customer_id" name="customer_id" required
+                                data-placeholder="Search by name or phone...">
+                            <option value="">Search by name or phone...</option>
+                            {% for cust in customers %}
+                            <option value="{{ cust.id }}" data-phone="{{ cust.phone or '' }}">
+                                {{ cust.name }}{% if cust.phone %} · {{ cust.phone }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="message_type" class="form-label form-label-custom">Message Template Type</label>
+                        <select class="form-select form-control-custom" id="message_type" name="message_type" required>
+                            <option value="" disabled selected>Select type...</option>
+                            <option value="due_reminder">Due Reminder Alert</option>
+                            <option value="offer">Promotional Offer</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary-custom w-100 mt-2">
+                        <i class="bi bi-send me-1"></i> Send Simulated SMS
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- SMS Placeholders helper card -->
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold" style="font-size: 0.95rem;">Template Placeholders</h5>
+            </div>
+            <div class="card-body card-body-premium py-3" style="font-size: 0.85rem;">
+                <p class="text-muted-custom mb-2">Use the following double-brace placeholders to automatically inject dynamic sale details:</p>
+                <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+                    <li><code>{% raw %}{{name}}{% endraw %}</code> — Customer Name</li>
+                    <li><code>{% raw %}{{due}}{% endraw %}</code> — Customer Outstanding Dues</li>
+                    <li><code>{% raw %}{{amount}}{% endraw %}</code> — Sale Cost Amount</li>
+                    <li><code>{% raw %}{{liters}}{% endraw %}</code> — Volume Liters Sold</li>
+                    <li><code>{% raw %}{{fuel}}{% endraw %}</code> — Fuel Type (Petrol/Diesel)</li>
+                    <li><code>{% raw %}{{petrol}}{% endraw %} / {% raw %}{{diesel}}{% endraw %}</code> — Standard Prices</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Template Config & Logs -->
+    <div class="col-12 col-lg-8">
+        {% if current_user.role == 'admin' %}
+        <!-- Templates Editor (Admin only) -->
+        <div class="card card-premium mb-4">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">SMS Notifications Templates</h5>
+            </div>
+            <div class="card-body card-body-premium p-0">
+                <div class="accordion accordion-flush" id="templatesAccordion" style="border-radius: 14px; overflow: hidden;">
+                    {% for temp in templates %}
+                    <div class="accordion-item" style="background-color: transparent; border-color: var(--border-color);">
+                        <h2 class="accordion-header" id="heading-{{ temp.type }}">
+                            <button class="accordion-button collapsed fw-semibold text-capitalize" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ temp.type }}" aria-expanded="false" aria-controls="collapse-{{ temp.type }}" style="background-color: transparent; color: var(--text-primary); box-shadow: none;">
+                                <i class="bi {% if temp.type == 'receipt' %}bi-receipt{% elif temp.type == 'due_reminder' %}bi-bell{% elif temp.type == 'price_update' %}bi-tag{% else %}bi-gift{% endif %} me-2 text-primary"></i>
+                                {{ temp.type | replace('_', ' ') }} Template
+                            </button>
+                        </h2>
+                        <div id="collapse-{{ temp.type }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ temp.type }}" data-bs-parent="#templatesAccordion">
+                            <div class="accordion-body">
+                                <form action="{{ url_for('sms.index') }}" method="POST">
+                                    <input type="hidden" name="action" value="update_template">
+                                    <input type="hidden" name="template_id" value="{{ temp.id }}">
+                                    
+                                    <div class="mb-3">
+                                        <textarea class="form-control form-control-custom" name="template_text" rows="3" required style="font-family: monospace; font-size: 0.9rem;">{{ temp.template_text }}</textarea>
+                                    </div>
+                                    <div class="text-end">
+                                        <button type="submit" class="btn btn-sm btn-primary-custom px-3">
+                                            Save Template
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Sent Logs Table -->
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">Outbox Logs</h5>
+                <span class="badge bg-secondary">Recent messages</span>
+            </div>
+            
+            <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Recipient</th>
+                            <th>Type</th>
+                            <th>Message Content</th>
+                            <th>Status</th>
+                            <th>Sent At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if sms_logs %}
+                            {% for log in sms_logs %}
+                            <tr>
+                                <td class="fw-semibold">
+                                    {% if log.customer %}
+                                    {{ log.customer.name }}
+                                    {% else %}
+                                    <span class="text-muted-custom">General</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge badge-custom bg-secondary text-capitalize" style="font-size: 0.7rem;">
+                                        {{ log.message_type | replace('_', ' ') }}
+                                    </span>
+                                </td>
+                                <td style="font-size: 0.85rem; max-width: 250px;" class="text-truncate" title="{{ log.message_body }}">
+                                    {{ log.message_body }}
+                                </td>
+                                <td>
+                                    {% if log.status == 'sent' %}
+                                    <span class="badge badge-custom badge-success-custom">Sent</span>
+                                    {% else %}
+                                    <span class="badge badge-custom badge-danger-custom">Failed</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size: 0.8rem;" class="text-muted-custom">
+                                    {{ log.sent_at.strftime('%Y-%m-%d %H:%M') }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="empty-state text-center py-4">
+                                    <div class="empty-state-icon"><i class="bi bi-chat-left-dots"></i></div>
+                                    <p class="text-muted-custom">No messages in transmission history.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

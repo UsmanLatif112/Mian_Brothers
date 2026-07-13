@@ -1,0 +1,371 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+/* Color Variables */
+:root {
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --accent-blue: #0284c7;
+    --accent-blue-hover: #0369a1;
+    --accent-amber: #f59e0b;
+    --accent-teal: #0d9488;
+    --border-color: #e2e8f0;
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --card-border: 1px solid #e2e8f0;
+    --glass-blur: blur(0px);
+}
+
+/* Dark Mode Variables */
+[data-theme="dark"] {
+    --bg-color: #0b0f19;
+    --card-bg: rgba(17, 24, 39, 0.8);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent-blue: #38bdf8;
+    --accent-blue-hover: #7dd3fc;
+    --accent-amber: #fbbf24;
+    --accent-teal: #2dd4bf;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+    --card-border: 1px solid rgba(255, 255, 255, 0.08);
+    --glass-blur: blur(12px);
+}
+
+/* Global Styles */
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+    padding-top: 70px; /* offset for fixed navbar */
+}
+
+body.no-navbar {
+    padding-top: 0;
+}
+
+/* Base Components & Transitions */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.text-muted-custom {
+    color: var(--text-secondary);
+}
+
+/* Fixed Top Navbar */
+.navbar-custom {
+    background-color: var(--card-bg) !important;
+    border-bottom: var(--card-border);
+    backdrop-filter: var(--glass-blur);
+    padding: 0.8rem 1.5rem;
+    transition: background-color 0.3s ease, border-bottom 0.3s ease;
+}
+
+.navbar-brand-custom {
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: var(--text-primary) !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-link-custom {
+    color: var(--text-secondary) !important;
+    font-weight: 500;
+    padding: 0.5rem 1rem !important;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.nav-link-custom:hover {
+    color: var(--accent-blue) !important;
+    background-color: rgba(56, 189, 248, 0.1);
+}
+
+.nav-link-custom.active {
+    color: var(--text-primary) !important;
+    background-color: rgba(56, 189, 248, 0.15);
+    font-weight: 600;
+}
+
+/* Premium Card Design (Glassmorphism + Shadow) */
+.card-premium {
+    background-color: var(--card-bg);
+    border: var(--card-border);
+    backdrop-filter: var(--glass-blur);
+    border-radius: 14px;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    overflow: hidden;
+}
+
+.card-premium:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+}
+
+.card-header-premium {
+    background-color: transparent;
+    border-bottom: var(--card-border);
+    padding: 1.25rem 1.5rem;
+    font-weight: 600;
+}
+
+.card-body-premium {
+    padding: 1.5rem;
+}
+
+/* Glow Borders on Hover for key metric cards */
+.metric-card {
+    border-left: 5px solid var(--accent-blue);
+}
+.metric-card.profit {
+    border-left: 5px solid var(--accent-teal);
+}
+.metric-card.credit {
+    border-left: 5px solid var(--accent-amber);
+}
+.metric-card.stock {
+    border-left: 5px solid #ec4899;
+}
+
+.metric-card .card-body-premium {
+    min-height: 104px;
+    padding: 1.1rem 1rem;
+    gap: 0.75rem;
+    align-items: flex-start !important;
+}
+
+.metric-content {
+    min-width: 0;
+    flex: 1 1 auto;
+    padding-right: 0.25rem;
+}
+
+.metric-label {
+    display: block;
+    font-size: 0.68rem;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    white-space: normal;
+    line-height: 1.25;
+    overflow: visible;
+    text-overflow: unset;
+}
+
+.metric-value {
+    font-size: clamp(0.95rem, 1.1vw, 1.2rem);
+    white-space: nowrap;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.metric-unit {
+    font-size: 0.8rem;
+    font-weight: 600;
+    opacity: 0.75;
+}
+
+.metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 40px;
+    font-size: 1.15rem;
+    opacity: 1;
+    background: rgba(2, 132, 199, 0.1);
+}
+
+.metric-icon.text-primary {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0284c7 !important;
+}
+
+.metric-icon.text-success {
+    background: rgba(13, 148, 136, 0.12);
+    color: #0d9488 !important;
+}
+
+.metric-icon.text-warning {
+    background: rgba(245, 158, 11, 0.14);
+    color: #d97706 !important;
+}
+
+.metric-icon.text-danger {
+    background: rgba(236, 72, 153, 0.12);
+    color: #db2777 !important;
+}
+
+/* Buttons Styling */
+.btn-primary-custom {
+    background-color: var(--accent-blue);
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-primary-custom:hover {
+    background-color: var(--accent-blue-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary-custom:active {
+    transform: translateY(0);
+}
+
+/* Tables styling */
+.table-custom {
+    color: var(--text-primary);
+}
+
+.table-custom th {
+    background-color: rgba(94, 94, 94, 0.05);
+    color: var(--text-secondary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+    padding: 1rem;
+}
+
+.table-custom td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card-premium .table-custom th,
+.card-premium .table-custom td {
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+}
+
+/* Theme Toggle Button */
+.theme-toggle-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.theme-toggle-btn:hover {
+    color: var(--text-primary);
+    background-color: rgba(94, 94, 94, 0.1);
+}
+
+/* Badges styling */
+.badge-custom {
+    padding: 0.4em 0.8em;
+    font-weight: 500;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+
+.badge-admin {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: var(--accent-amber);
+}
+
+.badge-staff {
+    background-color: rgba(2, 132, 199, 0.15);
+    color: var(--accent-blue);
+}
+
+.badge-success-custom {
+    background-color: rgba(13, 148, 136, 0.15);
+    color: var(--accent-teal);
+}
+
+.badge-danger-custom {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Forms layout styling */
+.form-control-custom {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary) !important;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    transition: all 0.2s ease;
+}
+
+.form-control-custom:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+    background-color: var(--card-bg);
+}
+
+.form-label-custom {
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+    color: var(--text-primary);
+}
+
+/* Tom Select theme alignment */
+.ts-wrapper.form-control-custom,
+.ts-wrapper.single .ts-control {
+    background-color: var(--card-bg) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+    border-radius: 8px;
+    min-height: 42px;
+}
+.ts-dropdown {
+    background-color: var(--card-bg) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+.ts-dropdown .option,
+.ts-dropdown .optgroup-header {
+    color: var(--text-primary) !important;
+}
+.ts-dropdown .active {
+    background-color: rgba(2, 132, 199, 0.12) !important;
+}
+
+/* Empty State Styling */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+}
+.empty-state-icon {
+    font-size: 3rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}

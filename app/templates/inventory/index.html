@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h2 class="fw-bold mb-1">Inventory Control</h2>
+        <p class="text-muted-custom mb-0">Monitor fuel reserves and add fuel, mobile oil, filters, and other shop items.</p>
+    </div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn">
+            <i class="bi bi-plus-circle me-1"></i> Add Inventory
+        </button>
+    </div>
+</div>
+
+<!-- Live Fuel Stock Levels -->
+<div class="row g-4 mb-4">
+    {% for ft in fuel_types %}
+    {% set inv = live_stock[ft.id] %}
+    {% set stock = inv.current_stock_liters if inv else 0.00 %}
+    {% set threshold = inv.reorder_threshold if inv else 1000.00 %}
+    {% set is_low = stock <= threshold %}
+    
+    <div class="col-12 col-md-6">
+        <div class="card card-premium {% if is_low %}border border-danger border-2{% else %}metric-card {% if ft.name | lower == 'petrol' %}stock{% else %}profit{% endif %}{% endif %}">
+            <div class="card-body card-body-premium">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <span class="text-muted-custom text-uppercase fs-6" style="font-weight: 500;">Live {{ ft.name }} Stock</span>
+                        <h1 class="fw-bold mb-0 mt-1">
+                            {{ "{:,.2f}".format(stock) }} <span class="fs-5 fw-normal text-muted-custom">Liters</span>
+                        </h1>
+                    </div>
+                    {% if is_low %}
+                    <span class="badge bg-danger text-white px-3 py-2" style="font-size: 0.8rem;">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Critical Low Stock
+                    </span>
+                    {% else %}
+                    <span class="badge bg-success text-white px-3 py-2" style="font-size: 0.8rem;">
+                        <i class="bi bi-shield-check me-1"></i> Stock Healthy
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="progress mb-3" style="height: 10px; background-color: rgba(94, 94, 94, 0.1); border-radius: 5px;">
+                    {% set max_capacity = 15000.00 %}
+                    {% set pct = ((stock | float) / max_capacity) * 100 %}
+                    {% set pct_clamped = pct if pct < 100 else 100 %}
+                    <div class="progress-bar {% if is_low %}bg-danger{% elif ft.name | lower == 'petrol' %}bg-info{% else %}bg-success{% endif %}" 
+                         role="progressbar" 
+                         style="width: {{ pct_clamped }}%; border-radius: 5px;" 
+                         aria-valuenow="{{ stock }}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="{{ max_capacity }}">
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center text-muted-custom" style="font-size: 0.85rem;">
+                    <span>Reorder Point: <strong>{{ "{:,.0f}".format(threshold) }} L</strong></span>
+                    <span>Est. Tank Capacity: 15,000 L</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Purchase / Add History -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Item Add History</h5>
+            </div>
+            <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Item</th>
+                            <th>Vendor</th>
+                            <th>Cost</th>
+                            <th>Sale</th>
+                            <th>Qty / Liters</th>
+                            <th>By</th>
+                            <th>Logged At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if purchase_logs %}
+                            {% for log in purchase_logs %}
+                            <tr>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ log.category }}</span></td>
+                                <td class="fw-semibold">
+                                    {{ log.item_name }}
+                                    {% if log.company and log.category != 'mobile' and log.category != 'filter' %}
+                                        <small class="text-muted-custom d-block">{{ log.company }}</small>
+                                    {% endif %}
+                                    {% if log.item_type and log.category == 'other' %}
+                                        <small class="text-muted-custom d-block">{{ log.item_type }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.vendor or '-' }}</td>
+                                <td>{{ log.cost_price | money }}</td>
+                                <td>{{ log.sale_price | money }}</td>
+                                <td class="fw-bold">
+                                    {% if log.category == 'fuel' %}
+                                        {{ "{:,.2f}".format(log.liters or 0) }} L
+                                    {% elif log.category == 'mobile' %}
+                                        {{ log.quantity or 0 }}
+                                        {% if log.liters %} <span class="text-muted-custom fw-normal">({{ "{:,.2f}".format(log.liters) }} L)</span>{% endif %}
+                                    {% else %}
+                                        {{ log.quantity or 0 }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.creator.name }}</td>
+                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% elif deliveries %}
+                            {% for del in deliveries %}
+                            <tr>
+                                <td><span class="badge badge-custom bg-secondary">FUEL</span></td>
+                                <td class="fw-semibold">{{ del.fuel_type.name }}</td>
+                                <td>{{ del.supplier or '-' }}</td>
+                                <td>{{ del.cost_per_liter | money }}</td>
+                                <td>-</td>
+                                <td class="fw-bold">{{ "{:,.2f}".format(del.liters_added) }} L</td>
+                                <td>{{ del.creator.name }}</td>
+                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ del.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="empty-state text-center py-4">
+                                    <div class="empty-state-icon"><i class="bi bi-box-seam"></i></div>
+                                    <p class="text-muted-custom">No items added yet.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Current Shop Stock -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Shop Stock (Mobile / Filter / Other)</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Item Name</th>
+                            <th>Company</th>
+                            <th>Type</th>
+                            <th>Vendor</th>
+                            <th>Cost</th>
+                            <th>Sale</th>
+                            <th>Liters</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if shop_items %}
+                            {% for item in shop_items %}
+                            <tr>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ item.category }}</span></td>
+                                <td class="fw-semibold">{{ item.name }}</td>
+                                <td>{{ item.company or '-' }}</td>
+                                <td>{{ item.item_type or '-' }}</td>
+                                <td>{{ item.vendor or '-' }}</td>
+                                <td>{{ item.cost_price | money }}</td>
+                                <td>{{ item.sale_price | money }}</td>
+                                <td>{% if item.liters %}{{ "{:,.2f}".format(item.liters) }} L{% else %}-{% endif %}</td>
+                                <td class="fw-bold">{{ item.quantity }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="empty-state text-center py-4">
+                                    <p class="text-muted-custom mb-0">No shop items in stock yet.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="addInventoryModal" tabindex="-1" aria-labelledby="addInventoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory</h5>
+                    <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Defaults to Fuel — change category anytime.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('inventory.index') }}" method="POST" id="add-item-form">
+                <div class="modal-body pt-3">
+                    <div class="row g-3">
+                        <!-- Category -->
+                        <div class="col-12 col-md-6">
+                            <label for="category" class="form-label form-label-custom">Item Category</label>
+                            <select class="form-select form-control-custom" id="category" name="category" required>
+                                <option value="fuel" selected>Fuel</option>
+                                <option value="mobile">Mobile (Oil)</option>
+                                <option value="filter">Filter</option>
+                                <option value="other">Other Item</option>
+                            </select>
+                        </div>
+
+                        <!-- Fuel: Petrol / Diesel / Other -->
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel">
+                            <label for="fuel_type_id" class="form-label form-label-custom">Fuel Type</label>
+                            <select class="form-select form-control-custom js-search-item" id="fuel_type_id" name="fuel_type_id"
+                                    data-placeholder="Search fuel...">
+                                <option value="">Search fuel...</option>
+                                {% for ft in fuel_types %}
+                                <option value="{{ ft.id }}">{{ ft.name }}</option>
+                                {% endfor %}
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 d-none" id="fuel_other_name_wrap">
+                            <label for="fuel_other_name" class="form-label form-label-custom">Fuel Name</label>
+                            <input type="text" class="form-control form-control-custom" id="fuel_other_name" name="fuel_other_name" placeholder="Enter fuel name">
+                        </div>
+
+                        <!-- Mobile: Company + Type -->
+                        <div class="col-12 col-md-6 field-group d-none" data-show="mobile">
+                            <label for="mobile_company" class="form-label form-label-custom">Mobile Company</label>
+                            <select class="form-select form-control-custom" id="mobile_company" name="company_mobile">
+                                <option value="" disabled selected>Select company...</option>
+                                <option value="Shell">Shell</option>
+                                <option value="Castrol">Castrol</option>
+                                <option value="Mobil">Mobil</option>
+                                <option value="Total">Total</option>
+                                <option value="PSO">PSO</option>
+                                <option value="Caltex">Caltex</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 d-none" id="mobile_company_other_wrap">
+                            <label for="mobile_company_other" class="form-label form-label-custom">Company Name</label>
+                            <input type="text" class="form-control form-control-custom" id="mobile_company_other" placeholder="Enter company name">
+                        </div>
+                        <div class="col-12 col-md-6 field-group d-none" data-show="mobile">
+                            <label for="mobile_type" class="form-label form-label-custom">Oil Type</label>
+                            <select class="form-select form-control-custom" id="mobile_type" name="item_type_mobile">
+                                <option value="" disabled selected>Select type...</option>
+                                <option value="5W-30">5W-30</option>
+                                <option value="10W-40">10W-40</option>
+                                <option value="15W-40">15W-40</option>
+                                <option value="20W-50">20W-50</option>
+                                <option value="ATF">ATF</option>
+                                <option value="Gear Oil">Gear Oil</option>
+                                <option value="Coolant">Coolant</option>
+                                <option value="Brake Fluid">Brake Fluid</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 d-none" id="mobile_type_other_wrap">
+                            <label for="mobile_type_other" class="form-label form-label-custom">Oil Type Name</label>
+                            <input type="text" class="form-control form-control-custom" id="mobile_type_other" placeholder="Enter oil type name">
+                        </div>
+
+                        <!-- Filter: Type + Company -->
+                        <div class="col-12 col-md-6 field-group d-none" data-show="filter">
+                            <label for="filter_type" class="form-label form-label-custom">Filter Type</label>
+                            <select class="form-select form-control-custom" id="filter_type" name="item_type_filter">
+                                <option value="" disabled selected>Select filter type...</option>
+                                <option value="Oil Filter">Oil Filter</option>
+                                <option value="Air Filter">Air Filter</option>
+                                <option value="Fuel Filter">Fuel Filter</option>
+                                <option value="Cabin Filter">Cabin Filter</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 d-none" id="filter_type_other_wrap">
+                            <label for="filter_type_other" class="form-label form-label-custom">Filter Type Name</label>
+                            <input type="text" class="form-control form-control-custom" id="filter_type_other" placeholder="Enter filter type name">
+                        </div>
+                        <div class="col-12 col-md-6 field-group d-none" data-show="filter">
+                            <label for="filter_company" class="form-label form-label-custom">Company Name</label>
+                            <select class="form-select form-control-custom" id="filter_company" name="company_filter">
+                                <option value="" disabled selected>Select company...</option>
+                                <option value="Bosch">Bosch</option>
+                                <option value="Mann">Mann</option>
+                                <option value="Fram">Fram</option>
+                                <option value="Toyota">Toyota</option>
+                                <option value="Honda">Honda</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 d-none" id="filter_company_other_wrap">
+                            <label for="filter_company_other" class="form-label form-label-custom">Company Name</label>
+                            <input type="text" class="form-control form-control-custom" id="filter_company_other" placeholder="Enter company name">
+                        </div>
+
+                        <!-- Other category: free text name -->
+                        <div class="col-12 field-group d-none" data-show="other">
+                            <label for="item_name" class="form-label form-label-custom">Item Name</label>
+                            <input type="text" class="form-control form-control-custom" id="item_name" name="item_name" placeholder="e.g. Air Freshener">
+                        </div>
+
+                        <!-- Shared fields -->
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile filter other">
+                            <label for="vendor" class="form-label form-label-custom">Vendor</label>
+                            <input type="text" class="form-control form-control-custom" id="vendor" name="vendor" placeholder="Supplier / vendor name">
+                        </div>
+
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile filter other">
+                            <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="cost_price" name="cost_price" placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile filter other">
+                            <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="sale_price" name="sale_price" placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <!-- Liters: fuel + mobile -->
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile">
+                            <label for="liters" class="form-label form-label-custom">
+                                <span class="liters-label">Liters</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="0.00">
+                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                            </div>
+                        </div>
+
+                        <!-- Quantity: mobile, filter, other -->
+                        <div class="col-12 col-md-6 field-group d-none" data-show="mobile filter other">
+                            <label for="quantity" class="form-label form-label-custom">Quantity</label>
+                            <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="1">
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="company" id="company_hidden" value="">
+                    <input type="hidden" name="item_type" id="item_type_hidden" value="">
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom" id="submit-btn">
+                        <i class="bi bi-plus-circle me-1"></i> Add Item
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const modalEl = document.getElementById('addInventoryModal');
+    const categorySelect = document.getElementById('category');
+    const form = document.getElementById('add-item-form');
+    const companyHidden = document.getElementById('company_hidden');
+    const typeHidden = document.getElementById('item_type_hidden');
+
+    const otherPairs = [
+        { select: 'fuel_type_id', wrap: 'fuel_other_name_wrap', input: 'fuel_other_name', match: 'other' },
+        { select: 'mobile_company', wrap: 'mobile_company_other_wrap', input: 'mobile_company_other', match: 'Other' },
+        { select: 'mobile_type', wrap: 'mobile_type_other_wrap', input: 'mobile_type_other', match: 'Other' },
+        { select: 'filter_company', wrap: 'filter_company_other_wrap', input: 'filter_company_other', match: 'Other' },
+        { select: 'filter_type', wrap: 'filter_type_other_wrap', input: 'filter_type_other', match: 'Other' },
+    ];
+
+    const syncOtherNameFields = () => {
+        otherPairs.forEach(({ select, wrap, input, match }) => {
+            const sel = document.getElementById(select);
+            const wrapEl = document.getElementById(wrap);
+            const inputEl = document.getElementById(input);
+            if (!sel || !wrapEl || !inputEl) return;
+
+            let categoryOk = false;
+            if (select === 'fuel_type_id') categoryOk = categorySelect.value === 'fuel';
+            if (['mobile_company', 'mobile_type'].includes(select)) categoryOk = categorySelect.value === 'mobile';
+            if (['filter_company', 'filter_type'].includes(select)) categoryOk = categorySelect.value === 'filter';
+
+            const visible = categoryOk && sel.value === match;
+            wrapEl.classList.toggle('d-none', !visible);
+            inputEl.required = visible;
+            if (!visible) inputEl.value = '';
+        });
+    };
+
+    const syncVisibleFields = () => {
+        const cat = categorySelect.value;
+        document.querySelectorAll('#add-item-form .field-group').forEach(el => {
+            const showFor = (el.dataset.show || '').split(/\s+/);
+            const visible = cat && showFor.includes(cat);
+            el.classList.toggle('d-none', !visible);
+
+            el.querySelectorAll('input, select').forEach(input => {
+                if (input.type === 'hidden') return;
+                if (visible) {
+                    if (['cost_price', 'sale_price'].includes(input.id) ||
+                        (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id)) ||
+                        (cat === 'mobile' && ['mobile_company', 'mobile_type', 'quantity', 'liters'].includes(input.id)) ||
+                        (cat === 'filter' && ['filter_type', 'filter_company', 'quantity'].includes(input.id)) ||
+                        (cat === 'other' && ['item_name', 'quantity'].includes(input.id))) {
+                        input.required = true;
+                    } else if (input.name === 'vendor') {
+                        input.required = false;
+                    }
+                } else {
+                    input.required = false;
+                }
+            });
+        });
+
+        const litersLabel = document.querySelector('.liters-label');
+        if (litersLabel) {
+            litersLabel.textContent = cat === 'mobile' ? 'Liters (per unit)' : 'Liters';
+        }
+
+        syncOtherNameFields();
+    };
+
+    const resetFormToFuel = () => {
+        form.reset();
+        categorySelect.value = 'fuel';
+        companyHidden.value = '';
+        typeHidden.value = '';
+        syncVisibleFields();
+    };
+
+    categorySelect.addEventListener('change', syncVisibleFields);
+    otherPairs.forEach(({ select }) => {
+        const sel = document.getElementById(select);
+        if (sel) sel.addEventListener('change', syncOtherNameFields);
+    });
+
+    modalEl.addEventListener('show.bs.modal', resetFormToFuel);
+
+    form.addEventListener('submit', (e) => {
+        const cat = categorySelect.value;
+
+        if (cat === 'fuel') {
+            const fuelSel = document.getElementById('fuel_type_id');
+            if (fuelSel.value === 'other') {
+                const custom = document.getElementById('fuel_other_name').value.trim();
+                if (!custom) {
+                    e.preventDefault();
+                    alert('Please enter the fuel name.');
+                    return;
+                }
+            }
+        }
+
+        if (cat === 'mobile') {
+            let company = document.getElementById('mobile_company').value;
+            let type = document.getElementById('mobile_type').value;
+            if (company === 'Other') {
+                company = document.getElementById('mobile_company_other').value.trim();
+                if (!company) {
+                    e.preventDefault();
+                    alert('Please enter the company name.');
+                    return;
+                }
+            }
+            if (type === 'Other') {
+                type = document.getElementById('mobile_type_other').value.trim();
+                if (!type) {
+                    e.preventDefault();
+                    alert('Please enter the oil type name.');
+                    return;
+                }
+            }
+            companyHidden.value = company;
+            typeHidden.value = type;
+        } else if (cat === 'filter') {
+            let company = document.getElementById('filter_company').value;
+            let type = document.getElementById('filter_type').value;
+            if (company === 'Other') {
+                company = document.getElementById('filter_company_other').value.trim();
+                if (!company) {
+                    e.preventDefault();
+                    alert('Please enter the company name.');
+                    return;
+                }
+            }
+            if (type === 'Other') {
+                type = document.getElementById('filter_type_other').value.trim();
+                if (!type) {
+                    e.preventDefault();
+                    alert('Please enter the filter type name.');
+                    return;
+                }
+            }
+            companyHidden.value = company;
+            typeHidden.value = type;
+        } else {
+            companyHidden.value = '';
+            typeHidden.value = '';
+        }
+    });
+
+    // Initial state for fuel defaults
+    syncVisibleFields();
+});
+</script>
+{% endblock %}
