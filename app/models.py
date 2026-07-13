@@ -72,7 +72,7 @@ class Inventory(db.Model):
     fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), unique=True, nullable=False)
     current_stock_liters = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    reorder_threshold = db.Column(db.Numeric(12, 2), nullable=False, default=1000.00)
+    reorder_threshold = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
 
     def __repr__(self):
         return f"<Inventory {self.fuel_type_id}: {self.current_stock_liters} liters>"

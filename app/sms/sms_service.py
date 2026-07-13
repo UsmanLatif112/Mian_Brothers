@@ -24,22 +24,26 @@ def send_sms(customer, message_type, context):
     :param message_type: 'receipt', 'due_reminder', 'offer', 'price_update'
     :param context: dict containing keys for replacement in template (e.g. name, liters, price, amount, due)
     """
-    # Fetch template
     template = SMSTemplate.query.filter_by(type=message_type).first()
     if not template:
-        # Default fallback messages if template doesn't exist
-        defaults = {
-            'receipt': "Dear {{name}}, thank you for purchasing {{liters}}L of {{fuel}} for PKR {{amount}}. Your outstanding balance is PKR {{due}}.",
-            'due_reminder': "Dear {{name}}, this is a friendly reminder that a payment of PKR {{due}} is outstanding on your account. Please settle soon.",
-            'offer': "Special offer for our valued customer {{name}}! Visit us today for premium quality fuel.",
-            'price_update': "Fuel price update: {{fuel}} is now PKR {{price}}/L effective {{date}}."
-        }
-        template_text = defaults.get(message_type, "Message from Fuel Station Management.")
+        # No hardcoded SMS defaults — create templates manually in the SMS module
+        template_text = ""
     else:
         template_text = template.template_text
         
     # Render body
-    rendered_body = render_template_text(template_text, context)
+    rendered_body = render_template_text(template_text, context) if template_text else ""
+    if not rendered_body.strip():
+        log = SMSLog(
+            customer_id=customer.id if customer else None,
+            message_type=message_type,
+            message_body="(No SMS template configured)",
+            status='failed'
+        )
+        db.session.add(log)
+        db.session.commit()
+        return log
+
     phone_number = customer.phone if customer else None
     
     # Try sending via Twilio if config is set

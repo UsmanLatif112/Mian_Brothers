@@ -1,10 +1,7 @@
 import os
 from flask import Flask, redirect, url_for
 from flask_login import LoginManager
-from app.models import (
-    db, User, FuelType, FuelPrice, Inventory, SMSTemplate,
-    OtherItem, ItemPurchaseLog, ItemPriceLog, Machine
-)
+from app.models import db, User
 
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
@@ -57,16 +54,13 @@ def create_app():
     def root():
         return redirect(url_for('dashboard.index'))
         
-    # Database seeding and initialization
+    # On each restart: ensure tables/schema exist. No default data is inserted —
+    # fuel types, prices, inventory, machines, users, etc. are added manually.
     with app.app_context():
-        # Create database tables if they do not exist
         db.create_all()
         ensure_inventory_schema()
         ensure_sales_schema()
         ensure_credit_sales_schema()
-        
-        # Seed initial data if database is empty
-        seed_database()
         
     return app
 
@@ -263,107 +257,3 @@ def ensure_credit_sales_schema():
         conn.execute(text("ALTER TABLE credit_sales_new RENAME TO credit_sales"))
         print("Rebuilt credit_sales for shop stock sales and walk-in paid entries.")
 
-
-def seed_database():
-    # 1. Seed users
-    if not User.query.first():
-        # Create admin
-        admin = User(
-            name="Admin User",
-            email="admin@fuel.com",
-            role="admin",
-            phone="1234567890",
-            status="active"
-        )
-        admin.set_password("admin123")
-        
-        # Create staff
-        staff = User(
-            name="Staff Operator",
-            email="staff@fuel.com",
-            role="staff",
-            phone="0987654321",
-            status="active"
-        )
-        staff.set_password("staff123")
-        
-        db.session.add(admin)
-        db.session.add(staff)
-        db.session.commit()
-        
-        # Refresh to get IDs
-        admin = User.query.filter_by(role='admin').first()
-        
-        # 2. Seed fuel types
-        petrol = FuelType(name="Petrol", unit="Liter")
-        diesel = FuelType(name="Diesel", unit="Liter")
-        db.session.add(petrol)
-        db.session.add(diesel)
-        db.session.commit()
-        
-        # 3. Seed prices
-        p_price = FuelPrice(fuel_type_id=petrol.id, price_per_liter=1.45, updated_by=admin.id)
-        d_price = FuelPrice(fuel_type_id=diesel.id, price_per_liter=1.32, updated_by=admin.id)
-        db.session.add(p_price)
-        db.session.add(d_price)
-        
-        # 4. Seed initial inventory
-        p_inv = Inventory(fuel_type_id=petrol.id, current_stock_liters=10000.00, reorder_threshold=1500.00)
-        d_inv = Inventory(fuel_type_id=diesel.id, current_stock_liters=10000.00, reorder_threshold=1500.00)
-        db.session.add(p_inv)
-        db.session.add(d_inv)
-        
-        # 5. Seed templates
-        templates = [
-            SMSTemplate(
-                type="receipt",
-                template_text="Dear {{name}}, thank you for purchasing {{liters}}L of {{fuel}} for PKR {{amount}}. Your outstanding balance is PKR {{due}}.",
-                created_by=admin.id
-            ),
-            SMSTemplate(
-                type="due_reminder",
-                template_text="Dear {{name}}, this is a friendly reminder that you have a pending credit balance of PKR {{due}} with our fuel station. Please settle it at your earliest convenience.",
-                created_by=admin.id
-            ),
-            SMSTemplate(
-                type="offer",
-                template_text="Hello {{name}}! Refuel today and get 5% cashback on your next purchase. Valid till end of the month.",
-                created_by=admin.id
-            ),
-            SMSTemplate(
-                type="price_update",
-                template_text="Dear Customer, new fuel prices are active from {{date}}. Petrol: PKR {{petrol}}/L, Diesel: PKR {{diesel}}/L.",
-                created_by=admin.id
-            )
-        ]
-        db.session.add_all(templates)
-        db.session.commit()
-        print("Database successfully seeded with default users, fuels, prices, stock, and SMS templates!")
-
-    # Seed other shop items (runs even if users already exist)
-    if not OtherItem.query.first():
-        other_items = [
-            OtherItem(category='mobile', name='Engine Oil 1L', company='Shell', item_type='5W-30', vendor='Shell Distributor', cost_price=4.50, sale_price=6.00, liters=1.00, quantity=48),
-            OtherItem(category='mobile', name='Coolant 1L', company='Castrol', item_type='Green Coolant', vendor='Castrol Dealer', cost_price=3.00, sale_price=4.50, liters=1.00, quantity=36),
-            OtherItem(category='filter', name='Oil Filter', company='Bosch', item_type='Oil Filter', vendor='Bosch Parts', cost_price=2.50, sale_price=4.00, quantity=24),
-            OtherItem(category='other', name='Air Freshener', company=None, item_type=None, vendor='Local Supplier', cost_price=0.80, sale_price=1.50, quantity=60),
-            OtherItem(category='other', name='Bottled Water', company=None, item_type=None, vendor='Local Supplier', cost_price=0.20, sale_price=0.50, quantity=120),
-        ]
-        db.session.add_all(other_items)
-        db.session.commit()
-        print("Other items inventory seeded!")
-
-    # Seed dispensing machines
-    if not Machine.query.first():
-        petrol = FuelType.query.filter_by(name='Petrol').first()
-        diesel = FuelType.query.filter_by(name='Diesel').first()
-        if petrol and diesel:
-            machines = [
-                Machine(name='Petrol Machine 1', fuel_type_id=petrol.id),
-                Machine(name='Petrol Machine 2', fuel_type_id=petrol.id),
-                Machine(name='Diesel Machine 1', fuel_type_id=diesel.id),
-                Machine(name='Diesel Machine 2', fuel_type_id=diesel.id),
-            ]
-            db.session.add_all(machines)
-            db.session.commit()
-            print("Dispensing machines seeded!")

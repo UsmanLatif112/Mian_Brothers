@@ -60,8 +60,8 @@ def index():
                 'liters': "0.00",
                 'fuel': "N/A",
                 'date': datetime.utcnow().strftime('%Y-%m-%d'),
-                'petrol': f"{prices.get('petrol', 1.45):.2f}",
-                'diesel': f"{prices.get('diesel', 1.32):.2f}",
+                'petrol': f"{prices['petrol']:.2f}" if 'petrol' in prices else '',
+                'diesel': f"{prices['diesel']:.2f}" if 'diesel' in prices else '',
                 'price': "0.00"
             }
             

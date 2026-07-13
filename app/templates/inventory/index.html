@@ -19,33 +19,41 @@
 <div class="row g-4 mb-4">
     {% for ft in fuel_types %}
     {% set inv = live_stock[ft.id] %}
-    {% set stock = inv.current_stock_liters if inv else 0.00 %}
-    {% set threshold = inv.reorder_threshold if inv else 1000.00 %}
-    {% set is_low = stock <= threshold %}
+    {% set stock = inv.current_stock_liters if inv else none %}
+    {% set threshold = inv.reorder_threshold if inv else none %}
+    {% set is_low = inv and threshold is not none and (stock | float) <= (threshold | float) and (threshold | float) > 0 %}
     
     <div class="col-12 col-md-6">
-        <div class="card card-premium {% if is_low %}border border-danger border-2{% else %}metric-card {% if ft.name | lower == 'petrol' %}stock{% else %}profit{% endif %}{% endif %}">
+        <div class="card card-premium {% if is_low %}border border-danger border-2{% elif inv %}metric-card {% if ft.name | lower == 'petrol' %}stock{% else %}profit{% endif %}{% endif %}">
             <div class="card-body card-body-premium">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
                         <span class="text-muted-custom text-uppercase fs-6" style="font-weight: 500;">Live {{ ft.name }} Stock</span>
                         <h1 class="fw-bold mb-0 mt-1">
+                            {% if stock is not none %}
                             {{ "{:,.2f}".format(stock) }} <span class="fs-5 fw-normal text-muted-custom">Liters</span>
+                            {% else %}
+                            — <span class="fs-5 fw-normal text-muted-custom">No stock yet</span>
+                            {% endif %}
                         </h1>
                     </div>
-                    {% if is_low %}
-                    <span class="badge bg-danger text-white px-3 py-2" style="font-size: 0.8rem;">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Critical Low Stock
-                    </span>
-                    {% else %}
-                    <span class="badge bg-success text-white px-3 py-2" style="font-size: 0.8rem;">
-                        <i class="bi bi-shield-check me-1"></i> Stock Healthy
-                    </span>
+                    {% if inv %}
+                        {% if is_low %}
+                        <span class="badge bg-danger text-white px-3 py-2" style="font-size: 0.8rem;">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i> Critical Low Stock
+                        </span>
+                        {% else %}
+                        <span class="badge bg-success text-white px-3 py-2" style="font-size: 0.8rem;">
+                            <i class="bi bi-shield-check me-1"></i> Stock Healthy
+                        </span>
+                        {% endif %}
                     {% endif %}
                 </div>
                 
+                {% if stock is not none and threshold is not none and (threshold | float) > 0 %}
                 <div class="progress mb-3" style="height: 10px; background-color: rgba(94, 94, 94, 0.1); border-radius: 5px;">
-                    {% set max_capacity = 15000.00 %}
+                    {% set max_capacity = (threshold | float) * 10 if (threshold | float) > 0 else (stock | float) %}
+                    {% set max_capacity = max_capacity if max_capacity > (stock | float) else ((stock | float) if (stock | float) > 0 else 1) %}
                     {% set pct = ((stock | float) / max_capacity) * 100 %}
                     {% set pct_clamped = pct if pct < 100 else 100 %}
                     <div class="progress-bar {% if is_low %}bg-danger{% elif ft.name | lower == 'petrol' %}bg-info{% else %}bg-success{% endif %}" 
@@ -56,11 +64,19 @@
                          aria-valuemax="{{ max_capacity }}">
                     </div>
                 </div>
+                {% endif %}
                 
                 <div class="d-flex justify-content-between align-items-center text-muted-custom" style="font-size: 0.85rem;">
-                    <span>Reorder Point: <strong>{{ "{:,.0f}".format(threshold) }} L</strong></span>
-                    <span>Est. Tank Capacity: 15,000 L</span>
+                    <span>Reorder Point: <strong>{% if threshold is not none %}{{ "{:,.0f}".format(threshold) }} L{% else %}—{% endif %}</strong></span>
                 </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-body text-center py-4">
+                <p class="text-muted-custom mb-0">No fuel types yet. Use <strong>Add Inventory</strong> to add fuel, prices, and stock manually.</p>
             </div>
         </div>
     </div>
@@ -206,7 +222,7 @@
             <div class="modal-header border-0 pb-0">
                 <div>
                     <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory</h5>
-                    <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Defaults to Fuel — change category anytime.</p>
+                    <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Enter fuel, prices, and stock manually — nothing is pre-filled.</p>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -217,7 +233,8 @@
                         <div class="col-12 col-md-6">
                             <label for="category" class="form-label form-label-custom">Item Category</label>
                             <select class="form-select form-control-custom" id="category" name="category" required>
-                                <option value="fuel" selected>Fuel</option>
+                                <option value="" disabled selected>Select category...</option>
+                                <option value="fuel">Fuel</option>
                                 <option value="mobile">Mobile (Oil)</option>
                                 <option value="filter">Filter</option>
                                 <option value="other">Other Item</option>
@@ -328,7 +345,7 @@
                             <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="cost_price" name="cost_price" placeholder="0.00">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="cost_price" name="cost_price" placeholder="Enter cost price">
                             </div>
                         </div>
 
@@ -336,7 +353,7 @@
                             <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="sale_price" name="sale_price" placeholder="0.00">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="sale_price" name="sale_price" placeholder="Enter sale price">
                             </div>
                         </div>
 
@@ -346,7 +363,7 @@
                                 <span class="liters-label">Liters</span>
                             </label>
                             <div class="input-group">
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="0.00">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="Enter liters">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
                             </div>
                         </div>
@@ -354,7 +371,7 @@
                         <!-- Quantity: mobile, filter, other -->
                         <div class="col-12 col-md-6 field-group d-none" data-show="mobile filter other">
                             <label for="quantity" class="form-label form-label-custom">Quantity</label>
-                            <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="1">
+                            <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="Enter quantity">
                         </div>
                     </div>
 
@@ -521,7 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initial state for fuel defaults
+    // Initial field visibility (no category pre-selected)
     syncVisibleFields();
 });
 </script>

@@ -10,8 +10,8 @@ from sqlalchemy import func
 def get_cost_for_sale(fuel_type_id, sale_date):
     """
     Finds the purchase cost per liter for a fuel type.
-    Finds the latest StockEntry before the sale_date.
-    Defaults to 80% of current price if no deliveries are logged.
+    Uses the latest StockEntry on or before the sale_date.
+    Returns 0 if no purchase cost has been logged yet.
     """
     latest_delivery = StockEntry.query.filter(
         StockEntry.fuel_type_id == fuel_type_id,
@@ -21,17 +21,11 @@ def get_cost_for_sale(fuel_type_id, sale_date):
     if latest_delivery:
         return float(latest_delivery.cost_per_liter)
         
-    # Fallback to general first delivery
     first_delivery = StockEntry.query.filter_by(fuel_type_id=fuel_type_id).first()
     if first_delivery:
         return float(first_delivery.cost_per_liter)
         
-    # Standard fallback based on current sales price
-    latest_price = FuelPrice.query.filter_by(fuel_type_id=fuel_type_id).order_by(FuelPrice.created_at.desc()).first()
-    if latest_price:
-        return float(latest_price.price_per_liter) * 0.8
-        
-    return 1.00 # hard fallback
+    return 0.0
 
 @dashboard_bp.route('/')
 @login_required

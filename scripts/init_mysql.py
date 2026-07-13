@@ -1,4 +1,4 @@
-"""Create all OctaneFlow tables on the configured MySQL database and seed defaults."""
+"""Create all OctaneFlow tables on the configured MySQL database (no seed data)."""
 from sqlalchemy import inspect, text
 from app import create_app
 from app.models import db
@@ -15,7 +15,7 @@ def main():
         print(f'Created/verified {len(tables)} tables:')
         for name in tables:
             print(f'  - {name}')
-        print('Done.')
+        print('Done. Add users, fuel, prices, and inventory manually.')
 
 
 if __name__ == '__main__':
