@@ -5,7 +5,7 @@ from app.models import (
     db, FuelType, FuelPrice, Inventory, MeterReading, Customer,
     Machine, CreditSale, OtherItem, Expense, Payment, DailyCashCount
 )
-from app.utils import parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for, paginate
+from app.utils import parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for, paginate, parse_form_date
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -54,6 +54,7 @@ def index():
         # ---------- Meter Sale ----------
         if action == 'meter_sale':
             fuel_type_id = request.form.get('fuel_type_id')
+            sale_day = parse_form_date(request.form.get('entry_date'), today)
             if not fuel_type_id:
                 flash('Please select a fuel type.', 'danger')
                 return redirect(url_for('sales.index'))
@@ -112,7 +113,7 @@ def index():
                 for machine in machines:
                     existing = MeterReading.query.filter_by(
                         machine_id=machine.id,
-                        reading_date=today
+                        reading_date=sale_day
                     ).first()
                     if existing and existing.liters_sold is not None:
                         previous_liters += float(existing.liters_sold)
@@ -129,7 +130,7 @@ def index():
                     machine = item['machine']
                     reading = MeterReading.query.filter_by(
                         machine_id=machine.id,
-                        reading_date=today
+                        reading_date=sale_day
                     ).first()
                     if reading:
                         reading.opening_reading = item['opening']
@@ -146,7 +147,7 @@ def index():
                             opening_reading=item['opening'],
                             closing_reading=item['closing'],
                             liters_sold=item['liters'],
-                            reading_date=today,
+                            reading_date=sale_day,
                             recorded_by=current_user.id,
                             closed_by=current_user.id,
                             closed_at=datetime.utcnow()
@@ -157,7 +158,7 @@ def index():
 
                 amount = total_liters * rate
                 flash(
-                    f'{fuel_type.name} meter sale saved: {total_liters:.2f}L '
+                    f'{fuel_type.name} meter sale saved for {sale_day}: {total_liters:.2f}L '
                     f'(PKR {amount:,.2f}). Inventory adjusted by {delta_liters:.2f}L.',
                     'success'
                 )
@@ -175,6 +176,7 @@ def index():
             remarks = (request.form.get('remarks') or '').strip() or None
             payment_status = request.form.get('payment_status', 'unpaid')
             amount_paid_raw = request.form.get('amount_paid')
+            sale_day = parse_form_date(request.form.get('entry_date'), today)
 
             if not item_key or not qty_raw:
                 flash('Item and quantity are required.', 'danger')
@@ -223,6 +225,9 @@ def index():
                 other_item = OtherItem.query.get(item_key.split(':', 1)[1])
                 if not other_item:
                     flash('Shop item not found.', 'danger')
+                    return redirect(url_for('sales.index'))
+                if other_item.category == 'ft_mobile':
+                    flash('Use the FT Sale card for FT Mobile Oil.', 'warning')
                     return redirect(url_for('sales.index'))
                 rate = float(other_item.sale_price or 0)
                 item_label = other_item.display_name()
@@ -286,7 +291,7 @@ def index():
                 customer_id=customer.id if customer else None,
                 fuel_type_id=fuel_type.id if fuel_type else None,
                 other_item_id=other_item.id if other_item else None,
-                sale_date=today,
+                sale_date=sale_day,
                 liters=qty_val,
                 rate=rate,
                 amount=amount,
@@ -303,6 +308,116 @@ def index():
                 f'Sale recorded for {who}: {item_label} — paid {amount_paid:,.2f}, '
                 f'credit {credit_amt:,.2f} — {stock_note}.',
                 'success'
+            )
+            return redirect(url_for('sales.index'))
+
+        # ---------- FT Mobile Oil sale (liters stock, paid / unpaid / partial) ----------
+        if action == 'ft_sale':
+            customer_id = (request.form.get('customer_id') or '').strip() or None
+            item_id = (request.form.get('ft_item_id') or '').strip()
+            qty_raw = request.form.get('liters')
+            remarks = (request.form.get('remarks') or '').strip() or None
+            payment_status = request.form.get('payment_status', 'paid')
+            amount_paid_raw = request.form.get('amount_paid')
+            sale_day = parse_form_date(request.form.get('entry_date'), today)
+
+            if not item_id or not qty_raw:
+                flash('FT Mobile Oil item and liters are required.', 'danger')
+                return redirect(url_for('sales.index'))
+
+            if not customer_id:
+                payment_status = 'paid'
+
+            try:
+                liters_val = float(qty_raw)
+                if liters_val <= 0:
+                    raise ValueError('Liters must be greater than zero.')
+            except ValueError as e:
+                flash(f'Invalid sale input: {e}', 'danger')
+                return redirect(url_for('sales.index'))
+
+            customer = Customer.query.get(customer_id) if customer_id else None
+            if customer_id and not customer:
+                flash('Customer not found.', 'danger')
+                return redirect(url_for('sales.index'))
+
+            other_item = OtherItem.query.get(item_id)
+            if not other_item or other_item.category != 'ft_mobile':
+                flash('FT Mobile Oil item not found.', 'danger')
+                return redirect(url_for('sales.index'))
+
+            rate = float(other_item.sale_price or 0)
+            cost_rate = float(other_item.cost_price or 0)
+            item_label = f"FT Mobile Oil — {other_item.display_name()}"
+            if rate <= 0:
+                flash(f'No sale price for {item_label}. Set price in inventory first.', 'danger')
+                return redirect(url_for('sales.index'))
+
+            available = float(other_item.liters or 0)
+            if available < liters_val:
+                flash(
+                    f'Insufficient FT Mobile Oil stock for {other_item.name}. '
+                    f'Available: {available:.2f}L, requested: {liters_val:.2f}L.',
+                    'danger',
+                )
+                return redirect(url_for('sales.index'))
+
+            amount = liters_val * rate
+
+            if payment_status == 'paid':
+                amount_paid = amount
+            elif payment_status == 'partial':
+                try:
+                    amount_paid = float(amount_paid_raw or 0)
+                except (TypeError, ValueError):
+                    flash('Invalid amount paid.', 'danger')
+                    return redirect(url_for('sales.index'))
+                if amount_paid <= 0 or amount_paid >= amount:
+                    flash('Partial payment must be greater than 0 and less than total amount.', 'danger')
+                    return redirect(url_for('sales.index'))
+            else:
+                amount_paid = 0.0
+
+            credit_amt = max(amount - amount_paid, 0.0)
+            payment_status = _payment_status(amount, amount_paid)
+
+            if credit_amt > 0:
+                if not customer:
+                    flash('Customer is required when any amount is on credit.', 'danger')
+                    return redirect(url_for('sales.index'))
+                if customer.credit_limit is not None:
+                    projected = float(customer.current_balance_due) + credit_amt
+                    if projected > float(customer.credit_limit):
+                        flash(
+                            f"Exceeds credit limit of PKR {float(customer.credit_limit):,.2f}.",
+                            'danger',
+                        )
+                        return redirect(url_for('sales.index'))
+                customer.current_balance_due = float(customer.current_balance_due) + credit_amt
+
+            other_item.liters = available - liters_val
+
+            db.session.add(CreditSale(
+                customer_id=customer.id if customer else None,
+                fuel_type_id=None,
+                other_item_id=other_item.id,
+                sale_date=sale_day,
+                liters=liters_val,
+                rate=rate,
+                amount=amount,
+                amount_paid=amount_paid,
+                entry_type='sale',
+                payment_status=payment_status,
+                remarks=remarks or f'FT sale · cost {cost_rate:.2f}/L',
+                recorded_by=current_user.id,
+            ))
+            db.session.commit()
+
+            who = customer.name if customer else 'Walk-in'
+            flash(
+                f'FT sale for {who}: {item_label} {liters_val:.2f}L — paid {amount_paid:,.2f}, '
+                f'credit {credit_amt:,.2f} — stock left {float(other_item.liters):.2f}L.',
+                'success',
             )
             return redirect(url_for('sales.index'))
 
@@ -353,7 +468,18 @@ def index():
             today_readings[r.machine_id] = r
 
     customers = Customer.query.order_by(Customer.name.asc()).all()
-    shop_items = OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc()).all()
+    shop_items = (
+        OtherItem.query
+        .filter(OtherItem.category != 'ft_mobile')
+        .order_by(OtherItem.category.asc(), OtherItem.name.asc())
+        .all()
+    )
+    ft_items = (
+        OtherItem.query
+        .filter_by(category='ft_mobile')
+        .order_by(OtherItem.name.asc())
+        .all()
+    )
 
     models_ns = SimpleNamespace(
         MeterReading=MeterReading,
@@ -380,6 +506,7 @@ def index():
         today_readings=today_readings,
         customers=customers,
         shop_items=shop_items,
+        ft_items=ft_items,
         stats=stats,
         period_entries=period_entries,
         entries_pagination=entries_pagination,
@@ -387,7 +514,7 @@ def index():
         start_date=start.isoformat(),
         end_date=end.isoformat(),
         period_choices=PERIOD_CHOICES,
-        today=today,
+        today=today.isoformat() if hasattr(today, 'isoformat') else today,
         day_cash=day_cash,
     )
 

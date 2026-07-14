@@ -6,7 +6,7 @@
 <div class="row mb-4 align-items-start">
     <div class="col">
         <h2 class="fw-bold mb-1">Purchasing</h2>
-        <p class="text-muted-custom mb-0">Purchase totals and history by period and category.</p>
+        <p class="text-muted-custom mb-0">Each Inventory add is one purchase batch. Same fuel can appear many times with different cost/L — totals use cost × liters.</p>
     </div>
     <div class="col-auto">
         <form method="GET" class="d-flex flex-wrap align-items-end gap-2 justify-content-end" id="period-filter-form">
@@ -66,7 +66,7 @@
 </script>
 
 <!-- Purchase totals -->
-<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5 dashboard-stats">
+<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-3 dashboard-stats">
     <div class="col">
         <div class="card card-premium metric-card stock h-100">
             <div class="card-body card-body-premium">
@@ -91,6 +91,15 @@
                 <span class="metric-label text-muted-custom text-uppercase">Total Mobile Purchase</span>
                 <div class="metric-value fw-bold mb-0">{{ purchase_stats.mobile_purchase | money }}</div>
                 <small class="text-muted-custom">{{ purchase_stats.mobile_qty }} units</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total FT Mobile Oil Purchase</span>
+                <div class="metric-value fw-bold mb-0">{{ purchase_stats.get('ft_mobile_purchase', 0) | money }}</div>
+                <small class="text-muted-custom">{{ "{:,.2f}".format(purchase_stats.get('ft_mobile_liters', 0)) }} L bought</small>
             </div>
         </div>
     </div>
@@ -120,6 +129,7 @@
         <div class="card card-premium">
             <div class="card-header-premium">
                 <h5 class="mb-0 fw-bold">Purchase History</h5>
+                <small class="text-muted-custom">One row per inventory add — e.g. 1000 L @ 200 and 2000 L @ 250 stay separate</small>
             </div>
             <div class="table-responsive">
                 <table class="table table-custom table-hover mb-0">
@@ -130,8 +140,8 @@
                             <th>What</th>
                             <th>Vendor</th>
                             <th>Qty / Liters</th>
-                            <th>Cost Price</th>
-                            <th>Sale Price</th>
+                            <th>Cost / Unit</th>
+                            <th>Sale / Unit</th>
                             <th>Total Cost</th>
                             <th>By</th>
                         </tr>
@@ -141,7 +151,7 @@
                             {% for log in purchase_logs %}
                             <tr>
                                 <td style="font-size: 0.85rem;" class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ log.category }}</span></td>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if log.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ log.category }}{% endif %}</span></td>
                                 <td class="fw-semibold">
                                     {{ log.item_name }}
                                     {% if log.company %}
@@ -152,7 +162,7 @@
                                 </td>
                                 <td>{{ log.vendor or '-' }}</td>
                                 <td class="fw-bold">
-                                    {% if log.category == 'fuel' %}
+                                    {% if log.category in ('fuel', 'ft_mobile') %}
                                         {{ "{:,.2f}".format(log.liters or 0) }} L
                                     {% elif log.category == 'mobile' %}
                                         {{ log.quantity or 0 }}

@@ -2,10 +2,11 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app.customers import customers_bp
 from app.models import db, Customer, Sale, Payment, CreditSale
-from app.utils import paginate
+from app.utils import paginate, parse_form_date, datetime_from_date
 from datetime import datetime
 
 PER_PAGE = 15
+
 
 @customers_bp.route('/', methods=['GET', 'POST'])
 @login_required
@@ -19,6 +20,8 @@ def index():
             address = request.form.get('address')
             old_book_no = (request.form.get('old_book_no') or '').strip() or None
             limit = request.form.get('credit_limit')
+            prev_raw = (request.form.get('previous_credit') or '').strip()
+            entry_date = parse_form_date(request.form.get('entry_date'))
             
             if not name:
                 flash('Customer name is required.', 'danger')
@@ -33,18 +36,45 @@ def index():
                 except ValueError as e:
                     flash(f"Invalid credit limit: {e}", 'danger')
                     return redirect(url_for('customers.index'))
+
+            prev_credit = 0.0
+            if prev_raw:
+                try:
+                    prev_credit = float(prev_raw)
+                    if prev_credit < 0:
+                        raise ValueError('Previous credit cannot be negative.')
+                except ValueError as e:
+                    flash(f'Invalid previous credit: {e}', 'danger')
+                    return redirect(url_for('customers.index'))
                     
             customer = Customer(
                 name=name,
                 phone=phone,
                 address=address,
                 old_book_no=old_book_no,
+                previous_credit=prev_credit if prev_credit > 0 else None,
                 credit_limit=limit_val,
-                current_balance_due=0.00
+                current_balance_due=prev_credit,
             )
             db.session.add(customer)
+            db.session.flush()
+
+            # Opening book credit affects customer balance only — excluded from period cash KPIs.
+            if prev_credit > 0:
+                db.session.add(CreditSale(
+                    customer_id=customer.id,
+                    sale_date=entry_date,
+                    liters=0,
+                    rate=0,
+                    amount=prev_credit,
+                    amount_paid=0,
+                    entry_type='opening',
+                    payment_status='unpaid',
+                    remarks='Previous / opening book credit',
+                    recorded_by=current_user.id,
+                ))
+
             db.session.commit()
-            
             flash(f"Customer '{name}' registered successfully.", 'success')
             
         elif action == 'edit':
@@ -100,6 +130,7 @@ def index():
         customers_pagination=customers_pagination,
         search=search_query,
         filter=status_filter,
+        today=datetime.utcnow().date().isoformat(),
     )
 
 @customers_bp.route('/ledger/<int:customer_id>', methods=['GET', 'POST'])
@@ -115,6 +146,7 @@ def ledger(customer_id):
             kind = (request.form.get('entry_kind') or '').strip().lower()
             amount = request.form.get('amount')
             note = (request.form.get('note') or '').strip() or None
+            entry_date = parse_form_date(request.form.get('entry_date'))
 
             if kind not in ('advance', 'loan'):
                 flash('Please select Advance or Loan.', 'danger')
@@ -128,13 +160,11 @@ def ledger(customer_id):
                 flash(f'Invalid amount: {e}', 'danger')
                 return redirect(url_for('customers.ledger', customer_id=customer.id))
 
-            today = datetime.utcnow().date()
             if kind == 'advance':
-                # Customer prepaid — reduce due (can go negative = advance on account)
                 customer.current_balance_due = float(customer.current_balance_due) - amt_val
                 db.session.add(CreditSale(
                     customer_id=customer.id,
-                    sale_date=today,
+                    sale_date=entry_date,
                     liters=0,
                     rate=0,
                     amount=amt_val,
@@ -152,11 +182,10 @@ def ledger(customer_id):
                     'success'
                 )
             else:
-                # Cash loaned to customer — increases amount owed
                 customer.current_balance_due = float(customer.current_balance_due) + amt_val
                 db.session.add(CreditSale(
                     customer_id=customer.id,
-                    sale_date=today,
+                    sale_date=entry_date,
                     liters=0,
                     rate=0,
                     amount=amt_val,
@@ -178,6 +207,7 @@ def ledger(customer_id):
         amount = request.form.get('amount_paid')
         method = request.form.get('method', 'Cash')
         note = request.form.get('note')
+        entry_date = parse_form_date(request.form.get('entry_date'))
         
         if not amount:
             flash('Payment amount is required.', 'danger')
@@ -194,7 +224,7 @@ def ledger(customer_id):
         payment = Payment(
             customer_id=customer.id,
             amount_paid=amt_val,
-            payment_date=datetime.utcnow(),
+            payment_date=datetime_from_date(entry_date),
             method=method,
             note=note
         )
@@ -241,6 +271,16 @@ def ledger(customer_id):
                 'credit': 0.0,
                 'ref_id': f"Loan #{p.id}",
                 'pay_type': 'loan'
+            })
+        elif et == 'opening':
+            ledger_entries.append({
+                'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
+                'type': 'purchase',
+                'desc': f"Previous / opening credit {f'({p.remarks})' if p.remarks else ''}",
+                'debit': float(p.amount or 0),
+                'credit': 0.0,
+                'ref_id': f"Opening #{p.id}",
+                'pay_type': 'opening'
             })
         else:
             paid = float(p.amount_paid or 0)
@@ -296,4 +336,5 @@ def ledger(customer_id):
     
     return render_template('customers/ledger.html', 
                            customer=customer, 
-                           ledger_entries=ledger_entries)
+                           ledger_entries=ledger_entries,
+                           today=datetime.utcnow().date().isoformat())

@@ -6,7 +6,7 @@
 <div class="row mb-4 align-items-start">
     <div class="col">
         <h2 class="fw-bold mb-1">Sales</h2>
-        <p class="text-muted-custom mb-0">Meter sale = all fuel for the day. Other sale = fuel credit or shop items (paid / unpaid / partial).</p>
+        <p class="text-muted-custom mb-0">Meter sale, Other sale, and FT Mobile Oil sale (paid / unpaid / partial).</p>
     </div>
     <div class="col-auto">
         <form method="GET" class="d-flex flex-wrap align-items-end gap-2 justify-content-end" id="period-filter-form">
@@ -79,11 +79,20 @@
         </div>
     </div>
     <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">FT Sale</span>
+                <div class="metric-value fw-bold mb-0">{{ stats.get('ft_sale', 0) | money }}</div>
+                <small class="text-muted-custom">{{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L · Cash {{ stats.get('ft_cash', 0) | money }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
         <div class="card card-premium metric-card h-100">
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">Total Sale</span>
                 <div class="metric-value fw-bold mb-0">{{ stats.total_sale | money }}</div>
-                <small class="text-muted-custom">Fuel {{ stats.meter_total | money }} + Other {{ stats.other_sale | money }}</small>
+                <small class="text-muted-custom">Fuel + Other + FT</small>
             </div>
         </div>
     </div>
@@ -199,6 +208,11 @@
                         <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Total Sale</span><strong class="text-success">PKR <span id="total-amount">0.00</span></strong></div>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="meter_entry_date">Sale Date</label>
+                        <input type="date" class="form-control form-control-custom" id="meter_entry_date" name="entry_date" value="{{ today }}">
+                    </div>
+
                     <button type="submit" class="btn btn-primary-custom w-100" id="meter-submit" disabled>
                         <i class="bi bi-save me-1"></i> Save Meter Sale &amp; Update Inventory
                     </button>
@@ -282,12 +296,104 @@
                         <label class="form-label form-label-custom">Remarks</label>
                         <input type="text" class="form-control form-control-custom" name="remarks" placeholder="Optional">
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="other_entry_date">Sale Date</label>
+                        <input type="date" class="form-control form-control-custom" id="other_entry_date" name="entry_date" value="{{ today }}">
+                    </div>
                     <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
                         Total: <strong>PKR <span id="credit_amount">0.00</span></strong>
                         <span class="ms-2" id="partial_hint"></span>
                     </div>
                     <button type="submit" class="btn btn-primary-custom w-100">
                         <i class="bi bi-journal-plus me-1"></i> Record Other Sale
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- FT Mobile Oil Sale -->
+    <div class="col-12 col-lg-6">
+        <div class="card card-premium h-100">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">3. FT Sale</h5>
+                <small class="text-muted-custom">FT Mobile Oil by liters — paid walk-in, or unpaid / partial with customer</small>
+            </div>
+            <div class="card-body card-body-premium">
+                <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
+                    <strong>Paid:</strong> select company + liters (walk-in OK).<br>
+                    <strong>Unpaid / Partial:</strong> customer required (same as other sales).
+                </div>
+                <form method="POST" action="{{ url_for('sales.index') }}" id="ft-sale-form">
+                    <input type="hidden" name="action" value="ft_sale">
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_customer">
+                            Customer <span class="text-muted-custom fw-normal" id="ft_customer_hint">(optional for paid)</span>
+                        </label>
+                        <select class="form-select form-control-custom js-search-customer js-create-customer" id="ft_customer" name="customer_id"
+                                data-placeholder="Search or add customer..."
+                                data-create-url="{{ url_for('sales.quick_customer') }}">
+                            <option value="">Search or add customer...</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
+                                {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_item_id">FT Mobile Oil</label>
+                        <select class="form-select form-control-custom js-search-item" id="ft_item_id" name="ft_item_id" required
+                                data-placeholder="Search company...">
+                            <option value="">Select company...</option>
+                            {% for item in ft_items %}
+                            <option value="{{ item.id }}"
+                                    data-rate="{{ item.sale_price }}"
+                                    data-cost="{{ item.cost_price }}"
+                                    data-stock="{{ item.liters or 0 }}">
+                                {{ item.name }} — {{ item.sale_price | money }}/L · {{ "{:,.2f}".format(item.liters or 0) }} L left
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not ft_items %}
+                        <small class="text-muted-custom">No FT Mobile Oil in inventory yet. Add it under Inventory → FT Mobile Oil.</small>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_liters">Liters</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="liters" id="ft_liters" required>
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                        </div>
+                        <small class="text-muted-custom" id="ft_stock_hint"></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_payment_status">Payment</label>
+                        <select class="form-select form-control-custom" name="payment_status" id="ft_payment_status">
+                            <option value="paid" selected>Paid (full cash / walk-in)</option>
+                            <option value="unpaid">Unpaid (full credit)</option>
+                            <option value="partial">Partial (cash now + rest credit)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 d-none" id="ft_amount_paid_wrap">
+                        <label class="form-label form-label-custom" for="ft_amount_paid">Cash paid now (PKR)</label>
+                        <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="amount_paid" id="ft_amount_paid" placeholder="e.g. 150000">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Remarks</label>
+                        <input type="text" class="form-control form-control-custom" name="remarks" placeholder="Optional">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_entry_date">Sale Date</label>
+                        <input type="date" class="form-control form-control-custom" id="ft_entry_date" name="entry_date" value="{{ today }}">
+                    </div>
+                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
+                        <div class="d-flex justify-content-between"><span class="text-muted-custom">Cost</span><strong>PKR <span id="ft_cost_total">0.00</span></strong></div>
+                        <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Sale total</span><strong class="text-success">PKR <span id="ft_sale_total">0.00</span></strong></div>
+                        <div class="mt-1" id="ft_partial_hint"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100" {% if not ft_items %}disabled{% endif %}>
+                        <i class="bi bi-droplet me-1"></i> Record FT Sale
                     </button>
                 </form>
             </div>
@@ -328,7 +434,7 @@
                                 <td><span class="badge bg-secondary text-uppercase">{{ cs.entry_type }}</span></td>
                                 <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
                                 <td>{{ cs.item_name }}</td>
-                                <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel %} L{% endif %}{% else %}—{% endif %}</td>
+                                <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}{% else %}—{% endif %}</td>
                                 <td>{{ cs.amount | money }}</td>
                                 <td>{{ (cs.amount_paid or 0) | money }}</td>
                                 <td class="text-warning">{{ cs.credit_amount | money }}</td>
@@ -542,6 +648,94 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pay === 'partial' && amountPaid) {
                 const total = Number(creditAmount?.textContent || 0);
                 const paid = Number(amountPaid.value || 0);
+                if (!(paid > 0 && paid < total)) {
+                    e.preventDefault();
+                    alert('Partial: cash paid must be greater than 0 and less than total amount.');
+                }
+            }
+        });
+    }
+
+    // ---------- FT Sale ----------
+    const ftItem = document.getElementById('ft_item_id');
+    const ftLiters = document.getElementById('ft_liters');
+    const ftCustomer = document.getElementById('ft_customer');
+    const ftPay = document.getElementById('ft_payment_status');
+    const ftPaidWrap = document.getElementById('ft_amount_paid_wrap');
+    const ftPaid = document.getElementById('ft_amount_paid');
+    const ftSaleTotal = document.getElementById('ft_sale_total');
+    const ftCostTotal = document.getElementById('ft_cost_total');
+    const ftHint = document.getElementById('ft_partial_hint');
+    const ftCustomerHint = document.getElementById('ft_customer_hint');
+    const ftStockHint = document.getElementById('ft_stock_hint');
+    const ftForm = document.getElementById('ft-sale-form');
+
+    const ftItemValue = () => ftItem && (ftItem.tomselect ? ftItem.tomselect.getValue() : ftItem.value) || '';
+
+    const syncFtSale = () => {
+        let rate = 0, cost = 0, stock;
+        const val = ftItemValue();
+        if (ftItem && val) {
+            const opt = ftItem.querySelector(`option[value="${val}"]`);
+            if (opt) {
+                rate = Number(opt.dataset.rate || 0);
+                cost = Number(opt.dataset.cost || 0);
+                stock = opt.dataset.stock;
+            }
+        }
+        const liters = Number(ftLiters?.value || 0);
+        const sale = rate * liters;
+        const costTotal = cost * liters;
+        if (ftSaleTotal) ftSaleTotal.textContent = sale.toFixed(2);
+        if (ftCostTotal) ftCostTotal.textContent = costTotal.toFixed(2);
+        if (ftStockHint) {
+            ftStockHint.textContent = stock !== undefined ? `In stock: ${Number(stock).toFixed(2)} L` : '';
+        }
+        const pay = ftPay?.value || 'paid';
+        if (ftPaidWrap) {
+            ftPaidWrap.classList.toggle('d-none', pay !== 'partial');
+            if (ftPaid) ftPaid.required = pay === 'partial';
+        }
+        if (ftCustomerHint) {
+            ftCustomerHint.textContent = pay === 'paid'
+                ? '(optional for paid walk-in)'
+                : '(required when unpaid or partial)';
+        }
+        if (ftCustomer) ftCustomer.required = pay !== 'paid';
+        if (ftHint && pay === 'partial' && ftPaid) {
+            const paid = Number(ftPaid.value || 0);
+            const creditLeft = Math.max(sale - paid, 0);
+            ftHint.innerHTML = `Paid <strong class="text-success">PKR ${paid.toFixed(2)}</strong> · Credit <strong class="text-warning">PKR ${creditLeft.toFixed(2)}</strong>`;
+        } else if (ftHint && pay === 'unpaid') {
+            ftHint.innerHTML = `Credit <strong class="text-warning">PKR ${sale.toFixed(2)}</strong>`;
+        } else if (ftHint && pay === 'paid') {
+            ftHint.innerHTML = `Paid <strong class="text-success">PKR ${sale.toFixed(2)}</strong>`;
+        } else if (ftHint) {
+            ftHint.textContent = '';
+        }
+    };
+
+    if (ftItem) {
+        ftItem.addEventListener('change', syncFtSale);
+        if (ftItem.tomselect) ftItem.tomselect.on('change', syncFtSale);
+    }
+    if (ftLiters) ftLiters.addEventListener('input', syncFtSale);
+    if (ftPay) ftPay.addEventListener('change', syncFtSale);
+    if (ftPaid) ftPaid.addEventListener('input', syncFtSale);
+    syncFtSale();
+
+    if (ftForm) {
+        ftForm.addEventListener('submit', (e) => {
+            const hasCustomer = ftCustomer && (ftCustomer.tomselect ? ftCustomer.tomselect.getValue() : ftCustomer.value);
+            const pay = ftPay?.value || 'paid';
+            if (pay !== 'paid' && !hasCustomer) {
+                e.preventDefault();
+                alert('Customer is required when FT sale is unpaid or partially paid.');
+                return;
+            }
+            if (pay === 'partial' && ftPaid) {
+                const total = Number(ftSaleTotal?.textContent || 0);
+                const paid = Number(ftPaid.value || 0);
                 if (!(paid > 0 && paid < total)) {
                     e.preventDefault();
                     alert('Partial: cash paid must be greater than 0 and less than total amount.');

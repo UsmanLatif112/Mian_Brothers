@@ -3,14 +3,51 @@
 {% block title %}Expenses — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-3 align-items-center">
+<div class="row mb-4 align-items-start">
     <div class="col">
         <h2 class="fw-bold mb-1">Expenses</h2>
         <p class="text-muted-custom mb-0">Record and filter station expenses. Totals follow the selected period.</p>
     </div>
+    <div class="col-auto">
+        <form method="GET" class="d-flex flex-wrap align-items-end gap-2 justify-content-end" id="period-filter-form">
+            <div>
+                <label class="form-label form-label-custom mb-1 small">Period</label>
+                <select name="period" id="period-select" class="form-select form-control-custom form-select-sm" style="min-width: 140px;">
+                    {% for value, label in period_choices %}
+                    <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
+                <label class="form-label form-label-custom mb-1 small">From</label>
+                <input type="date" name="start_date" class="form-control form-control-custom form-control-sm" value="{{ start_date }}">
+            </div>
+            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
+                <label class="form-label form-label-custom mb-1 small">To</label>
+                <input type="date" name="end_date" class="form-control form-control-custom form-control-sm" value="{{ end_date }}">
+            </div>
+            <button type="submit" class="btn btn-primary-custom btn-sm">
+                <i class="bi bi-funnel me-1"></i> Apply
+            </button>
+        </form>
+        <div class="text-muted-custom small text-end mt-1">{{ start_date }} → {{ end_date }}</div>
+    </div>
 </div>
 
-{% include "partials/period_filter.html" %}
+<script>
+(function () {
+    const sel = document.getElementById('period-select');
+    if (!sel) return;
+    sel.addEventListener('change', () => {
+        document.querySelectorAll('.custom-dates').forEach(el => {
+            el.classList.toggle('d-none', sel.value !== 'custom');
+        });
+        if (sel.value !== 'custom') {
+            document.getElementById('period-filter-form').submit();
+        }
+    });
+})();
+</script>
 
 <div class="row g-4 mb-4">
     <div class="col-12 col-md-4">

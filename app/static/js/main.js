@@ -101,7 +101,16 @@ document.addEventListener('DOMContentLoaded', () => {
                                           callback();
                                           return;
                                       }
-                                      // Reload so machine blocks appear for new fuel
+                                      // Sales page needs reload for machine blocks; inventory can keep the form open
+                                      if (el.dataset.noReload === '1') {
+                                          callback({
+                                              value: String(data.id || data.value),
+                                              text: data.text || data.name,
+                                              rate: data.rate,
+                                              stock: data.stock,
+                                          });
+                                          return;
+                                      }
                                       location.reload();
                                   })
                                   .catch(() => {
@@ -133,6 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
                               });
                       }
                     : false,
+                render: createFuel
+                    ? {
+                          option_create: (data, escape) =>
+                              `<div class="create">Add fuel type <strong>${escape(data.input)}</strong>…</div>`,
+                      }
+                    : undefined,
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
         });

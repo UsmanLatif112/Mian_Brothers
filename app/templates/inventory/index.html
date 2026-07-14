@@ -6,7 +6,7 @@
 <div class="row mb-4 align-items-center">
     <div class="col">
         <h2 class="fw-bold mb-1">Inventory Control</h2>
-        <p class="text-muted-custom mb-0">Monitor stock and add fuel, mobile oil, filters, and other items.</p>
+        <p class="text-muted-custom mb-0">Each Add Inventory creates a purchase batch in Purchasing. Selecting an existing fuel increases that live stock (does not create a new fuel).</p>
     </div>
     <div class="col-auto">
         <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn">
@@ -67,7 +67,35 @@
                 {% endif %}
                 
                 <div class="d-flex justify-content-between align-items-center text-muted-custom" style="font-size: 0.85rem;">
-                    <span>Reorder Point: <strong>{% if threshold is not none %}{{ "{:,.0f}".format(threshold) }} L{% else %}—{% endif %}</strong></span>
+                    <div>
+                        <div>Reorder Point: <strong>{% if threshold is not none %}{{ "{:,.0f}".format(threshold) }} L{% else %}—{% endif %}</strong></div>
+                        <div class="mt-1">
+                            Sale: <strong>{{ (fuel_sale_rates.get(ft.id) or 0) | money }}/L</strong>
+                            {% if fuel_last_costs.get(ft.id) is not none %}
+                            · Last buy: <strong>{{ fuel_last_costs[ft.id] | money }}/L</strong>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="btn-group gap-1">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary border-0 edit-fuel-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editFuelModal"
+                                data-id="{{ ft.id }}"
+                                data-edit-url="{{ url_for('inventory.edit_fuel', fuel_type_id=ft.id) }}"
+                                data-name="{{ ft.name }}"
+                                data-stock="{{ stock if stock is not none else 0 }}"
+                                data-threshold="{{ threshold if threshold is not none else 0 }}"
+                                title="Edit fuel">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <form action="{{ url_for('inventory.delete_fuel', fuel_type_id=ft.id) }}" method="POST" class="d-inline"
+                              onsubmit="return confirm('Delete fuel type {{ ft.name }}? This cannot be undone.');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete fuel">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -88,7 +116,7 @@
     <div class="col-12">
         <div class="card card-premium">
             <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Shop Stock (Mobile / Filter / Other)</h5>
+                <h5 class="mb-0 fw-bold">Shop Stock (Mobile / FT Mobile Oil / Filter / Other)</h5>
             </div>
             <div class="table-responsive">
                 <table class="table table-custom table-hover mb-0">
@@ -103,26 +131,54 @@
                             <th>Sale</th>
                             <th>Liters</th>
                             <th>Quantity</th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if shop_items %}
                             {% for item in shop_items %}
                             <tr>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ item.category }}</span></td>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span></td>
                                 <td class="fw-semibold">{{ item.name }}</td>
                                 <td>{{ item.company or '-' }}</td>
                                 <td>{{ item.item_type or '-' }}</td>
                                 <td>{{ item.vendor or '-' }}</td>
-                                <td>{{ item.cost_price | money }}</td>
-                                <td>{{ item.sale_price | money }}</td>
-                                <td>{% if item.liters %}{{ "{:,.2f}".format(item.liters) }} L{% else %}-{% endif %}</td>
-                                <td class="fw-bold">{{ item.quantity }}</td>
+                                <td>{{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
+                                <td>{{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
+                                <td class="fw-bold">{% if item.liters is not none %}{{ "{:,.2f}".format(item.liters) }} L{% else %}-{% endif %}</td>
+                                <td>{% if item.category == 'ft_mobile' %}<span class="text-muted-custom">—</span>{% else %}<span class="fw-bold">{{ item.quantity }}</span>{% endif %}</td>
+                                <td class="text-end">
+                                    <div class="btn-group gap-1">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary border-0 edit-item-btn"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editItemModal"
+                                                data-id="{{ item.id }}"
+                                                data-edit-url="{{ url_for('inventory.edit_item', item_id=item.id) }}"
+                                                data-name="{{ item.name }}"
+                                                data-company="{{ item.company or '' }}"
+                                                data-item-type="{{ item.item_type or '' }}"
+                                                data-vendor="{{ item.vendor or '' }}"
+                                                data-cost="{{ item.cost_price }}"
+                                                data-sale="{{ item.sale_price }}"
+                                                data-liters="{{ item.liters if item.liters is not none else '' }}"
+                                                data-quantity="{{ item.quantity }}"
+                                                title="Edit item">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <form action="{{ url_for('inventory.delete_item', item_id=item.id) }}" method="POST" class="d-inline"
+                                              onsubmit="return confirm('Delete {{ item.name }} from inventory?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete item">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="9" class="empty-state text-center py-4">
+                                <td colspan="10" class="empty-state text-center py-4">
                                     <p class="text-muted-custom mb-0">No shop items in stock yet.</p>
                                 </td>
                             </tr>
@@ -145,8 +201,8 @@
             <form action="{{ url_for('inventory.index') }}" method="POST" id="add-item-form" class="inventory-modal-form">
                 <div class="modal-header border-0 pb-2">
                     <div>
-                        <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Select a category, then enter prices and stock.</p>
+                        <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory (Purchase Batch)</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Adds to live stock and creates one Purchasing log line per save.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -158,6 +214,7 @@
                                 <option value="" disabled selected>Select category...</option>
                                 <option value="fuel">Fuel</option>
                                 <option value="mobile">Mobile (Oil)</option>
+                                <option value="ft_mobile">FT Mobile Oil</option>
                                 <option value="filter">Filter</option>
                                 <option value="other">Other Item</option>
                             </select>
@@ -165,17 +222,39 @@
 
                         <div class="col-12 field-group d-none" data-show="fuel">
                             <label for="fuel_type_id" class="form-label form-label-custom">Fuel Type</label>
-                            <select class="form-select form-control-custom js-search-item" id="fuel_type_id" name="fuel_type_id"
-                                    data-placeholder="Search fuel...">
-                                <option value="">Search fuel...</option>
+                            <select class="form-select form-control-custom js-search-item js-create-fuel" id="fuel_type_id" name="fuel_type_id"
+                                    data-placeholder="Search inventory fuel or type to add..."
+                                    data-create-url="{{ url_for('inventory.quick_fuel') }}"
+                                    data-list-url="{{ url_for('inventory.api_fuels') }}"
+                                    data-no-reload="1">
+                                <option value="">Search inventory fuel or type to add...</option>
                                 {% for ft in fuel_types %}
-                                <option value="{{ ft.id }}">{{ ft.name }}</option>
+                                {% set stock = live_stock[ft.id].current_stock_liters if live_stock.get(ft.id) else 0 %}
+                                <option value="{{ ft.id }}" data-rate="{{ fuel_sale_rates.get(ft.id) or 0 }}" data-stock="{{ stock }}">
+                                    {{ ft.name }} · {{ "{:,.2f}".format(stock | float) }} L in stock
+                                </option>
                                 {% endfor %}
-                                <option value="other">Other</option>
                             </select>
-                            <div class="mt-2 d-none" id="fuel_other_name_wrap">
-                                <label for="fuel_other_name" class="form-label form-label-custom">Fuel Name</label>
-                                <input type="text" class="form-control form-control-custom" id="fuel_other_name" name="fuel_other_name" placeholder="Enter fuel name">
+                            <div class="form-text text-muted-custom">
+                                List loads from inventory fuel types. Type a new name and choose <strong>Add …</strong> if it is not listed.
+                            </div>
+                        </div>
+
+                        <div class="col-12 field-group d-none" data-show="ft_mobile">
+                            <label for="ft_mobile_company" class="form-label form-label-custom">Company Name</label>
+                            <select class="form-select form-control-custom" id="ft_mobile_company" name="company_ft_mobile">
+                                <option value="" disabled selected>Select company...</option>
+                                <option value="Shell">Shell</option>
+                                <option value="Castrol">Castrol</option>
+                                <option value="Mobil">Mobil</option>
+                                <option value="Total">Total</option>
+                                <option value="PSO">PSO</option>
+                                <option value="Caltex">Caltex</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <div class="mt-2 d-none" id="ft_mobile_company_other_wrap">
+                                <label for="ft_mobile_company_other" class="form-label form-label-custom">Company Name</label>
+                                <input type="text" class="form-control form-control-custom" id="ft_mobile_company_other" placeholder="Enter company name">
                             </div>
                         </div>
 
@@ -255,38 +334,55 @@
                             <input type="text" class="form-control form-control-custom" id="item_name" name="item_name" placeholder="e.g. Air Freshener">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile filter other">
+                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
                             <hr class="my-1" style="border-color: var(--border-color); opacity: 0.4;">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile filter other">
+                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
                             <label for="vendor" class="form-label form-label-custom">Vendor</label>
                             <input type="text" class="form-control form-control-custom" id="vendor" name="vendor" placeholder="Supplier / vendor name">
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile filter other">
-                            <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="cost_price" name="cost_price" placeholder="Enter cost price">
-                            </div>
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                            <label for="entry_date" class="form-label form-label-custom">Purchase Date</label>
+                            <input type="date" class="form-control form-control-custom" id="entry_date" name="entry_date" value="{{ today }}">
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile filter other">
-                            <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                            <label for="cost_price" class="form-label form-label-custom">Cost Price <span class="text-muted-custom fw-normal">(this purchase only)</span></label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="sale_price" name="sale_price" placeholder="Enter sale price">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="cost_price" name="cost_price" placeholder="e.g. 200">
                             </div>
+                            <div class="form-text text-muted-custom" id="cost_price_hint">Per liter for this batch — kept in Purchasing even if next buy is different.</div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                            <label for="sale_price" class="form-label form-label-custom">Sale Price <span class="text-muted-custom fw-normal">(all live stock)</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="sale_price" name="sale_price" placeholder="Current selling price">
+                            </div>
+                            <div class="form-text text-muted-custom" id="sale_price_hint">Updates selling rate for the whole stock of this item.</div>
+                        </div>
+
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile">
                             <label for="liters" class="form-label form-label-custom">
                                 <span class="liters-label">Liters</span>
                             </label>
                             <div class="input-group">
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="Enter liters">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="e.g. 1000">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                            </div>
+                        </div>
+
+                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                            <div class="p-3 rounded" style="background: rgba(2,132,199,0.08); font-size: 0.9rem;">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted-custom">This purchase batch total</span>
+                                    <strong>PKR <span id="batch_cost_total">0.00</span></strong>
+                                </div>
+                                <small class="text-muted-custom">Example: 1000 L × 200 = 200,000 · next buy 2000 L × 250 = 500,000 (two Purchasing rows).</small>
                             </div>
                         </div>
 
@@ -309,6 +405,96 @@
         </div>
     </div>
 </div>
+
+<!-- EDIT SHOP ITEM MODAL -->
+<div class="modal fade" id="editItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
+            <form id="edit-item-form" method="POST" action="">
+                <div class="modal-header border-0 pb-2">
+                    <h5 class="modal-title fw-bold">Edit Inventory Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <div class="mb-3">
+                        <label for="edit_item_name" class="form-label form-label-custom">Item Name</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_item_name" name="name" required>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_item_company" class="form-label form-label-custom">Company</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_item_company" name="company">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_item_type" class="form-label form-label-custom">Type</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_item_type" name="item_type">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_item_vendor" class="form-label form-label-custom">Vendor</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_item_vendor" name="vendor">
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_item_cost" class="form-label form-label-custom">Cost Price (PKR)</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_item_cost" name="cost_price" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_item_sale" class="form-label form-label-custom">Sale Price (PKR)</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_item_sale" name="sale_price" required>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_item_liters" class="form-label form-label-custom">Liters</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_item_liters" name="liters">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_item_qty" class="form-label form-label-custom">Quantity</label>
+                            <input type="number" step="1" min="0" class="form-control form-control-custom" id="edit_item_qty" name="quantity" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-2 pb-3 gap-2 justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT FUEL MODAL -->
+<div class="modal fade" id="editFuelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
+            <form id="edit-fuel-form" method="POST" action="">
+                <div class="modal-header border-0 pb-2">
+                    <h5 class="modal-title fw-bold">Edit Fuel Stock</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <div class="mb-3">
+                        <label for="edit_fuel_name" class="form-label form-label-custom">Fuel Name</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_fuel_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_fuel_stock" class="form-label form-label-custom">Current Stock (Liters)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_fuel_stock" name="stock_liters" required>
+                    </div>
+                    <div class="mb-0">
+                        <label for="edit_fuel_threshold" class="form-label form-label-custom">Reorder Point (Liters)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_fuel_threshold" name="reorder_threshold" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-2 pb-3 gap-2 justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -321,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const typeHidden = document.getElementById('item_type_hidden');
 
     const otherPairs = [
-        { select: 'fuel_type_id', wrap: 'fuel_other_name_wrap', input: 'fuel_other_name', match: 'other' },
+        { select: 'ft_mobile_company', wrap: 'ft_mobile_company_other_wrap', input: 'ft_mobile_company_other', match: 'Other' },
         { select: 'mobile_company', wrap: 'mobile_company_other_wrap', input: 'mobile_company_other', match: 'Other' },
         { select: 'mobile_type', wrap: 'mobile_type_other_wrap', input: 'mobile_type_other', match: 'Other' },
         { select: 'filter_company', wrap: 'filter_company_other_wrap', input: 'filter_company_other', match: 'Other' },
@@ -336,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!sel || !wrapEl || !inputEl) return;
 
             let categoryOk = false;
-            if (select === 'fuel_type_id') categoryOk = categorySelect.value === 'fuel';
+            if (select === 'ft_mobile_company') categoryOk = categorySelect.value === 'ft_mobile';
             if (['mobile_company', 'mobile_type'].includes(select)) categoryOk = categorySelect.value === 'mobile';
             if (['filter_company', 'filter_type'].includes(select)) categoryOk = categorySelect.value === 'filter';
 
@@ -345,6 +531,55 @@ document.addEventListener('DOMContentLoaded', () => {
             inputEl.required = visible;
             if (!visible) inputEl.value = '';
         });
+    };
+
+    const refreshFuelDropdown = async () => {
+        const fuelSel = document.getElementById('fuel_type_id');
+        if (!fuelSel || !fuelSel.dataset.listUrl) return;
+        try {
+            const res = await fetch(fuelSel.dataset.listUrl, {
+                headers: { Accept: 'application/json' },
+            });
+            const data = await res.json();
+            if (!data.ok || !Array.isArray(data.fuels)) return;
+
+            const current = fuelSel.tomselect
+                ? fuelSel.tomselect.getValue()
+                : fuelSel.value;
+            const options = data.fuels.map((f) => ({
+                value: String(f.id),
+                text: f.text || f.name,
+                rate: f.rate,
+                stock: f.stock,
+            }));
+
+            if (fuelSel.tomselect) {
+                fuelSel.tomselect.clearOptions();
+                options.forEach((opt) => fuelSel.tomselect.addOption(opt));
+                fuelSel.tomselect.refreshOptions(false);
+                if (current) fuelSel.tomselect.setValue(current, true);
+            } else {
+                const placeholder = fuelSel.querySelector('option[value=""]');
+                fuelSel.innerHTML = '';
+                if (placeholder) fuelSel.appendChild(placeholder);
+                else {
+                    const empty = document.createElement('option');
+                    empty.value = '';
+                    empty.textContent = fuelSel.dataset.placeholder || 'Search fuel...';
+                    fuelSel.appendChild(empty);
+                }
+                options.forEach((opt) => {
+                    const o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.text;
+                    o.dataset.rate = opt.rate || 0;
+                    o.dataset.stock = opt.stock || 0;
+                    fuelSel.appendChild(o);
+                });
+            }
+        } catch (err) {
+            console.warn('Could not refresh fuel list', err);
+        }
     };
 
     const syncVisibleFields = () => {
@@ -359,6 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (visible) {
                     if (['cost_price', 'sale_price'].includes(input.id) ||
                         (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id)) ||
+                        (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id)) ||
                         (cat === 'mobile' && ['mobile_company', 'mobile_type', 'quantity', 'liters'].includes(input.id)) ||
                         (cat === 'filter' && ['filter_type', 'filter_company', 'quantity'].includes(input.id)) ||
                         (cat === 'other' && ['item_name', 'quantity'].includes(input.id))) {
@@ -376,8 +612,59 @@ document.addEventListener('DOMContentLoaded', () => {
         if (litersLabel) {
             litersLabel.textContent = cat === 'mobile' ? 'Liters (per unit)' : 'Liters';
         }
-
+        const costHint = document.getElementById('cost_price_hint');
+        const saleHint = document.getElementById('sale_price_hint');
+        if (costHint) {
+            if (cat === 'fuel' || cat === 'ft_mobile') {
+                costHint.textContent = 'Per liter for this batch only — each save becomes its own Purchasing line.';
+            } else if (cat === 'mobile' || cat === 'filter' || cat === 'other') {
+                costHint.textContent = 'Cost per unit for this batch — logged in Purchasing separately from older buys.';
+            }
+        }
+        if (saleHint) {
+            if (cat === 'fuel' || cat === 'ft_mobile') {
+                saleHint.textContent = 'Selling price per liter for all live stock of this fuel / FT oil.';
+            } else {
+                saleHint.textContent = 'Selling price for this product (all units in stock).';
+            }
+        }
+        updateBatchTotal();
         syncOtherNameFields();
+        if (cat === 'fuel') refreshFuelDropdown();
+    };
+
+    const updateBatchTotal = () => {
+        const cat = categorySelect.value;
+        const cost = Number(document.getElementById('cost_price')?.value || 0);
+        let qty = 0;
+        if (cat === 'fuel' || cat === 'ft_mobile' || cat === 'mobile') {
+            qty = Number(document.getElementById('liters')?.value || 0);
+            if (cat === 'mobile') {
+                // Mobile: cost is per unit; liters are optional metadata
+                qty = Number(document.getElementById('quantity')?.value || 0);
+            }
+        } else {
+            qty = Number(document.getElementById('quantity')?.value || 0);
+        }
+        const el = document.getElementById('batch_cost_total');
+        if (el) el.textContent = (cost * qty).toFixed(2);
+    };
+
+    const fillFuelSalePrice = () => {
+        const fuelSel = document.getElementById('fuel_type_id');
+        if (!fuelSel || categorySelect.value !== 'fuel') return;
+        const val = fuelSel.tomselect ? fuelSel.tomselect.getValue() : fuelSel.value;
+        let rate = 0;
+        if (fuelSel.tomselect && val) {
+            const opt = fuelSel.tomselect.options[val];
+            if (opt) rate = Number(opt.rate || 0);
+        }
+        if (!rate) {
+            const nativeOpt = fuelSel.querySelector(`option[value="${val}"]`);
+            if (nativeOpt && nativeOpt.dataset.rate) rate = Number(nativeOpt.dataset.rate);
+        }
+        const saleInput = document.getElementById('sale_price');
+        if (saleInput && rate > 0) saleInput.value = rate.toFixed(2);
     };
 
     const resetForm = () => {
@@ -385,13 +672,27 @@ document.addEventListener('DOMContentLoaded', () => {
         categorySelect.value = '';
         companyHidden.value = '';
         typeHidden.value = '';
+        const fuelSel = document.getElementById('fuel_type_id');
+        if (fuelSel && fuelSel.tomselect) fuelSel.tomselect.clear(true);
         syncVisibleFields();
+        updateBatchTotal();
+        refreshFuelDropdown();
     };
 
     categorySelect.addEventListener('change', syncVisibleFields);
     otherPairs.forEach(({ select }) => {
         const sel = document.getElementById(select);
         if (sel) sel.addEventListener('change', syncOtherNameFields);
+    });
+
+    const fuelSel = document.getElementById('fuel_type_id');
+    if (fuelSel) {
+        fuelSel.addEventListener('change', fillFuelSalePrice);
+        if (fuelSel.tomselect) fuelSel.tomselect.on('change', fillFuelSalePrice);
+    }
+    ['cost_price', 'sale_price', 'liters', 'quantity'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateBatchTotal);
     });
 
     modalEl.addEventListener('show.bs.modal', resetForm);
@@ -401,13 +702,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (cat === 'fuel') {
             const fuelSel = document.getElementById('fuel_type_id');
-            if (fuelSel.value === 'other') {
-                const custom = document.getElementById('fuel_other_name').value.trim();
-                if (!custom) {
-                    e.preventDefault();
-                    alert('Please enter the fuel name.');
-                    return;
-                }
+            const fuelVal = fuelSel && (fuelSel.tomselect ? fuelSel.tomselect.getValue() : fuelSel.value);
+            if (!fuelVal) {
+                e.preventDefault();
+                alert('Please select a fuel type, or type a new name and choose Add.');
+                return;
             }
         }
 
@@ -432,6 +731,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             companyHidden.value = company;
             typeHidden.value = type;
+        } else if (cat === 'ft_mobile') {
+            let company = document.getElementById('ft_mobile_company').value;
+            if (company === 'Other') {
+                company = document.getElementById('ft_mobile_company_other').value.trim();
+                if (!company) {
+                    e.preventDefault();
+                    alert('Please enter the company name.');
+                    return;
+                }
+            }
+            companyHidden.value = company;
+            typeHidden.value = '';
         } else if (cat === 'filter') {
             let company = document.getElementById('filter_company').value;
             let type = document.getElementById('filter_type').value;
@@ -460,6 +771,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     syncVisibleFields();
+
+    document.querySelectorAll('.edit-item-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const form = document.getElementById('edit-item-form');
+            form.action = btn.dataset.editUrl;
+            document.getElementById('edit_item_name').value = btn.dataset.name || '';
+            document.getElementById('edit_item_company').value = btn.dataset.company || '';
+            document.getElementById('edit_item_type').value = btn.dataset.itemType || '';
+            document.getElementById('edit_item_vendor').value = btn.dataset.vendor || '';
+            document.getElementById('edit_item_cost').value = btn.dataset.cost || '';
+            document.getElementById('edit_item_sale').value = btn.dataset.sale || '';
+            document.getElementById('edit_item_liters').value = btn.dataset.liters || '';
+            document.getElementById('edit_item_qty').value = btn.dataset.quantity || '0';
+        });
+    });
+
+    document.querySelectorAll('.edit-fuel-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const form = document.getElementById('edit-fuel-form');
+            form.action = btn.dataset.editUrl;
+            document.getElementById('edit_fuel_name').value = btn.dataset.name || '';
+            document.getElementById('edit_fuel_stock').value = btn.dataset.stock || '0';
+            document.getElementById('edit_fuel_threshold').value = btn.dataset.threshold || '0';
+        });
+    });
 });
 </script>
 {% endblock %}

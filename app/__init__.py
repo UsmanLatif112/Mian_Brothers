@@ -25,6 +25,9 @@ def create_app():
 
     @app.template_filter('money')
     def money_filter(value):
+        from jinja2 import Undefined
+        if value is None or isinstance(value, Undefined):
+            return "PKR 0.00"
         try:
             return f"PKR {float(value):,.2f}"
         except (TypeError, ValueError):
@@ -70,7 +73,7 @@ def create_app():
 
 
 def ensure_customers_schema():
-    """Add optional old_book_no on customers for SQLite and MySQL."""
+    """Add optional old_book_no / previous_credit on customers for SQLite and MySQL."""
     from sqlalchemy import text, inspect
 
     inspector = inspect(db.engine)
@@ -78,12 +81,19 @@ def ensure_customers_schema():
         return
 
     existing = {col['name'] for col in inspector.get_columns('customers')}
-    if 'old_book_no' in existing:
+    alters = []
+    if 'old_book_no' not in existing:
+        alters.append("ALTER TABLE customers ADD COLUMN old_book_no VARCHAR(50) NULL")
+    if 'previous_credit' not in existing:
+        alters.append("ALTER TABLE customers ADD COLUMN previous_credit NUMERIC(12, 2) NULL")
+
+    if not alters:
         return
 
     with db.engine.begin() as conn:
-        conn.execute(text("ALTER TABLE customers ADD COLUMN old_book_no VARCHAR(50) NULL"))
-    print("Upgraded customers schema for old_book_no.")
+        for stmt in alters:
+            conn.execute(text(stmt))
+    print("Upgraded customers schema for old_book_no / previous_credit.")
 
 
 def ensure_journal_schema():

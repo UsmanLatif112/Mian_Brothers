@@ -109,12 +109,23 @@
         </a>
     </div>
     <div class="col">
+        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=ft" class="text-decoration-none">
+            <div class="card card-premium metric-card profit h-100">
+                <div class="card-body card-body-premium">
+                    <span class="metric-label text-muted-custom text-uppercase">FT Sale</span>
+                    <div class="metric-value fw-bold mb-0">{{ stats.get('ft_sale', 0) | money }}</div>
+                    <small class="text-muted-custom">{{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L · Cash {{ stats.get('ft_cash', 0) | money }}</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col">
         <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=sale" class="text-decoration-none">
             <div class="card card-premium metric-card h-100">
                 <div class="card-body card-body-premium">
                     <span class="metric-label text-muted-custom text-uppercase">Total Sale</span>
                     <div class="metric-value fw-bold mb-0">{{ stats.total_sale | money }}</div>
-                    <small class="text-muted-custom">Fuel {{ stats.meter_total | money }} + Other {{ stats.other_sale | money }}</small>
+                    <small class="text-muted-custom">Fuel + Other + FT</small>
                 </div>
             </div>
         </a>
@@ -139,6 +150,15 @@
                 </div>
             </div>
         </a>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Purchasing</span>
+                <div class="metric-value fw-bold mb-0">{{ stats.purchase_total | money }}</div>
+                <small class="text-muted-custom">Inventory purchases in period</small>
+            </div>
+        </div>
     </div>
     <div class="col">
         <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=cash" class="text-decoration-none">
@@ -192,7 +212,7 @@
     <div class="col-12">
         <div class="card card-premium">
             <div class="card-header-premium d-flex justify-content-between">
-                <h5 class="mb-0 fw-bold">Details: {{ detail | capitalize }}</h5>
+                <h5 class="mb-0 fw-bold">Details: {% if detail == 'ft' %}FT Sale{% else %}{{ detail | capitalize }}{% endif %}</h5>
                 <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-sm btn-outline-secondary">Close</a>
             </div>
             <div class="table-responsive">
@@ -225,6 +245,7 @@
                 <div class="card-body">
                     <p class="mb-2">Fuel (meter): <strong>{{ stats.meter_total | money }}</strong> ({{ "{:,.2f}".format(stats.meter_liters) }} L)</p>
                     <p class="mb-2">Other items: <strong>{{ stats.other_sale | money }}</strong></p>
+                    <p class="mb-2">FT Mobile Oil: <strong>{{ stats.get('ft_sale', 0) | money }}</strong> ({{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L)</p>
                     <p class="mb-0">Total sale: <strong>{{ stats.total_sale | money }}</strong></p>
                 </div>
                 {% else %}
@@ -251,7 +272,15 @@
                                 <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
                                 <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
                             </tr>
-                            {% elif detail == 'other' and cs.other_item_id %}
+                            {% elif detail == 'other' and cs.other_item_id and (not cs.other_item or cs.other_item.category != 'ft_mobile') %}
+                            {% set ns.rows = ns.rows + 1 %}
+                            <tr>
+                                <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
+                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
+                                <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
+                                <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
+                            </tr>
+                            {% elif detail == 'ft' and cs.other_item and cs.other_item.category == 'ft_mobile' %}
                             {% set ns.rows = ns.rows + 1 %}
                             <tr>
                                 <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>

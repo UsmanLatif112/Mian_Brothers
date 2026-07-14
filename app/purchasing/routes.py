@@ -14,6 +14,7 @@ CATEGORY_CHOICES = (
     ('all', 'All Categories'),
     ('fuel', 'Fuel'),
     ('mobile', 'Mobile'),
+    ('ft_mobile', 'FT Mobile Oil'),
     ('filter', 'Filter'),
     ('other', 'Other'),
 )
@@ -22,7 +23,7 @@ CATEGORY_CHOICES = (
 def _purchase_amount(log):
     """Total purchase spend for one log row (cost × liters or quantity)."""
     cost = float(log.cost_price or 0)
-    if log.category == 'fuel':
+    if log.category in ('fuel', 'ft_mobile'):
         return cost * float(log.liters or 0)
     return cost * float(log.quantity or 0)
 
@@ -47,6 +48,8 @@ def _compute_purchase_stats(start_date, end_date, category='all'):
         'filter_qty': 0,
         'other_purchase': 0.0,
         'other_qty': 0,
+        'ft_mobile_purchase': 0.0,
+        'ft_mobile_liters': 0.0,
     }
 
     start_dt, end_dt = _period_bounds(start_date, end_date)
@@ -73,6 +76,9 @@ def _compute_purchase_stats(start_date, end_date, category='all'):
         elif log.category == 'mobile':
             stats['mobile_purchase'] += amount
             stats['mobile_qty'] += int(log.quantity or 0)
+        elif log.category == 'ft_mobile':
+            stats['ft_mobile_purchase'] += amount
+            stats['ft_mobile_liters'] += float(log.liters or 0)
         elif log.category == 'filter':
             stats['filter_purchase'] += amount
             stats['filter_qty'] += int(log.quantity or 0)
@@ -155,7 +161,7 @@ def index():
         cost_price = request.form.get('cost_price')
         sale_price = request.form.get('sale_price')
 
-        if category not in ('fuel', 'mobile', 'filter', 'other'):
+        if category not in ('fuel', 'mobile', 'filter', 'other', 'ft_mobile'):
             flash('Please select a valid item category.', 'danger')
             return redirect(url_for('purchasing.index'))
 
@@ -240,6 +246,60 @@ def index():
                 f"Sale price updated to PKR {sale_val:,.2f}/L.",
                 'success'
             )
+            return redirect(url_for('purchasing.index'))
+
+        if category == 'ft_mobile':
+            company = (request.form.get('company') or '').strip() or None
+            liters_raw = request.form.get('liters')
+            if not company:
+                flash('Company name is required for FT Mobile Oil.', 'danger')
+                return redirect(url_for('purchasing.index'))
+            try:
+                liters_val = float(liters_raw)
+                if liters_val <= 0:
+                    raise ValueError('Liters must be greater than zero.')
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid liters value: {e}', 'danger')
+                return redirect(url_for('purchasing.index'))
+
+            item_name = company
+            shop_item = _find_or_create_shop_item('ft_mobile', item_name, company, None)
+            if shop_item:
+                shop_item.liters = float(shop_item.liters or 0) + liters_val
+                shop_item.vendor = vendor
+                shop_item.cost_price = cost_val
+            else:
+                shop_item = OtherItem(
+                    category='ft_mobile',
+                    name=item_name,
+                    company=company,
+                    item_type=None,
+                    vendor=vendor,
+                    cost_price=cost_val,
+                    sale_price=sale_val,
+                    liters=liters_val,
+                    quantity=0,
+                )
+                db.session.add(shop_item)
+
+            db.session.flush()
+            _apply_product_sale_price('ft_mobile', sale_val, company=company, name=item_name, cost_val=cost_val)
+            shop_item.sale_price = sale_val
+            shop_item.quantity = 0
+
+            db.session.add(ItemPurchaseLog(
+                category='ft_mobile',
+                item_name=item_name,
+                company=company,
+                vendor=vendor,
+                cost_price=cost_val,
+                sale_price=sale_val,
+                liters=liters_val,
+                entry_date=datetime.utcnow(),
+                added_by=current_user.id,
+            ))
+            db.session.commit()
+            flash(f'Purchased {liters_val:.2f}L of FT Mobile Oil ({company}).', 'success')
             return redirect(url_for('purchasing.index'))
 
         company = (request.form.get('company') or '').strip() or None

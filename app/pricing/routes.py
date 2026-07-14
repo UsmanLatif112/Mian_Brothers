@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app.pricing import pricing_bp
 from app.models import db, FuelType, FuelPrice, OtherItem, ItemPriceLog
 from app.decorators import role_required
+from app.utils import parse_form_date
 from datetime import datetime
 
 
@@ -13,6 +14,7 @@ def index():
     if request.method == 'POST':
         item_key = (request.form.get('item_key') or '').strip()
         new_price = request.form.get('price')
+        effective = parse_form_date(request.form.get('effective_date'))
 
         if not item_key or not new_price:
             flash('Item and price are required.', 'danger')
@@ -36,7 +38,7 @@ def index():
             db.session.add(FuelPrice(
                 fuel_type_id=fuel_type.id,
                 price_per_liter=price_val,
-                effective_date=datetime.utcnow().date(),
+                effective_date=effective,
                 updated_by=current_user.id
             ))
             db.session.commit()
@@ -126,5 +128,6 @@ def index():
         fuel_types=fuel_types,
         shop_items=shop_items,
         current_fuel_prices=current_fuel_prices,
-        price_history=price_history[:100]
+        price_history=price_history[:100],
+        today=datetime.utcnow().date().isoformat(),
     )

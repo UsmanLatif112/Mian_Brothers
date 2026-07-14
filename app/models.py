@@ -152,7 +152,7 @@ class CreditSale(db.Model):
     rate = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_paid = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash received now
-    entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan
+    entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan | opening
     payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid / partial
     remarks = db.Column(db.String(255), nullable=True)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -170,6 +170,8 @@ class CreditSale(db.Model):
             return 'Customer Advance'
         if self.entry_type == 'loan':
             return 'Customer Loan / Borrow'
+        if self.entry_type == 'opening':
+            return 'Previous / Opening Credit'
         if self.other_item:
             return self.other_item.display_name()
         if self.fuel_type:
@@ -251,6 +253,7 @@ class Customer(db.Model):
     phone = db.Column(db.String(20), nullable=True)
     address = db.Column(db.String(200), nullable=True)
     old_book_no = db.Column(db.String(50), nullable=True)
+    previous_credit = db.Column(db.Numeric(12, 2), nullable=True)  # opening book credit (not period cash)
     credit_limit = db.Column(db.Numeric(12, 2), nullable=True)
     current_balance_due = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -300,7 +303,7 @@ class OtherItem(db.Model):
     __tablename__ = 'other_items'
 
     id = db.Column(db.Integer, primary_key=True)
-    category = db.Column(db.String(20), nullable=False, default='other')  # mobile, filter, other
+    category = db.Column(db.String(20), nullable=False, default='other')  # mobile, filter, other, ft_mobile
     name = db.Column(db.String(100), nullable=False)
     company = db.Column(db.String(100), nullable=True)
     item_type = db.Column(db.String(100), nullable=True)

@@ -176,6 +176,18 @@
                         <input type="text" class="form-control form-control-custom" id="create_old_book_no" name="old_book_no" placeholder="Previous ledger / book number">
                     </div>
                     <div class="mb-3">
+                        <label for="create_previous_credit" class="form-label form-label-custom">Previous Credit <span class="text-muted-custom fw-normal">(Optional)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="create_previous_credit" name="previous_credit" placeholder="Opening book credit">
+                        </div>
+                        <small class="text-muted-custom" style="font-size: 0.75rem;">Sets customer due balance. Not counted in today’s cash / sales KPIs.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_entry_date" class="form-label form-label-custom">Entry Date</label>
+                        <input type="date" class="form-control form-control-custom" id="create_entry_date" name="entry_date" value="{{ today }}">
+                    </div>
+                    <div class="mb-3">
                         <label for="create_address" class="form-label form-label-custom">Billing Address</label>
                         <input type="text" class="form-control form-control-custom" id="create_address" name="address" placeholder="123 Main St, Springfield">
                     </div>

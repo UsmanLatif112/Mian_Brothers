@@ -75,6 +75,12 @@
                     <i class="bi bi-journal-bookmark text-muted-custom"></i>
                     <span>Old Book No: {{ customer.old_book_no or '—' }}</span>
                 </div>
+                {% if customer.previous_credit %}
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-book text-muted-custom"></i>
+                    <span>Previous Credit: {{ customer.previous_credit | money }}</span>
+                </div>
+                {% endif %}
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-geo-alt text-muted-custom"></i>
                     <span class="text-truncate">{{ customer.address or 'No Billing Address' }}</span>
@@ -101,6 +107,11 @@
                             <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="amount_paid" name="amount_paid" placeholder="Enter amount" required>
                         </div>
                         <small class="text-muted-custom">Paying more than due creates a negative (advance) balance.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="payment_entry_date" class="form-label form-label-custom">Payment Date</label>
+                        <input type="date" class="form-control form-control-custom" id="payment_entry_date" name="entry_date" value="{{ today }}">
                     </div>
                     
                     <div class="mb-3">
@@ -228,6 +239,10 @@
                         <small class="text-muted-custom d-block mt-1">
                             Advance reduces balance (can go negative). Loan increases balance due.
                         </small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="al_entry_date" class="form-label form-label-custom">Date</label>
+                        <input type="date" class="form-control form-control-custom" id="al_entry_date" name="entry_date" value="{{ today }}">
                     </div>
                     <div class="mb-1">
                         <label for="al_note" class="form-label form-label-custom">Note (optional)</label>
