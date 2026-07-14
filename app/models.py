@@ -138,7 +138,7 @@ class MeterReading(db.Model):
 
 
 class CreditSale(db.Model):
-    """Item/credit sale record. Fuel entries are ledger-only; shop items decrease stock."""
+    """Item/credit sale, advance, or loan. Fuel ledger-only; shop items decrease stock."""
     __tablename__ = 'credit_sales'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -148,10 +148,12 @@ class CreditSale(db.Model):
     other_item_id = db.Column(db.Integer, db.ForeignKey('other_items.id'), nullable=True)
     sale_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     vehicle_number = db.Column(db.String(50), nullable=True)
-    liters = db.Column(db.Numeric(12, 2), nullable=False)  # liters for fuel, qty for shop items
-    rate = db.Column(db.Numeric(10, 2), nullable=False)
+    liters = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # liters/qty; 0 for advance/loan
+    rate = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
-    payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid
+    amount_paid = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash received now
+    entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan
+    payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid / partial
     remarks = db.Column(db.String(255), nullable=True)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -164,6 +166,10 @@ class CreditSale(db.Model):
 
     @property
     def item_name(self):
+        if self.entry_type == 'advance':
+            return 'Customer Advance'
+        if self.entry_type == 'loan':
+            return 'Customer Loan / Borrow'
         if self.other_item:
             return self.other_item.display_name()
         if self.fuel_type:
@@ -174,8 +180,47 @@ class CreditSale(db.Model):
     def is_fuel(self):
         return self.fuel_type_id is not None
 
+    @property
+    def credit_amount(self):
+        """Portion still owed on this entry."""
+        return max(float(self.amount or 0) - float(self.amount_paid or 0), 0.0)
+
     def __repr__(self):
-        return f"<CreditSale {self.id} customer={self.customer_id} amount={self.amount}>"
+        return f"<CreditSale {self.id} type={self.entry_type} amount={self.amount}>"
+
+
+class Expense(db.Model):
+    __tablename__ = 'expenses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    expense_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+    name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    recorder = db.relationship('User', foreign_keys=[recorded_by])
+
+    def __repr__(self):
+        return f"<Expense {self.name}: {self.amount}>"
+
+
+class DailyCashCount(db.Model):
+    """Physical cash counted at till for a day (for journal reconciliation)."""
+    __tablename__ = 'daily_cash_counts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    count_date = db.Column(db.Date, nullable=False, unique=True)
+    cash_in_hand = db.Column(db.Numeric(12, 2), nullable=False)
+    note = db.Column(db.String(255), nullable=True)
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    recorder = db.relationship('User', foreign_keys=[recorded_by])
+
+    def __repr__(self):
+        return f"<DailyCashCount {self.count_date}: {self.cash_in_hand}>"
 
 
 class DailyFuelStock(db.Model):
@@ -212,7 +257,6 @@ class Customer(db.Model):
     # Relationships
     sales = db.relationship('Sale', backref='customer', lazy=True)
     payments = db.relationship('Payment', backref='customer', lazy=True)
-    sms_logs = db.relationship('SMSLog', backref='customer', lazy=True)
 
     def __repr__(self):
         return f"<Customer {self.name} (Due: {self.current_balance_due})>"
@@ -249,34 +293,6 @@ class Payment(db.Model):
 
     def __repr__(self):
         return f"<Payment {self.id}: {self.amount_paid} from customer {self.customer_id}>"
-
-
-class SMSTemplate(db.Model):
-    __tablename__ = 'sms_templates'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    type = db.Column(db.String(50), unique=True, nullable=False) # 'receipt', 'due_reminder', 'offer', 'price_update'
-    template_text = db.Column(db.Text, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
-
-    def __repr__(self):
-        return f"<SMSTemplate {self.type}>"
-
-
-class SMSLog(db.Model):
-    __tablename__ = 'sms_logs'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)
-    message_type = db.Column(db.String(50), nullable=False)
-    message_body = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(20), nullable=False, default='sent') # 'sent' or 'failed'
-    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    def __repr__(self):
-        return f"<SMSLog {self.id}: to Customer {self.customer_id} ({self.status})>"
 
 
 class OtherItem(db.Model):

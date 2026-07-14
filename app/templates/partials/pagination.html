@@ -1,0 +1,27 @@
+{# Shared pagination — expects: pagination dict, page_param, optional keep_args dict #}
+{% if pagination and pagination.pages > 1 %}
+{% set shown_end = pagination.page * pagination.per_page %}
+{% if shown_end > pagination.total %}{% set shown_end = pagination.total %}{% endif %}
+<nav class="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-3 border-top" style="border-color: var(--border-color) !important;">
+    <small class="text-muted-custom">
+        Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }}–{{ shown_end }} of {{ pagination.total }}
+    </small>
+    <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{% if pagination.has_prev %}?{{ page_param }}={{ pagination.prev_num }}{% for k, v in (keep_args or {}).items() if v is not none %}&{{ k }}={{ v }}{% endfor %}{% else %}#{% endif %}">Prev</a>
+        </li>
+        {% for p in range(1, pagination.pages + 1) %}
+            {% if p == 1 or p == pagination.pages or (p >= pagination.page - 2 and p <= pagination.page + 2) %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="?{{ page_param }}={{ p }}{% for k, v in (keep_args or {}).items() if v is not none %}&{{ k }}={{ v }}{% endfor %}">{{ p }}</a>
+            </li>
+            {% elif p == pagination.page - 3 or p == pagination.page + 3 %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{% if pagination.has_next %}?{{ page_param }}={{ pagination.next_num }}{% for k, v in (keep_args or {}).items() if v is not none %}&{{ k }}={{ v }}{% endfor %}{% else %}#{% endif %}">Next</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}

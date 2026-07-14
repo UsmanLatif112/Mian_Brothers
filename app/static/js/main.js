@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const htmlElement = document.documentElement;
     const themeIcon = themeToggleBtn ? themeToggleBtn.querySelector('i') : null;
 
-    // Load saved theme or default to system preference
     const savedTheme = localStorage.getItem('theme') || 'light';
     htmlElement.setAttribute('data-theme', savedTheme);
     updateThemeIcon(savedTheme);
@@ -13,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
         themeToggleBtn.addEventListener('click', () => {
             const currentTheme = htmlElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
             htmlElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
             updateThemeIcon(newTheme);
@@ -22,53 +20,125 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateThemeIcon(theme) {
         if (!themeIcon) return;
-        if (theme === 'dark') {
-            themeIcon.className = 'bi bi-sun-fill';
-        } else {
-            themeIcon.className = 'bi bi-moon-stars-fill';
-        }
+        themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
 
-    // Searchable selects (Tom Select) — customers by name/phone, items by name
+    async function postJson(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        return res.json();
+    }
+
     if (typeof TomSelect !== 'undefined') {
         const shared = {
             maxOptions: null,
             allowEmptyOption: true,
-            create: false,
             sortField: { field: 'text', direction: 'asc' },
             render: {
-                no_results: () => '<div class="no-results">No matches found</div>'
-            }
+                no_results: (data, escape) =>
+                    `<div class="no-results">No matches for “${escape(data.input)}”</div>`,
+                option_create: (data, escape) =>
+                    `<div class="create">Add <strong>${escape(data.input)}</strong>…</div>`,
+            },
         };
 
         document.querySelectorAll('select.js-search-customer').forEach((el) => {
             if (el.tomselect) return;
+            const createUrl = el.dataset.createUrl;
+            const canCreate = el.classList.contains('js-create-customer') && createUrl;
             const tom = new TomSelect(el, {
                 ...shared,
                 placeholder: el.dataset.placeholder || 'Search by name or phone...',
                 searchField: ['text', 'phone'],
                 dropdownParent: el.closest('.modal') ? 'body' : undefined,
+                create: canCreate
+                    ? (input, callback) => {
+                          const phone = window.prompt(`Phone for "${input}" (optional):`, '') || '';
+                          postJson(createUrl, { name: input.trim(), phone: phone.trim() })
+                              .then((data) => {
+                                  if (!data.ok) {
+                                      alert(data.error || 'Could not add customer');
+                                      callback();
+                                      return;
+                                  }
+                                  callback({
+                                      value: String(data.id),
+                                      text: data.text,
+                                      phone: data.phone || '',
+                                  });
+                              })
+                              .catch(() => {
+                                  alert('Could not add customer');
+                                  callback();
+                              });
+                      }
+                    : false,
             });
-            tom.on('change', () => {
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            });
+            tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
         });
 
         document.querySelectorAll('select.js-search-item').forEach((el) => {
             if (el.tomselect) return;
+            const createUrl = el.dataset.createUrl;
+            const createFuel = el.classList.contains('js-create-fuel') && createUrl;
+            const createItem = el.classList.contains('js-create-item') && createUrl;
+
             const tom = new TomSelect(el, {
                 ...shared,
                 placeholder: el.dataset.placeholder || 'Search by name...',
                 searchField: ['text'],
                 dropdownParent: el.closest('.modal') ? 'body' : undefined,
+                create: createFuel || createItem
+                    ? (input, callback) => {
+                          if (createFuel) {
+                              postJson(createUrl, { name: input.trim() })
+                                  .then((data) => {
+                                      if (!data.ok) {
+                                          alert(data.error || 'Could not add fuel');
+                                          callback();
+                                          return;
+                                      }
+                                      // Reload so machine blocks appear for new fuel
+                                      location.reload();
+                                  })
+                                  .catch(() => {
+                                      alert('Could not add fuel');
+                                      callback();
+                                  });
+                              return;
+                          }
+                          const priceRaw = window.prompt(`Sale price (PKR) for "${input}":`, '');
+                          const sale_price = parseFloat(priceRaw || '0') || 0;
+                          postJson(createUrl, { name: input.trim(), sale_price })
+                              .then((data) => {
+                                  if (!data.ok) {
+                                      alert(data.error || 'Could not add item');
+                                      callback();
+                                      return;
+                                  }
+                                  callback({
+                                      value: data.value,
+                                      text: data.text,
+                                      rate: data.rate,
+                                      unit: 'qty',
+                                      stock: 0,
+                                  });
+                              })
+                              .catch(() => {
+                                  alert('Could not add item');
+                                  callback();
+                              });
+                      }
+                    : false,
             });
-            tom.on('change', () => {
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            });
+            tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
         });
     }
 
-    // Auto-calculate values for Sales forms
+    // Legacy meter calc helpers (older forms)
     const openingInput = document.getElementById('opening_reading');
     const closingInput = document.getElementById('closing_reading');
     const computedLitersSpan = document.getElementById('computed_liters');
@@ -82,57 +152,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const openVal = parseFloat(openingInput.value) || 0;
             const closeVal = parseFloat(closingInput.value) || 0;
             const litersSold = Math.max(0, closeVal - openVal);
-
-            if (computedLitersSpan) {
-                computedLitersSpan.innerText = litersSold.toFixed(2);
-            }
-
+            if (computedLitersSpan) computedLitersSpan.innerText = litersSold.toFixed(2);
             let rate = 0;
-            if (rateInput) {
-                rate = parseFloat(rateInput.value) || 0;
-            } else if (fuelSelect) {
+            if (rateInput) rate = parseFloat(rateInput.value) || 0;
+            else if (fuelSelect) {
                 const selectedOption = fuelSelect.options[fuelSelect.selectedIndex];
-                rate = parseFloat(selectedOption.getAttribute('data-price')) || 0;
+                rate = parseFloat(selectedOption?.getAttribute('data-price')) || 0;
             }
-
-            const totalAmount = litersSold * rate;
-            if (computedAmountSpan) {
-                computedAmountSpan.innerText = totalAmount.toFixed(2);
-            }
+            if (computedAmountSpan) computedAmountSpan.innerText = (litersSold * rate).toFixed(2);
         };
-
         openingInput.addEventListener('input', updateCalculations);
         closingInput.addEventListener('input', updateCalculations);
-        if (fuelSelect) {
-            fuelSelect.addEventListener('change', () => {
-                const selectedOption = fuelSelect.options[fuelSelect.selectedIndex];
-                const rate = parseFloat(selectedOption.getAttribute('data-price')) || 0;
-                if (priceDisplay) {
-                    priceDisplay.innerText = rate.toFixed(2);
-                }
-                updateCalculations();
-            });
-        }
-    }
-
-    // Auto-calculate for custom sales form (Liters to Cost)
-    const litersInput = document.getElementById('liters');
-    const saleAmountInput = document.getElementById('total_amount_display');
-    const saleFuelSelect = document.getElementById('sale_fuel_type_id');
-
-    if (litersInput && saleFuelSelect) {
-        const updateSaleAmount = () => {
-            const liters = parseFloat(litersInput.value) || 0;
-            const selectedOption = saleFuelSelect.options[saleFuelSelect.selectedIndex];
-            const rate = parseFloat(selectedOption.getAttribute('data-price')) || 0;
-            const total = liters * rate;
-
-            if (saleAmountInput) {
-                saleAmountInput.value = total.toFixed(2);
-            }
-        };
-
-        litersInput.addEventListener('input', updateSaleAmount);
-        saleFuelSelect.addEventListener('change', updateSaleAmount);
+        if (fuelSelect) fuelSelect.addEventListener('change', updateCalculations);
     }
 });

@@ -172,6 +172,26 @@ h1, h2, h3, h4, h5, h6 {
     max-width: 100%;
 }
 
+/* Compact dashboard stat cards */
+.dashboard-stats .metric-card .card-body-premium {
+    min-height: 88px;
+    padding: 0.85rem 0.9rem;
+}
+
+.dashboard-stats .metric-label {
+    font-size: 0.62rem;
+    margin-bottom: 0.25rem;
+}
+
+.dashboard-stats .metric-value {
+    font-size: clamp(0.88rem, 1vw, 1.05rem);
+}
+
+.dashboard-stats .metric-card small {
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
 .metric-unit {
     font-size: 0.8rem;
     font-weight: 600;
@@ -368,4 +388,33 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 3rem;
     color: var(--text-secondary);
     margin-bottom: 1rem;
+}
+
+/* Add Inventory modal — keep all fields inside and scroll body only */
+#addInventoryModal .inventory-modal-content {
+    max-height: min(90vh, 720px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#addInventoryModal .inventory-modal-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: inherit;
+    flex: 1 1 auto;
+}
+
+#addInventoryModal .inventory-modal-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(60vh, 480px);
+    padding-bottom: 1rem;
+}
+
+#addInventoryModal .modal-footer {
+    flex-shrink: 0;
+    background-color: var(--card-bg);
 }

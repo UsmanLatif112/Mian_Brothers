@@ -1,13 +1,15 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from app.sales import sales_bp
 from app.models import (
     db, FuelType, FuelPrice, Inventory, MeterReading, Customer,
-    Machine, CreditSale, OtherItem
+    Machine, CreditSale, OtherItem, Expense, Payment, DailyCashCount
 )
-from app.sms.sms_service import send_sms
+from app.utils import parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for, paginate
 from datetime import datetime
-from sqlalchemy import func
+from types import SimpleNamespace
+
+PER_PAGE = 15
 
 
 def _today():
@@ -15,8 +17,8 @@ def _today():
 
 
 def _fuel_rate(fuel_type_id):
-    latest = FuelPrice.query.filter_by(fuel_type_id=fuel_type_id).order_by(FuelPrice.created_at.desc()).first()
-    return float(latest.price_per_liter) if latest else None
+    rate = fuel_rate_for(fuel_type_id, FuelPrice)
+    return rate if rate > 0 else None
 
 
 def _machines_for_fuel(fuel_type_id):
@@ -28,37 +30,28 @@ def _machines_for_fuel(fuel_type_id):
     )
 
 
-def _day_fuel_totals(target_date):
-    """Liters and amounts sold today per fuel type from closed meter readings."""
-    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
-    totals = {}
-    for ft in fuel_types:
-        readings = MeterReading.query.filter(
-            MeterReading.fuel_type_id == ft.id,
-            MeterReading.reading_date == target_date,
-            MeterReading.closing_reading.isnot(None)
-        ).all()
-        liters = sum(float(r.liters_sold or 0) for r in readings)
-        rate = _fuel_rate(ft.id) or 0.0
-        totals[ft.id] = {
-            'fuel': ft,
-            'liters': liters,
-            'rate': rate,
-            'amount': liters * rate,
-            'readings': readings,
-        }
-    return totals
+def _payment_status(amount, amount_paid):
+    if amount_paid <= 0:
+        return 'unpaid'
+    if amount_paid >= amount:
+        return 'paid'
+    return 'partial'
 
 
 @sales_bp.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
     today = _today()
+    period, start, end = parse_period(request.args if request.method == 'GET' else {
+        'period': request.form.get('period') or request.args.get('period') or 'today',
+        'start_date': request.form.get('start_date') or request.args.get('start_date'),
+        'end_date': request.form.get('end_date') or request.args.get('end_date'),
+    })
 
     if request.method == 'POST':
         action = request.form.get('action', 'meter_sale')
 
-        # ---------- Meter Sale (single page) ----------
+        # ---------- Meter Sale ----------
         if action == 'meter_sale':
             fuel_type_id = request.form.get('fuel_type_id')
             if not fuel_type_id:
@@ -72,7 +65,7 @@ def index():
 
             machines = _machines_for_fuel(fuel_type.id)
             if len(machines) < 1:
-                flash(f'No machines configured for {fuel_type.name}.', 'danger')
+                flash(f'No machines for {fuel_type.name}. Add a machine from the dropdown.', 'danger')
                 return redirect(url_for('sales.index'))
 
             rate = _fuel_rate(fuel_type.id)
@@ -115,7 +108,6 @@ def index():
                 if not inventory:
                     raise ValueError(f'No inventory record for {fuel_type.name}.')
 
-                # Previous liters already applied to stock today for this fuel
                 previous_liters = 0.0
                 for machine in machines:
                     existing = MeterReading.query.filter_by(
@@ -133,7 +125,6 @@ def index():
                         f'Additional sold: {delta_liters:.2f}L.'
                     )
 
-                # Upsert today's meter readings per machine
                 for item in machine_sales:
                     machine = item['machine']
                     reading = MeterReading.query.filter_by(
@@ -176,15 +167,14 @@ def index():
 
             return redirect(url_for('sales.index'))
 
-        # ---------- Item sale (fuel = ledger only; shop items decrease stock) ----------
+        # ---------- Item sale (paid / unpaid / partial) ----------
         if action == 'credit_sale':
             customer_id = (request.form.get('customer_id') or '').strip() or None
             item_key = (request.form.get('item_key') or '').strip()
             qty_raw = request.form.get('liters')
             remarks = (request.form.get('remarks') or '').strip() or None
             payment_status = request.form.get('payment_status', 'unpaid')
-            if payment_status not in ('paid', 'unpaid'):
-                payment_status = 'unpaid'
+            amount_paid_raw = request.form.get('amount_paid')
 
             if not item_key or not qty_raw:
                 flash('Item and quantity are required.', 'danger')
@@ -193,12 +183,10 @@ def index():
             is_fuel_sale = item_key.startswith('fuel:')
             is_shop_sale = item_key.startswith('item:')
 
-            # Petrol/Diesel: customer always required. Other items: walk-in allowed.
             if is_fuel_sale and not customer_id:
                 flash('Customer is required for petrol/diesel sales (walk-in not allowed).', 'danger')
                 return redirect(url_for('sales.index'))
 
-            # Walk-in shop sale is always cash (cannot put credit on no customer)
             if is_shop_sale and not customer_id:
                 payment_status = 'paid'
 
@@ -242,7 +230,6 @@ def index():
                     flash(f'No sale price for {item_label}. Set price first.', 'danger')
                     return redirect(url_for('sales.index'))
 
-                # Shop items always decrease stock (Paid or Unpaid)
                 qty_units = int(round(qty_val))
                 if qty_units < 1:
                     flash('Shop item quantity must be at least 1.', 'danger')
@@ -262,16 +249,38 @@ def index():
                 return redirect(url_for('sales.index'))
 
             amount = qty_val * rate
-            if payment_status == 'unpaid':
+
+            # Resolve cash paid now (supports half paid / half credit)
+            if payment_status == 'paid':
+                amount_paid = amount
+            elif payment_status == 'partial':
+                try:
+                    amount_paid = float(amount_paid_raw or 0)
+                except (TypeError, ValueError):
+                    flash('Invalid amount paid.', 'danger')
+                    return redirect(url_for('sales.index'))
+                if amount_paid <= 0 or amount_paid >= amount:
+                    flash('Partial payment must be greater than 0 and less than total amount.', 'danger')
+                    return redirect(url_for('sales.index'))
+            else:
+                amount_paid = 0.0
+
+            credit_amt = max(amount - amount_paid, 0.0)
+            payment_status = _payment_status(amount, amount_paid)
+
+            if credit_amt > 0:
+                if not customer:
+                    flash('Customer is required when any amount is on credit.', 'danger')
+                    return redirect(url_for('sales.index'))
                 if customer.credit_limit is not None:
-                    projected = float(customer.current_balance_due) + amount
+                    projected = float(customer.current_balance_due) + credit_amt
                     if projected > float(customer.credit_limit):
                         flash(
                             f"Exceeds credit limit of PKR {float(customer.credit_limit):,.2f}.",
                             'danger'
                         )
                         return redirect(url_for('sales.index'))
-                customer.current_balance_due = float(customer.current_balance_due) + amount
+                customer.current_balance_due = float(customer.current_balance_due) + credit_amt
 
             db.session.add(CreditSale(
                 customer_id=customer.id if customer else None,
@@ -281,26 +290,53 @@ def index():
                 liters=qty_val,
                 rate=rate,
                 amount=amount,
+                amount_paid=amount_paid,
+                entry_type='sale',
                 payment_status=payment_status,
                 remarks=remarks,
                 recorded_by=current_user.id
             ))
             db.session.commit()
 
-            if payment_status == 'unpaid' and customer:
-                send_sms(customer, 'receipt', {
-                    'name': customer.name,
-                    'liters': f'{qty_val:.2f}',
-                    'fuel': item_label,
-                    'amount': f'{amount:.2f}',
-                    'due': f'{float(customer.current_balance_due):.2f}'
-                })
-
             who = customer.name if customer else 'Walk-in'
             flash(
-                f'Sale recorded for {who}: {item_label} — {stock_note}.',
+                f'Sale recorded for {who}: {item_label} — paid {amount_paid:,.2f}, '
+                f'credit {credit_amt:,.2f} — {stock_note}.',
                 'success'
             )
+            return redirect(url_for('sales.index'))
+
+        # ---------- Customer advance / loan removed from Sales UI ----------
+        if action in ('advance', 'loan'):
+            flash('Advance and loan are not available on Sales. Use Customers later.', 'warning')
+            return redirect(url_for('sales.index'))
+
+        # ---------- Cash in hand count (journal) ----------
+        if action == 'cash_count':
+            amount_raw = request.form.get('cash_in_hand')
+            note = (request.form.get('note') or '').strip() or None
+            try:
+                cash_val = float(amount_raw)
+                if cash_val < 0:
+                    raise ValueError('Cash cannot be negative.')
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid cash amount: {e}', 'danger')
+                return redirect(url_for('sales.index'))
+
+            row = DailyCashCount.query.filter_by(count_date=today).first()
+            if row:
+                row.cash_in_hand = cash_val
+                row.note = note
+                row.recorded_by = current_user.id
+            else:
+                db.session.add(DailyCashCount(
+                    count_date=today,
+                    cash_in_hand=cash_val,
+                    note=note,
+                    recorded_by=current_user.id,
+                ))
+            db.session.commit()
+            flash(f'Cash in hand for today set to PKR {cash_val:,.2f}.', 'success')
             return redirect(url_for('sales.index'))
 
         flash('Unknown action.', 'danger')
@@ -310,9 +346,7 @@ def index():
     fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
     fuel_prices = {ft.id: _fuel_rate(ft.id) or 0.0 for ft in fuel_types}
     machines_by_fuel = {ft.id: _machines_for_fuel(ft.id) for ft in fuel_types}
-    day_totals = _day_fuel_totals(today)
 
-    # Existing readings today for form defaults
     today_readings = {}
     for r in MeterReading.query.filter_by(reading_date=today).all():
         if r.machine_id:
@@ -320,13 +354,23 @@ def index():
 
     customers = Customer.query.order_by(Customer.name.asc()).all()
     shop_items = OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc()).all()
-    credit_sales = CreditSale.query.filter_by(sale_date=today).order_by(CreditSale.created_at.desc()).all()
-    credit_total = sum(float(c.amount) for c in credit_sales)
 
-    petrol = next((t for t in day_totals.values() if t['fuel'].name.lower() == 'petrol'), None)
-    diesel = next((t for t in day_totals.values() if t['fuel'].name.lower() == 'diesel'), None)
-    meter_total = sum(t['amount'] for t in day_totals.values())
-    cash_sale = max(meter_total - credit_total, 0.0)
+    models_ns = SimpleNamespace(
+        MeterReading=MeterReading,
+        FuelType=FuelType,
+        FuelPrice=FuelPrice,
+        CreditSale=CreditSale,
+        Expense=Expense,
+        Payment=Payment,
+        DailyCashCount=DailyCashCount,
+        Customer=Customer,
+    )
+    stats = compute_period_stats(start, end, models_ns)
+
+    day_cash = DailyCashCount.query.filter_by(count_date=today).first()
+
+    entries_page = request.args.get('page', 1)
+    period_entries, entries_pagination = paginate(stats['entries'], entries_page, PER_PAGE)
 
     return render_template(
         'sales/index.html',
@@ -334,14 +378,99 @@ def index():
         fuel_prices=fuel_prices,
         machines_by_fuel=machines_by_fuel,
         today_readings=today_readings,
-        day_totals=day_totals,
-        petrol_total=petrol,
-        diesel_total=diesel,
         customers=customers,
         shop_items=shop_items,
-        credit_sales=credit_sales,
-        credit_total=credit_total,
-        meter_total=meter_total,
-        cash_sale=cash_sale,
-        today=today
+        stats=stats,
+        period_entries=period_entries,
+        entries_pagination=entries_pagination,
+        period=period,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        period_choices=PERIOD_CHOICES,
+        today=today,
+        day_cash=day_cash,
     )
+
+
+# ---------- Quick-add APIs (dropdown "Add new") ----------
+
+@sales_bp.route('/api/quick/customer', methods=['POST'])
+@login_required
+def quick_customer():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    phone = (data.get('phone') or '').strip() or None
+    if not name:
+        return jsonify({'ok': False, 'error': 'Name is required'}), 400
+    customer = Customer(name=name, phone=phone, current_balance_due=0)
+    db.session.add(customer)
+    db.session.commit()
+    label = f"{customer.name}{' · ' + customer.phone if customer.phone else ''} (Due: PKR 0.00)"
+    return jsonify({'ok': True, 'id': customer.id, 'text': label, 'phone': customer.phone or ''})
+
+
+@sales_bp.route('/api/quick/fuel', methods=['POST'])
+@login_required
+def quick_fuel():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'ok': False, 'error': 'Fuel name is required'}), 400
+    for ft in FuelType.query.all():
+        if ft.name.lower() == name.lower():
+            return jsonify({'ok': True, 'id': ft.id, 'text': ft.name, 'rate': _fuel_rate(ft.id) or 0})
+    fuel = FuelType(name=name, unit='Liter')
+    db.session.add(fuel)
+    db.session.flush()
+    db.session.add(Inventory(fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0))
+    db.session.commit()
+    return jsonify({'ok': True, 'id': fuel.id, 'text': fuel.name, 'rate': 0})
+
+
+@sales_bp.route('/api/quick/item', methods=['POST'])
+@login_required
+def quick_item():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    try:
+        sale_price = float(data.get('sale_price') or 0)
+    except (TypeError, ValueError):
+        sale_price = 0
+    if not name:
+        return jsonify({'ok': False, 'error': 'Item name is required'}), 400
+    item = OtherItem(
+        category='other',
+        name=name,
+        sale_price=sale_price,
+        cost_price=0,
+        quantity=0,
+    )
+    db.session.add(item)
+    db.session.commit()
+    text = f"Other — {item.display_name()} (PKR {sale_price:,.2f}) · 0 left"
+    return jsonify({
+        'ok': True,
+        'id': item.id,
+        'value': f'item:{item.id}',
+        'text': text,
+        'rate': sale_price,
+    })
+
+
+@sales_bp.route('/api/quick/machine', methods=['POST'])
+@login_required
+def quick_machine():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    fuel_type_id = data.get('fuel_type_id')
+    if not name or not fuel_type_id:
+        return jsonify({'ok': False, 'error': 'Machine name and fuel type are required'}), 400
+    fuel = FuelType.query.get(fuel_type_id)
+    if not fuel:
+        return jsonify({'ok': False, 'error': 'Fuel type not found'}), 404
+    if Machine.query.filter_by(name=name).first():
+        return jsonify({'ok': False, 'error': 'Machine name already exists'}), 400
+    machine = Machine(name=name, fuel_type_id=fuel.id, is_active=True)
+    db.session.add(machine)
+    db.session.commit()
+    return jsonify({'ok': True, 'id': machine.id, 'text': machine.name, 'fuel_type_id': fuel.id})

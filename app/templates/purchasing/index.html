@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Purchasing — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-start">
+    <div class="col">
+        <h2 class="fw-bold mb-1">Purchasing</h2>
+        <p class="text-muted-custom mb-0">Purchase totals and history by period and category.</p>
+    </div>
+    <div class="col-auto">
+        <form method="GET" class="d-flex flex-wrap align-items-end gap-2 justify-content-end" id="period-filter-form">
+            <div>
+                <label class="form-label form-label-custom mb-1 small">Category</label>
+                <select name="category" id="category-select" class="form-select form-control-custom form-select-sm" style="min-width: 140px;">
+                    {% for value, label in category_choices %}
+                    <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label form-label-custom mb-1 small">Period</label>
+                <select name="period" id="period-select" class="form-select form-control-custom form-select-sm" style="min-width: 140px;">
+                    {% for value, label in period_choices %}
+                    <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
+                <label class="form-label form-label-custom mb-1 small">From</label>
+                <input type="date" name="start_date" class="form-control form-control-custom form-control-sm" value="{{ start_date }}">
+            </div>
+            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
+                <label class="form-label form-label-custom mb-1 small">To</label>
+                <input type="date" name="end_date" class="form-control form-control-custom form-control-sm" value="{{ end_date }}">
+            </div>
+            <button type="submit" class="btn btn-primary-custom btn-sm">
+                <i class="bi bi-funnel me-1"></i> Apply
+            </button>
+        </form>
+        <div class="text-muted-custom small text-end mt-1">{{ start_date }} → {{ end_date }}</div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const form = document.getElementById('period-filter-form');
+    const periodSel = document.getElementById('period-select');
+    const catSel = document.getElementById('category-select');
+    if (!form || !periodSel) return;
+
+    const toggleCustom = () => {
+        document.querySelectorAll('.custom-dates').forEach(el => {
+            el.classList.toggle('d-none', periodSel.value !== 'custom');
+        });
+    };
+
+    periodSel.addEventListener('change', () => {
+        toggleCustom();
+        if (periodSel.value !== 'custom') form.submit();
+    });
+    if (catSel) {
+        catSel.addEventListener('change', () => form.submit());
+    }
+})();
+</script>
+
+<!-- Purchase totals -->
+<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5 dashboard-stats">
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Petrol Purchase</span>
+                <div class="metric-value fw-bold mb-0">{{ purchase_stats.petrol_purchase | money }}</div>
+                <small class="text-muted-custom">{{ "{:,.2f}".format(purchase_stats.petrol_liters) }} L bought</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Diesel Purchase</span>
+                <div class="metric-value fw-bold mb-0 text-success">{{ purchase_stats.diesel_purchase | money }}</div>
+                <small class="text-muted-custom">{{ "{:,.2f}".format(purchase_stats.diesel_liters) }} L bought</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Mobile Purchase</span>
+                <div class="metric-value fw-bold mb-0">{{ purchase_stats.mobile_purchase | money }}</div>
+                <small class="text-muted-custom">{{ purchase_stats.mobile_qty }} units</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card credit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Filter Purchase</span>
+                <div class="metric-value fw-bold mb-0">{{ purchase_stats.filter_purchase | money }}</div>
+                <small class="text-muted-custom">{{ purchase_stats.filter_qty }} units</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Other Purchase</span>
+                <div class="metric-value fw-bold mb-0">{{ purchase_stats.other_purchase | money }}</div>
+                <small class="text-muted-custom">{{ purchase_stats.other_qty }} units</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Purchase listing -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Purchase History</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>What</th>
+                            <th>Vendor</th>
+                            <th>Qty / Liters</th>
+                            <th>Cost Price</th>
+                            <th>Sale Price</th>
+                            <th>Total Cost</th>
+                            <th>By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if purchase_logs %}
+                            {% for log in purchase_logs %}
+                            <tr>
+                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ log.category }}</span></td>
+                                <td class="fw-semibold">
+                                    {{ log.item_name }}
+                                    {% if log.company %}
+                                        <small class="text-muted-custom d-block">{{ log.company }}{% if log.item_type %} · {{ log.item_type }}{% endif %}</small>
+                                    {% elif log.item_type %}
+                                        <small class="text-muted-custom d-block">{{ log.item_type }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.vendor or '-' }}</td>
+                                <td class="fw-bold">
+                                    {% if log.category == 'fuel' %}
+                                        {{ "{:,.2f}".format(log.liters or 0) }} L
+                                    {% elif log.category == 'mobile' %}
+                                        {{ log.quantity or 0 }}
+                                        {% if log.liters %} <span class="text-muted-custom fw-normal">({{ "{:,.2f}".format(log.liters) }} L)</span>{% endif %}
+                                    {% else %}
+                                        {{ log.quantity or 0 }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.cost_price | money }}</td>
+                                <td>{{ log.sale_price | money }}</td>
+                                <td class="fw-bold">{{ purchase_amount(log) | money }}</td>
+                                <td>{{ log.creator.name if log.creator else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% elif deliveries %}
+                            {% for del in deliveries %}
+                            <tr>
+                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ del.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td><span class="badge badge-custom bg-secondary">FUEL</span></td>
+                                <td class="fw-semibold">{{ del.fuel_type.name }}</td>
+                                <td>{{ del.supplier or '-' }}</td>
+                                <td class="fw-bold">{{ "{:,.2f}".format(del.liters_added) }} L</td>
+                                <td>{{ del.cost_per_liter | money }}</td>
+                                <td>-</td>
+                                <td class="fw-bold">{{ ((del.cost_per_liter or 0) * (del.liters_added or 0)) | money }}</td>
+                                <td>{{ del.creator.name if del.creator else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="9" class="empty-state text-center py-4">
+                                    <div class="empty-state-icon"><i class="bi bi-cart-plus"></i></div>
+                                    <p class="text-muted-custom mb-0">No purchases for this filter.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            {% with pagination=hist_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'category': category} %}
+                {% include "partials/pagination.html" %}
+            {% endwith %}
+        </div>
+    </div>
+</div>
+{% endblock %}

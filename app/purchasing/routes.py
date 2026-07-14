@@ -1,14 +1,107 @@
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
-from app.inventory import inventory_bp
+from app.purchasing import purchasing_bp
 from app.models import (
     db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog
 )
-from app.utils import paginate
-from datetime import datetime
+from app.utils import paginate, parse_period, PERIOD_CHOICES
+from datetime import datetime, time
 
 
 PER_PAGE = 15
+
+CATEGORY_CHOICES = (
+    ('all', 'All Categories'),
+    ('fuel', 'Fuel'),
+    ('mobile', 'Mobile'),
+    ('filter', 'Filter'),
+    ('other', 'Other'),
+)
+
+
+def _purchase_amount(log):
+    """Total purchase spend for one log row (cost × liters or quantity)."""
+    cost = float(log.cost_price or 0)
+    if log.category == 'fuel':
+        return cost * float(log.liters or 0)
+    return cost * float(log.quantity or 0)
+
+
+def _period_bounds(start_date, end_date):
+    return (
+        datetime.combine(start_date, time.min),
+        datetime.combine(end_date, time.max),
+    )
+
+
+def _compute_purchase_stats(start_date, end_date, category='all'):
+    """Purchase totals for the selected period (and optional category)."""
+    stats = {
+        'petrol_purchase': 0.0,
+        'petrol_liters': 0.0,
+        'diesel_purchase': 0.0,
+        'diesel_liters': 0.0,
+        'mobile_purchase': 0.0,
+        'mobile_qty': 0,
+        'filter_purchase': 0.0,
+        'filter_qty': 0,
+        'other_purchase': 0.0,
+        'other_qty': 0,
+    }
+
+    start_dt, end_dt = _period_bounds(start_date, end_date)
+    query = ItemPurchaseLog.query.filter(
+        ItemPurchaseLog.entry_date >= start_dt,
+        ItemPurchaseLog.entry_date <= end_dt,
+    )
+    if category and category != 'all':
+        query = query.filter(ItemPurchaseLog.category == category)
+
+    for log in query.all():
+        amount = _purchase_amount(log)
+        if log.category == 'fuel':
+            name = (log.item_name or '').lower()
+            if log.fuel_type and log.fuel_type.name:
+                name = log.fuel_type.name.lower()
+            liters = float(log.liters or 0)
+            if 'petrol' in name or 'gasoline' in name:
+                stats['petrol_purchase'] += amount
+                stats['petrol_liters'] += liters
+            elif 'diesel' in name:
+                stats['diesel_purchase'] += amount
+                stats['diesel_liters'] += liters
+        elif log.category == 'mobile':
+            stats['mobile_purchase'] += amount
+            stats['mobile_qty'] += int(log.quantity or 0)
+        elif log.category == 'filter':
+            stats['filter_purchase'] += amount
+            stats['filter_qty'] += int(log.quantity or 0)
+        elif log.category == 'other':
+            stats['other_purchase'] += amount
+            stats['other_qty'] += int(log.quantity or 0)
+
+    if (
+        category in ('all', 'fuel')
+        and not ItemPurchaseLog.query.filter_by(category='fuel').first()
+    ):
+        for entry in StockEntry.query.filter(
+            StockEntry.entry_date >= start_dt,
+            StockEntry.entry_date <= end_dt,
+        ).all():
+            ft = FuelType.query.get(entry.fuel_type_id)
+            if not ft:
+                continue
+            amount = float(entry.cost_per_liter or 0) * float(entry.liters_added or 0)
+            liters = float(entry.liters_added or 0)
+            name = (ft.name or '').lower()
+            if 'petrol' in name or 'gasoline' in name:
+                stats['petrol_purchase'] += amount
+                stats['petrol_liters'] += liters
+            elif 'diesel' in name:
+                stats['diesel_purchase'] += amount
+                stats['diesel_liters'] += liters
+
+    return stats
 
 
 def _find_or_create_shop_item(category, name, company, item_type):
@@ -53,7 +146,7 @@ def _apply_product_sale_price(category, sale_val, company=None, item_type=None, 
     return updated
 
 
-@inventory_bp.route('/', methods=['GET', 'POST'])
+@purchasing_bp.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
     if request.method == 'POST':
@@ -64,7 +157,7 @@ def index():
 
         if category not in ('fuel', 'mobile', 'filter', 'other'):
             flash('Please select a valid item category.', 'danger')
-            return redirect(url_for('inventory.index'))
+            return redirect(url_for('purchasing.index'))
 
         try:
             cost_val = float(cost_price)
@@ -73,7 +166,7 @@ def index():
                 raise ValueError('Cost and sale prices must be greater than zero.')
         except (TypeError, ValueError) as e:
             flash(f'Invalid price values: {e}', 'danger')
-            return redirect(url_for('inventory.index'))
+            return redirect(url_for('purchasing.index'))
 
         if category == 'fuel':
             fuel_type_id = request.form.get('fuel_type_id')
@@ -82,7 +175,7 @@ def index():
 
             if not fuel_type_id or not liters_added:
                 flash('Fuel type and liters are required.', 'danger')
-                return redirect(url_for('inventory.index'))
+                return redirect(url_for('purchasing.index'))
 
             try:
                 liters_val = float(liters_added)
@@ -90,12 +183,12 @@ def index():
                     raise ValueError('Liters must be greater than zero.')
             except ValueError as e:
                 flash(f'Invalid liters value: {e}', 'danger')
-                return redirect(url_for('inventory.index'))
+                return redirect(url_for('purchasing.index'))
 
             if fuel_type_id == 'other':
                 if not fuel_other_name:
                     flash('Please enter the fuel name.', 'danger')
-                    return redirect(url_for('inventory.index'))
+                    return redirect(url_for('purchasing.index'))
                 fuel_type = FuelType.query.filter(
                     db.func.lower(FuelType.name) == fuel_other_name.lower()
                 ).first()
@@ -107,7 +200,7 @@ def index():
                 fuel_type = FuelType.query.get(fuel_type_id)
                 if not fuel_type:
                     flash('Fuel type not found.', 'danger')
-                    return redirect(url_for('inventory.index'))
+                    return redirect(url_for('purchasing.index'))
 
             db.session.add(StockEntry(
                 fuel_type_id=fuel_type.id,
@@ -143,11 +236,11 @@ def index():
             ))
             db.session.commit()
             flash(
-                f"Added {liters_val:.2f}L of {fuel_type.name}. "
+                f"Purchased {liters_val:.2f}L of {fuel_type.name}. "
                 f"Sale price updated to PKR {sale_val:,.2f}/L.",
                 'success'
             )
-            return redirect(url_for('inventory.index'))
+            return redirect(url_for('purchasing.index'))
 
         company = (request.form.get('company') or '').strip() or None
         item_type = (request.form.get('item_type') or '').strip() or None
@@ -157,18 +250,18 @@ def index():
         if category == 'mobile':
             if not company or not item_type:
                 flash('Mobile company name and type are required.', 'danger')
-                return redirect(url_for('inventory.index'))
+                return redirect(url_for('purchasing.index'))
             item_name = f"{company} {item_type}"
         elif category == 'filter':
             if not company or not item_type:
                 flash('Filter type and company name are required.', 'danger')
-                return redirect(url_for('inventory.index'))
+                return redirect(url_for('purchasing.index'))
             item_name = f"{company} {item_type}"
         else:
             item_name = (request.form.get('item_name') or '').strip()
             if not item_name:
                 flash('Item name is required for other items.', 'danger')
-                return redirect(url_for('inventory.index'))
+                return redirect(url_for('purchasing.index'))
 
         try:
             qty_val = int(quantity_raw)
@@ -176,7 +269,7 @@ def index():
                 raise ValueError('Quantity must be greater than zero.')
         except (TypeError, ValueError) as e:
             flash(f'Invalid quantity: {e}', 'danger')
-            return redirect(url_for('inventory.index'))
+            return redirect(url_for('purchasing.index'))
 
         liters_val = None
         if category == 'mobile' and liters_raw:
@@ -186,7 +279,7 @@ def index():
                     raise ValueError('Liters cannot be negative.')
             except ValueError as e:
                 flash(f'Invalid liters value: {e}', 'danger')
-                return redirect(url_for('inventory.index'))
+                return redirect(url_for('purchasing.index'))
 
         shop_item = _find_or_create_shop_item(category, item_name, company, item_type)
         if shop_item:
@@ -234,30 +327,58 @@ def index():
             added_by=current_user.id
         ))
         db.session.commit()
-        msg = f"Added {qty_val} × {item_name} to inventory."
+        msg = f"Purchased {qty_val} × {item_name}."
         if price_updates:
             msg += f" Sale price updated to PKR {sale_val:,.2f} for this product."
         else:
             msg += f" Sale price set to PKR {sale_val:,.2f}."
         flash(msg, 'success')
-        return redirect(url_for('inventory.index'))
+        return redirect(url_for('purchasing.index'))
 
-    fuel_types = FuelType.query.all()
-    live_stock = {}
-    for ft in fuel_types:
-        live_stock[ft.id] = Inventory.query.filter_by(fuel_type_id=ft.id).first()
+    period, start_date, end_date = parse_period(request.args)
+    category = (request.args.get('category') or 'all').strip().lower()
+    if category not in dict(CATEGORY_CHOICES):
+        category = 'all'
 
-    stock_page = request.args.get('stock_page', 1)
-    shop_items, shop_pagination = paginate(
-        OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc()),
-        stock_page,
+    start_dt, end_dt = _period_bounds(start_date, end_date)
+    hist_page = request.args.get('page', 1)
+
+    log_query = ItemPurchaseLog.query.filter(
+        ItemPurchaseLog.entry_date >= start_dt,
+        ItemPurchaseLog.entry_date <= end_dt,
+    )
+    if category != 'all':
+        log_query = log_query.filter(ItemPurchaseLog.category == category)
+
+    purchase_logs, hist_pagination = paginate(
+        log_query.order_by(ItemPurchaseLog.entry_date.desc()),
+        hist_page,
         PER_PAGE,
     )
 
+    deliveries = []
+    if hist_pagination['total'] == 0 and category in ('all', 'fuel'):
+        if not ItemPurchaseLog.query.filter_by(category='fuel').first():
+            deliveries, hist_pagination = paginate(
+                StockEntry.query.filter(
+                    StockEntry.entry_date >= start_dt,
+                    StockEntry.entry_date <= end_dt,
+                ).order_by(StockEntry.entry_date.desc()).all(),
+                hist_page,
+                PER_PAGE,
+            )
+
     return render_template(
-        'inventory/index.html',
-        fuel_types=fuel_types,
-        live_stock=live_stock,
-        shop_items=shop_items,
-        shop_pagination=shop_pagination,
+        'purchasing/index.html',
+        purchase_logs=purchase_logs,
+        deliveries=deliveries,
+        hist_pagination=hist_pagination,
+        purchase_stats=_compute_purchase_stats(start_date, end_date, category),
+        purchase_amount=_purchase_amount,
+        period=period,
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+        period_choices=PERIOD_CHOICES,
+        category=category,
+        category_choices=CATEGORY_CHOICES,
     )

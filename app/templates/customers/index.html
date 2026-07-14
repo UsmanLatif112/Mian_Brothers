@@ -140,6 +140,9 @@
                     </tbody>
                 </table>
             </div>
+            {% with pagination=customers_pagination, page_param='page', keep_args={'search': search, 'filter': filter} %}
+                {% include "partials/pagination.html" %}
+            {% endwith %}
         </div>
     </div>
 </div>
@@ -162,7 +165,7 @@
                         <input type="text" class="form-control form-control-custom" id="create_name" name="name" required placeholder="Acme Logistics / Bob Smith">
                     </div>
                     <div class="mb-3">
-                        <label for="create_phone" class="form-label form-label-custom">Phone Number (For SMS Receipts)</label>
+                        <label for="create_phone" class="form-label form-label-custom">Phone Number</label>
                         <input type="text" class="form-control form-control-custom" id="create_phone" name="phone" placeholder="+1234567890">
                     </div>
                     <div class="mb-3">

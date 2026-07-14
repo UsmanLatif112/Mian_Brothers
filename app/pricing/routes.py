@@ -50,15 +50,37 @@ def index():
                 flash('Selected inventory item does not exist.', 'danger')
                 return redirect(url_for('pricing.index'))
 
-            shop_item.sale_price = price_val
-            db.session.add(ItemPriceLog(
-                other_item_id=shop_item.id,
-                sale_price=price_val,
-                cost_price=shop_item.cost_price,
-                updated_by=current_user.id
-            ))
+            # Same product = same category + company + type (each has its own price).
+            query = OtherItem.query.filter_by(category=shop_item.category)
+            if shop_item.company:
+                query = query.filter_by(company=shop_item.company)
+            else:
+                query = query.filter(OtherItem.company.is_(None))
+            if shop_item.item_type:
+                query = query.filter_by(item_type=shop_item.item_type)
+            else:
+                query = query.filter(OtherItem.item_type.is_(None))
+            if shop_item.category == 'other':
+                query = query.filter_by(name=shop_item.name)
+
+            updated = 0
+            for item in query.all():
+                item.sale_price = price_val
+                db.session.add(ItemPriceLog(
+                    other_item_id=item.id,
+                    sale_price=price_val,
+                    cost_price=item.cost_price,
+                    updated_by=current_user.id
+                ))
+                updated += 1
+
             db.session.commit()
-            flash(f"Updated price for {shop_item.name} to PKR {price_val:,.2f} successfully.", 'success')
+            label = shop_item.display_name()
+            flash(
+                f"Updated sale price for {label} to PKR {price_val:,.2f} "
+                f"({updated} stock row{'s' if updated != 1 else ''}).",
+                'success'
+            )
             return redirect(url_for('pricing.index'))
 
         flash('Invalid item selection.', 'danger')

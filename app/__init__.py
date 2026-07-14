@@ -39,15 +39,17 @@ def create_app():
     from app.inventory.routes import inventory_bp
     from app.sales.routes import sales_bp
     from app.customers.routes import customers_bp
-    from app.sms.routes import sms_bp
+    from app.expenses import expenses_bp
+    from app.purchasing import purchasing_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(pricing_bp, url_prefix='/pricing')
     app.register_blueprint(inventory_bp, url_prefix='/inventory')
+    app.register_blueprint(purchasing_bp, url_prefix='/purchasing')
     app.register_blueprint(sales_bp, url_prefix='/sales')
     app.register_blueprint(customers_bp, url_prefix='/customers')
-    app.register_blueprint(sms_bp, url_prefix='/sms')
+    app.register_blueprint(expenses_bp, url_prefix='/expenses')
     
     # Root route redirect
     @app.route('/')
@@ -61,8 +63,42 @@ def create_app():
         ensure_inventory_schema()
         ensure_sales_schema()
         ensure_credit_sales_schema()
+        ensure_journal_schema()
         
     return app
+
+
+def ensure_journal_schema():
+    """Add amount_paid / entry_type on credit_sales for SQLite and MySQL."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    if 'credit_sales' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('credit_sales')}
+    alters = []
+    url = str(db.engine.url)
+    is_sqlite = url.startswith('sqlite')
+
+    if 'amount_paid' not in existing:
+        if is_sqlite:
+            alters.append("ALTER TABLE credit_sales ADD COLUMN amount_paid NUMERIC(12, 2) NOT NULL DEFAULT 0")
+        else:
+            alters.append("ALTER TABLE credit_sales ADD COLUMN amount_paid NUMERIC(12, 2) NOT NULL DEFAULT 0")
+    if 'entry_type' not in existing:
+        if is_sqlite:
+            alters.append("ALTER TABLE credit_sales ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'sale'")
+        else:
+            alters.append("ALTER TABLE credit_sales ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'sale'")
+
+    if not alters:
+        return
+
+    with db.engine.begin() as conn:
+        for stmt in alters:
+            conn.execute(text(stmt))
+    print("Upgraded credit_sales for amount_paid / entry_type (journal).")
 
 
 def ensure_inventory_schema():
