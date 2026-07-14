@@ -250,6 +250,7 @@ class Customer(db.Model):
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=True)
     address = db.Column(db.String(200), nullable=True)
+    old_book_no = db.Column(db.String(50), nullable=True)
     credit_limit = db.Column(db.Numeric(12, 2), nullable=True)
     current_balance_due = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

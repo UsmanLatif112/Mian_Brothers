@@ -418,3 +418,35 @@ h1, h2, h3, h4, h5, h6 {
     flex-shrink: 0;
     background-color: var(--card-bg);
 }
+
+/* Customer create/edit modals — keep footer buttons fully visible */
+#createCustomerModal .customer-modal-content,
+#editCustomerModal .customer-modal-content {
+    max-height: min(90vh, 680px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#createCustomerModal .customer-modal-form,
+#editCustomerModal .customer-modal-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: inherit;
+    flex: 1 1 auto;
+}
+
+#createCustomerModal .customer-modal-body,
+#editCustomerModal .customer-modal-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(55vh, 420px);
+}
+
+#createCustomerModal .modal-footer,
+#editCustomerModal .modal-footer {
+    flex-shrink: 0;
+    background-color: var(--card-bg);
+}

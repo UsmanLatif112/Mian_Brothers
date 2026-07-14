@@ -71,6 +71,10 @@
                     <i class="bi bi-telephone text-muted-custom"></i>
                     <span>{{ customer.phone or 'No Phone' }}</span>
                 </div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-journal-bookmark text-muted-custom"></i>
+                    <span>Old Book No: {{ customer.old_book_no or '—' }}</span>
+                </div>
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-geo-alt text-muted-custom"></i>
                     <span class="text-truncate">{{ customer.address or 'No Billing Address' }}</span>

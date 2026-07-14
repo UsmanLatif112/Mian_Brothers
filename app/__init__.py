@@ -64,8 +64,26 @@ def create_app():
         ensure_sales_schema()
         ensure_credit_sales_schema()
         ensure_journal_schema()
+        ensure_customers_schema()
         
     return app
+
+
+def ensure_customers_schema():
+    """Add optional old_book_no on customers for SQLite and MySQL."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    if 'customers' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('customers')}
+    if 'old_book_no' in existing:
+        return
+
+    with db.engine.begin() as conn:
+        conn.execute(text("ALTER TABLE customers ADD COLUMN old_book_no VARCHAR(50) NULL"))
+    print("Upgraded customers schema for old_book_no.")
 
 
 def ensure_journal_schema():

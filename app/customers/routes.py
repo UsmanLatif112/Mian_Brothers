@@ -17,6 +17,7 @@ def index():
             name = request.form.get('name')
             phone = request.form.get('phone')
             address = request.form.get('address')
+            old_book_no = (request.form.get('old_book_no') or '').strip() or None
             limit = request.form.get('credit_limit')
             
             if not name:
@@ -37,6 +38,7 @@ def index():
                 name=name,
                 phone=phone,
                 address=address,
+                old_book_no=old_book_no,
                 credit_limit=limit_val,
                 current_balance_due=0.00
             )
@@ -52,6 +54,7 @@ def index():
                 customer.name = request.form.get('name')
                 customer.phone = request.form.get('phone')
                 customer.address = request.form.get('address')
+                customer.old_book_no = (request.form.get('old_book_no') or '').strip() or None
                 
                 limit = request.form.get('credit_limit')
                 limit_val = None
@@ -74,7 +77,11 @@ def index():
     query = Customer.query
     
     if search_query:
-        query = query.filter(Customer.name.like(f"%{search_query}%") | Customer.phone.like(f"%{search_query}%"))
+        query = query.filter(
+            Customer.name.like(f"%{search_query}%")
+            | Customer.phone.like(f"%{search_query}%")
+            | Customer.old_book_no.like(f"%{search_query}%")
+        )
         
     if status_filter == 'due':
         query = query.filter(Customer.current_balance_due > 0)
