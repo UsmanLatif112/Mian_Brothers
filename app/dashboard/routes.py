@@ -3,7 +3,8 @@ from flask_login import login_required
 from app.dashboard import dashboard_bp
 from app.models import (
     db, Sale, StockEntry, Customer, Inventory, FuelType, FuelPrice,
-    OtherItem, MeterReading, CreditSale, Expense, Payment, DailyCashCount
+    OtherItem, MeterReading, CreditSale, Expense, Payment, DailyCashCount,
+    ItemPurchaseLog,
 )
 from app.utils import parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for
 from datetime import datetime, timedelta
@@ -29,6 +30,255 @@ def get_cost_for_sale(fuel_type_id, sale_date):
     return 0.0
 
 
+def _build_meter_trend(start, end):
+    """
+    Profit for the selected period:
+
+      Gross = Sale value − COGS
+      Net   = Gross − Expenses   ← Profit KPI / chart
+
+    Include in sales: meter fuel, other/shop, FT, credit sales.
+    Exclude: advance, loan, opening due.
+    """
+    from collections import defaultdict
+
+    if start > end:
+        start, end = end, start
+    span = (end - start).days + 1
+
+    # Latest selling rates (per fuel type)
+    rates = {}
+    for fp in FuelPrice.query.order_by(FuelPrice.created_at.desc()).all():
+        if fp.fuel_type_id not in rates:
+            rates[fp.fuel_type_id] = float(fp.price_per_liter or 0)
+
+    # Fuel cost timeline: (date, cost) ascending per fuel_type_id
+    # Prefer purchase logs; fall back to legacy stock_entries per fuel type.
+    fuel_costs = defaultdict(list)
+    for log in ItemPurchaseLog.query.filter(
+        ItemPurchaseLog.category == 'fuel',
+        ItemPurchaseLog.fuel_type_id.isnot(None),
+    ).order_by(ItemPurchaseLog.entry_date.asc()).all():
+        ed = log.entry_date
+        d = ed.date() if isinstance(ed, datetime) else ed
+        if d is None:
+            continue
+        fuel_costs[log.fuel_type_id].append((d, float(log.cost_price or 0)))
+
+    fuels_with_purchase_logs = set(fuel_costs.keys())
+    for se in StockEntry.query.order_by(StockEntry.entry_date.asc()).all():
+        if not se.fuel_type_id or se.fuel_type_id in fuels_with_purchase_logs:
+            continue
+        ed = se.entry_date
+        d = ed.date() if isinstance(ed, datetime) else ed
+        if d is None:
+            continue
+        fuel_costs[se.fuel_type_id].append((d, float(se.cost_per_liter or 0)))
+
+    def as_date(val):
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val.date()
+        if isinstance(val, str):
+            try:
+                return datetime.strptime(val[:10], '%Y-%m-%d').date()
+            except ValueError:
+                return None
+        return val
+
+    def fuel_cost_as_of(fuel_type_id, sale_date):
+        sale_date = as_date(sale_date)
+        entries = fuel_costs.get(fuel_type_id) or []
+        best = None
+        for d, cost in entries:
+            if sale_date and d <= sale_date:
+                best = cost
+            else:
+                break
+        if best is not None:
+            return best
+        return entries[0][1] if entries else 0.0
+
+    # Other/FT current cost by item id
+    item_costs = {
+        oi.id: float(oi.cost_price or 0)
+        for oi in OtherItem.query.all()
+    }
+
+    day_sales = defaultdict(float)
+    day_cogs = defaultdict(float)
+    day_gross = defaultdict(float)
+    day_expenses = defaultdict(float)
+
+    # 1) Meter / pump fuel
+    readings = MeterReading.query.filter(
+        MeterReading.reading_date >= start,
+        MeterReading.reading_date <= end,
+        MeterReading.closing_reading.isnot(None),
+    ).all()
+    for reading in readings:
+        d = as_date(reading.reading_date)
+        if d is None:
+            continue
+        liters = float(reading.liters_sold or 0)
+        rate = rates.get(reading.fuel_type_id, 0.0)
+        cost = fuel_cost_as_of(reading.fuel_type_id, d)
+        sale_val = liters * rate
+        cogs_val = liters * cost
+        day_sales[d] += sale_val
+        day_cogs[d] += cogs_val
+        day_gross[d] += sale_val - cogs_val
+
+    # 2) Credit / other / FT sales — skip advance/loan/opening
+    entries = CreditSale.query.filter(
+        CreditSale.sale_date >= start,
+        CreditSale.sale_date <= end,
+    ).all()
+    for e in entries:
+        et = (e.entry_type or 'sale').lower()
+        if et in ('advance', 'loan', 'opening'):
+            continue
+
+        d = as_date(e.sale_date)
+        if d is None:
+            continue
+        sale_val = float(e.amount or 0)
+        qty = float(e.liters or 0)
+        cogs_val = 0.0
+
+        if e.fuel_type_id:
+            cogs_val = qty * fuel_cost_as_of(e.fuel_type_id, d)
+        elif e.other_item_id:
+            unit_cost = item_costs.get(e.other_item_id, 0.0)
+            cogs_val = qty * unit_cost
+
+        day_sales[d] += sale_val
+        day_cogs[d] += cogs_val
+        day_gross[d] += sale_val - cogs_val
+
+    # 3) Period expenses (by expense_date)
+    for exp in Expense.query.filter(
+        Expense.expense_date >= start,
+        Expense.expense_date <= end,
+    ).all():
+        d = as_date(exp.expense_date)
+        if d is not None:
+            day_expenses[d] += float(exp.amount or 0)
+
+    day_net = defaultdict(float)
+    for d in set(day_gross) | set(day_expenses):
+        day_net[d] = day_gross.get(d, 0.0) - day_expenses.get(d, 0.0)
+
+    total_sales = round(sum(day_sales.values()), 2)
+    total_cogs = round(sum(day_cogs.values()), 2)
+    total_gross = round(sum(day_gross.values()), 2)
+    total_expenses = round(sum(day_expenses.values()), 2)
+    total_profit = round(total_gross - total_expenses, 2)
+
+    labels = []
+    date_labels = []
+    sales_trend = []
+    profit_trend = []
+    expense_trend = []
+    gross_trend = []
+    cogs_trend = []
+    grain = 'day'
+
+    if span <= 62:
+        grain = 'day'
+        cursor = start
+        while cursor <= end:
+            labels.append(cursor.strftime('%b %d'))
+            date_labels.append(cursor.strftime('%Y-%m-%d (%a)'))
+            sales_trend.append(round(day_sales.get(cursor, 0.0), 2))
+            profit_trend.append(round(day_net.get(cursor, 0.0), 2))
+            expense_trend.append(round(day_expenses.get(cursor, 0.0), 2))
+            gross_trend.append(round(day_gross.get(cursor, 0.0), 2))
+            cogs_trend.append(round(day_cogs.get(cursor, 0.0), 2))
+            cursor += timedelta(days=1)
+    elif span <= 400:
+        grain = 'week'
+        cursor = start
+        while cursor <= end:
+            week_end = min(cursor + timedelta(days=6), end)
+            s = p = ex = g = c = 0.0
+            d = cursor
+            while d <= week_end:
+                s += day_sales.get(d, 0.0)
+                p += day_net.get(d, 0.0)
+                ex += day_expenses.get(d, 0.0)
+                g += day_gross.get(d, 0.0)
+                c += day_cogs.get(d, 0.0)
+                d += timedelta(days=1)
+            if cursor == week_end:
+                labels.append(cursor.strftime('%b %d'))
+                date_labels.append(cursor.strftime('%Y-%m-%d (%a)'))
+            else:
+                labels.append(f"{cursor.strftime('%b %d')}–{week_end.strftime('%b %d')}")
+                date_labels.append(
+                    f"{cursor.strftime('%Y-%m-%d')} → {week_end.strftime('%Y-%m-%d')}"
+                )
+            sales_trend.append(round(s, 2))
+            profit_trend.append(round(p, 2))
+            expense_trend.append(round(ex, 2))
+            gross_trend.append(round(g, 2))
+            cogs_trend.append(round(c, 2))
+            cursor = week_end + timedelta(days=1)
+    else:
+        grain = 'month'
+        y, m = start.year, start.month
+        while True:
+            month_start = datetime(y, m, 1).date()
+            if month_start > end:
+                break
+            if m == 12:
+                next_month = datetime(y + 1, 1, 1).date()
+            else:
+                next_month = datetime(y, m + 1, 1).date()
+            month_end = min(next_month - timedelta(days=1), end)
+            range_start = max(month_start, start)
+            s = p = ex = g = c = 0.0
+            d = range_start
+            while d <= month_end:
+                s += day_sales.get(d, 0.0)
+                p += day_net.get(d, 0.0)
+                ex += day_expenses.get(d, 0.0)
+                g += day_gross.get(d, 0.0)
+                c += day_cogs.get(d, 0.0)
+                d += timedelta(days=1)
+            labels.append(range_start.strftime('%b %Y'))
+            date_labels.append(
+                f"{range_start.strftime('%Y-%m-%d')} → {month_end.strftime('%Y-%m-%d')}"
+            )
+            sales_trend.append(round(s, 2))
+            profit_trend.append(round(p, 2))
+            expense_trend.append(round(ex, 2))
+            gross_trend.append(round(g, 2))
+            cogs_trend.append(round(c, 2))
+            if next_month > end:
+                break
+            y, m = next_month.year, next_month.month
+
+    return {
+        'labels': labels,
+        'date_labels': date_labels,
+        'sales_trend': sales_trend,
+        'profit_trend': profit_trend,
+        'expense_trend': expense_trend,
+        'gross_trend': gross_trend,
+        'cogs_trend': cogs_trend,
+        'total_sales': total_sales,
+        'total_cogs': total_cogs,
+        'total_gross': total_gross,
+        'total_expenses': total_expenses,
+        'total_profit': total_profit,
+        'grain': grain,
+        'start': start.isoformat(),
+        'end': end.isoformat(),
+    }
+
+
 def _models_ns():
     return SimpleNamespace(
         MeterReading=MeterReading,
@@ -46,23 +296,16 @@ def _models_ns():
 @login_required
 def index():
     period, start, end = parse_period(request.args)
-    stats = compute_period_stats(start, end, _models_ns())
+    stats = compute_period_stats(
+        start, end, _models_ns(),
+        include_opening_credit=(period == 'all'),
+    )
 
-    # Profit for period from meter readings
-    total_profit = 0.0
-    readings = MeterReading.query.filter(
-        MeterReading.reading_date >= start,
-        MeterReading.reading_date <= end,
-        MeterReading.closing_reading.isnot(None),
-    ).all()
-    for reading in readings:
-        liters = float(reading.liters_sold or 0)
-        rate = fuel_rate_for(reading.fuel_type_id, FuelPrice)
-        cost = get_cost_for_sale(
-            reading.fuel_type_id,
-            datetime.combine(reading.reading_date, datetime.min.time()),
-        )
-        total_profit += liters * (rate - cost)
+    # Same calculation as the Revenue & Margin chart (period total)
+    meter_trend = _build_meter_trend(start, end)
+    total_profit = meter_trend['total_profit']
+    total_gross = meter_trend['total_gross']
+    total_expenses_profit = meter_trend['total_expenses']
 
     DRY_THRESHOLD = 100.0
     inventory_items = Inventory.query.all()
@@ -99,6 +342,8 @@ def index():
         'dashboard/index.html',
         stats=stats,
         total_profit=total_profit,
+        total_gross=total_gross,
+        total_expenses_profit=total_expenses_profit,
         stock_summary=stock_summary,
         dry_message=dry_message,
         petrol_stock=petrol_stock,
@@ -177,53 +422,9 @@ def _top_overdue_credit_customers(limit=200000, overdue_days=30):
 @dashboard_bp.route('/api/chart-data')
 @login_required
 def chart_data():
-    period, start, end = parse_period(request.args)
-    days = (end - start).days + 1
-    days = max(min(days, 366), 1)
-    dates_list = [start + timedelta(days=x) for x in range(days)]
-    labels = [d.strftime('%b %d') for d in dates_list]
-
-    sales_trend = []
-    profit_trend = []
-    for d in dates_list:
-        readings = MeterReading.query.filter(
-            MeterReading.reading_date == d,
-            MeterReading.closing_reading.isnot(None),
-        ).all()
-        day_sales = 0.0
-        day_profit = 0.0
-        for reading in readings:
-            liters = float(reading.liters_sold or 0)
-            rate = fuel_rate_for(reading.fuel_type_id, FuelPrice)
-            day_sales += liters * rate
-            cost = get_cost_for_sale(reading.fuel_type_id, datetime.combine(d, datetime.min.time()))
-            day_profit += liters * (rate - cost)
-        sales_trend.append(round(day_sales, 2))
-        profit_trend.append(round(day_profit, 2))
-
-    fuel_sales = db.session.query(
-        FuelType.name, func.sum(MeterReading.liters_sold)
-    ).join(MeterReading, MeterReading.fuel_type_id == FuelType.id).filter(
-        MeterReading.reading_date >= start,
-        MeterReading.reading_date <= end,
-        MeterReading.closing_reading.isnot(None),
-    ).group_by(FuelType.name).all()
-
-    stats = compute_period_stats(start, end, _models_ns())
-
-    return jsonify({
-        'labels': labels,
-        'sales_trend': sales_trend,
-        'profit_trend': profit_trend,
-        'fuel_split': {
-            'labels': [item[0] for item in fuel_sales] or ['No Data'],
-            'data': [float(item[1] or 0) for item in fuel_sales] or [0.0],
-        },
-        'payment_split': {
-            'labels': ['Expected Cash', 'Period Credit', 'Expenses'],
-            'data': [stats['expected_cash'], stats['period_credit'], stats['expense_total']],
-        },
-    })
+    """Trend series using the same profit math as the Profit KPI card."""
+    _, start, end = parse_period(request.args)
+    return jsonify(_build_meter_trend(start, end))
 
 
 @dashboard_bp.route('/reports', methods=['GET', 'POST'])

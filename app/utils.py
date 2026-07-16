@@ -9,8 +9,42 @@ PERIOD_CHOICES = (
     ('month', 'This Month'),
     ('6months', 'Last 6 Months'),
     ('year', 'This Year'),
+    ('all', 'All'),
     ('custom', 'Custom Dates'),
 )
+
+
+def earliest_activity_date():
+    """Earliest business date across sales, meters, expenses, payments, purchases."""
+    from app.models import (
+        MeterReading, CreditSale, Expense, Payment,
+        ItemPurchaseLog, StockEntry, DailyCashCount,
+    )
+
+    today = datetime.utcnow().date()
+    candidates = []
+
+    def _add(val):
+        if val is None:
+            return
+        if isinstance(val, datetime):
+            val = val.date()
+        elif isinstance(val, str):
+            try:
+                val = datetime.strptime(val[:10], '%Y-%m-%d').date()
+            except ValueError:
+                return
+        candidates.append(val)
+
+    _add(MeterReading.query.with_entities(func.min(MeterReading.reading_date)).scalar())
+    _add(CreditSale.query.with_entities(func.min(CreditSale.sale_date)).scalar())
+    _add(Expense.query.with_entities(func.min(Expense.expense_date)).scalar())
+    _add(Payment.query.with_entities(func.min(func.date(Payment.payment_date))).scalar())
+    _add(ItemPurchaseLog.query.with_entities(func.min(ItemPurchaseLog.entry_date)).scalar())
+    _add(StockEntry.query.with_entities(func.min(StockEntry.entry_date)).scalar())
+    _add(DailyCashCount.query.with_entities(func.min(DailyCashCount.count_date)).scalar())
+
+    return min(candidates) if candidates else today
 
 
 def parse_form_date(raw, default=None):
@@ -42,9 +76,9 @@ def datetime_from_date(d, hour=12):
 def parse_period(args):
     """Resolve start/end dates from request args. Returns (period, start_date, end_date)."""
     today = datetime.utcnow().date()
-    period = (args.get('period') or 'today').strip().lower()
+    period = (args.get('period') or 'all').strip().lower()
     if period not in dict(PERIOD_CHOICES):
-        period = 'today'
+        period = 'all'
 
     start = end = today
 
@@ -58,6 +92,10 @@ def parse_period(args):
         start = today - timedelta(days=182)
     elif period == 'year':
         start = today.replace(month=1, day=1)
+    elif period == 'all':
+        # Full history: first recorded activity → today
+        start = earliest_activity_date()
+        end = today
     elif period == 'custom':
         start_raw = (args.get('start_date') or '').strip()
         end_raw = (args.get('end_date') or '').strip()
@@ -128,10 +166,13 @@ def paginate(query_or_list, page, per_page=15):
     }
 
 
-def compute_period_stats(start, end, models):
+def compute_period_stats(start, end, models, include_opening_credit=False):
     """
     Aggregate petrol/diesel/other/credit/expense/cash for [start, end].
     models: namespace with MeterReading, FuelType, FuelPrice, CreditSale, Expense, Payment, DailyCashCount
+
+    include_opening_credit: when True (e.g. period=All), unpaid opening/previous-book
+    credit is included in period_credit for display. Cash-in-hand still excludes opening.
     """
     MeterReading = models.MeterReading
     FuelType = models.FuelType
@@ -143,6 +184,23 @@ def compute_period_stats(start, end, models):
     Customer = models.Customer
 
     fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+
+    # Latest rates once (avoid per-fuel FuelPrice queries)
+    rate_by_fuel = {}
+    for fp in FuelPrice.query.order_by(FuelPrice.created_at.desc()).all():
+        if fp.fuel_type_id not in rate_by_fuel:
+            rate_by_fuel[fp.fuel_type_id] = float(fp.price_per_liter or 0)
+
+    # All meter readings in range — single query
+    meter_rows = MeterReading.query.filter(
+        MeterReading.reading_date >= start,
+        MeterReading.reading_date <= end,
+        MeterReading.closing_reading.isnot(None),
+    ).all()
+    liters_by_fuel = {}
+    for r in meter_rows:
+        liters_by_fuel[r.fuel_type_id] = liters_by_fuel.get(r.fuel_type_id, 0.0) + float(r.liters_sold or 0)
+
     by_fuel = {}
     meter_total = 0.0
     meter_liters = 0.0
@@ -150,14 +208,8 @@ def compute_period_stats(start, end, models):
     petrol_liters = diesel_liters = 0.0
 
     for ft in fuel_types:
-        readings = MeterReading.query.filter(
-            MeterReading.fuel_type_id == ft.id,
-            MeterReading.reading_date >= start,
-            MeterReading.reading_date <= end,
-            MeterReading.closing_reading.isnot(None),
-        ).all()
-        liters = sum(float(r.liters_sold or 0) for r in readings)
-        rate = fuel_rate_for(ft.id, FuelPrice)
+        liters = liters_by_fuel.get(ft.id, 0.0)
+        rate = rate_by_fuel.get(ft.id, 0.0)
         amount = liters * rate
         by_fuel[ft.id] = {'fuel': ft, 'liters': liters, 'rate': rate, 'amount': amount}
         meter_total += amount
@@ -187,6 +239,7 @@ def compute_period_stats(start, end, models):
     loans = 0.0
     sale_cash_paid = 0.0
     period_credit_sales = 0.0
+    opening_credit = 0.0
 
     for e in entries:
         amt = float(e.amount or 0)
@@ -205,8 +258,9 @@ def compute_period_stats(start, end, models):
             loans += amt
             continue
         if et == 'opening':
-            # Opening / previous book credit — tracked on customer balance only.
-            # Never counted in period cash-in-hand / period credit KPIs.
+            # Opening / previous book credit — excluded from cash-in-hand.
+            # Included in Credit KPI only when include_opening_credit=True (All).
+            opening_credit += credit
             continue
 
         # sale
@@ -226,11 +280,10 @@ def compute_period_stats(start, end, models):
         elif e.fuel_type_id:
             fuel_credit += credit
 
-    expense_q = Expense.query.filter(
+    expenses = Expense.query.filter(
         Expense.expense_date >= start,
         Expense.expense_date <= end,
-    )
-    expenses = expense_q.order_by(Expense.expense_date.desc(), Expense.id.desc()).all()
+    ).order_by(Expense.expense_date.desc(), Expense.id.desc()).all()
     expense_total = sum(float(x.amount or 0) for x in expenses)
 
     payments = Payment.query.filter(
@@ -244,17 +297,20 @@ def compute_period_stats(start, end, models):
     purchase_total = 0.0
     purchase_start = datetime.combine(start, time.min)
     purchase_end = datetime.combine(end, time.max)
-    for log in ItemPurchaseLog.query.filter(
+    purchase_logs = ItemPurchaseLog.query.filter(
         ItemPurchaseLog.entry_date >= purchase_start,
         ItemPurchaseLog.entry_date <= purchase_end,
-    ).all():
+    ).all()
+    for log in purchase_logs:
         cost = float(log.cost_price or 0)
         if log.category in ('fuel', 'ft_mobile'):
             purchase_total += cost * float(log.liters or 0)
         else:
             purchase_total += cost * float(log.quantity or 0)
 
-    if not ItemPurchaseLog.query.filter_by(category='fuel').first():
+    # Only fall back to StockEntry if there are no fuel purchase logs at all (legacy)
+    has_fuel_purchase_log = any(log.category == 'fuel' for log in purchase_logs)
+    if not has_fuel_purchase_log:
         for entry in StockEntry.query.filter(
             StockEntry.entry_date >= purchase_start,
             StockEntry.entry_date <= purchase_end,
@@ -264,14 +320,18 @@ def compute_period_stats(start, end, models):
     # Total sale = fuel (meter) + other items + FT Mobile Oil
     total_sale = meter_total + other_sale + ft_sale
 
-    # Credit = fuel on credit + other items on credit + FT credit + borrowed money
-    period_credit = fuel_credit + other_credit + ft_credit + loans
+    # Activity credit only (excludes opening) — used for cash-in-hand
+    activity_credit = fuel_credit + other_credit + ft_credit + loans
+
+    # Credit KPI: optionally include opening (All filter)
+    period_credit = activity_credit + (opening_credit if include_opening_credit else 0.0)
 
     # Deposits = customer advances + payments collected
     deposits = advances + payments_total
 
-    # Cash in hand = (fuel + other + FT + deposits) − credit − expenses
-    cash_in_hand = total_sale + deposits - period_credit - expense_total
+    # Cash in hand = (fuel + other + FT + deposits) − activity credit − expenses
+    # Opening book credit must never reduce cash-in-hand.
+    cash_in_hand = total_sale + deposits - activity_credit - expense_total
 
     cash_counts = DailyCashCount.query.filter(
         DailyCashCount.count_date >= start,
@@ -307,6 +367,8 @@ def compute_period_stats(start, end, models):
         'ft_credit': ft_credit,
         'ft_liters': ft_liters,
         'fuel_credit': fuel_credit,
+        'opening_credit': opening_credit,
+        'activity_credit': activity_credit,
         'period_credit': period_credit,
         'period_credit_sales': period_credit_sales,
         'sale_cash_paid': sale_cash_paid,

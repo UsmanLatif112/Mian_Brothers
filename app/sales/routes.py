@@ -491,7 +491,10 @@ def index():
         DailyCashCount=DailyCashCount,
         Customer=Customer,
     )
-    stats = compute_period_stats(start, end, models_ns)
+    stats = compute_period_stats(
+        start, end, models_ns,
+        include_opening_credit=(period == 'all'),
+    )
 
     day_cash = DailyCashCount.query.filter_by(count_date=today).first()
 

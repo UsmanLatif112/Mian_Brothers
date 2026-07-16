@@ -62,15 +62,21 @@
 
 <script>
 (function () {
+    const form = document.getElementById('period-filter-form');
     const sel = document.getElementById('period-select');
-    if (!sel) return;
-    sel.addEventListener('change', () => {
+    if (!form || !sel) return;
+    const dateInputs = form.querySelectorAll('[name="start_date"], [name="end_date"]');
+    const syncDates = () => {
+        const isCustom = sel.value === 'custom';
+        dateInputs.forEach((el) => { el.disabled = !isCustom; });
         document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', sel.value !== 'custom');
+            el.classList.toggle('d-none', !isCustom);
         });
-        if (sel.value !== 'custom') {
-            document.getElementById('period-filter-form').submit();
-        }
+    };
+    syncDates();
+    sel.addEventListener('change', () => {
+        syncDates();
+        if (sel.value !== 'custom') form.submit();
     });
 })();
 </script>
@@ -128,7 +134,13 @@
             <span class="kpi-label">Credit</span>
         </div>
         <div class="kpi-value text-warning">{{ stats.period_credit | money }}</div>
-        <div class="kpi-meta">Due {{ stats.outstanding_credit | money }}</div>
+        <div class="kpi-meta">
+            {% if period == 'all' %}
+            All-time due {{ stats.outstanding_credit | money }}
+            {% else %}
+            Due {{ stats.outstanding_credit | money }}
+            {% endif %}
+        </div>
     </a>
 
     <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=expense" class="kpi-card kpi-expense">
@@ -161,10 +173,10 @@
     <div class="kpi-card kpi-profit">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-trophy"></i></span>
-            <span class="kpi-label">Profit</span>
+            <span class="kpi-label">Net Profit</span>
         </div>
-        <div class="kpi-value text-success">{{ total_profit | money }}</div>
-        <div class="kpi-meta">Net margin</div>
+        <div class="kpi-value {% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_profit | money }}</div>
+        <div class="kpi-meta">Gross {{ total_gross | money }} · Expenses {{ total_expenses_profit | money }}</div>
     </div>
 </section>
 
@@ -227,7 +239,7 @@
                 <p class="small text-muted-custom mb-0">
                     Total sale {{ stats.total_sale | money }}
                     + deposits {{ stats.deposits | money }}
-                    − credit {{ stats.period_credit | money }}
+                    − credit {{ (stats.activity_credit if stats.activity_credit is defined else stats.period_credit) | money }}
                     − expenses {{ stats.expense_total | money }}
                 </p>
             </div>
@@ -304,7 +316,10 @@
     <div class="card card-premium dashboard-chart-card">
         <div class="card-header-premium">
             <h2 class="panel-title mb-0">Revenue &amp; Margin</h2>
-            <p class="panel-subtitle mb-0">Selected period trend</p>
+            <p class="panel-subtitle mb-0">
+                Net profit (sale − COGS − expenses)
+                <strong class="{% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}" id="chart-period-profit">{{ total_profit | money }}</strong>
+            </p>
         </div>
         <div class="card-body card-body-premium">
             <div class="chart-wrap">
@@ -394,26 +409,40 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const params = new URLSearchParams(window.location.search);
+    // Always use server-resolved period (ignore stale URL start/end from other filters)
+    const params = new URLSearchParams({
+        period: '{{ period }}',
+        start_date: '{{ start_date }}',
+        end_date: '{{ end_date }}',
+    });
     const qs = params.toString();
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99, 102, 241, 0.08)';
     const tickColor = isDark ? '#94a3b8' : '#6b7280';
     const salesColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-sales').trim() || '#6366f1';
     const profitColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-profit').trim() || '#10b981';
+    const money = (n) => 'PKR ' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     fetch(`{{ url_for('dashboard.chart_data') }}?${qs}`)
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error('Chart data failed');
+            return r.json();
+        })
         .then(data => {
             const ctx = document.getElementById('trendChart');
             if (!ctx) return;
+            const grainLabel = data.grain === 'week' ? 'Week' : (data.grain === 'month' ? 'Month' : 'Day');
+            const periodProfitEl = document.getElementById('chart-period-profit');
+            if (periodProfitEl && data.total_profit != null) {
+                periodProfitEl.textContent = money(data.total_profit);
+            }
             new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: data.labels,
                     datasets: [
                         {
-                            label: 'Sales',
+                            label: `${grainLabel} Sales`,
                             data: data.sales_trend,
                             borderColor: salesColor,
                             backgroundColor: isDark ? 'rgba(129, 140, 248, 0.16)' : 'rgba(99, 102, 241, 0.14)',
@@ -427,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             pointHoverBorderWidth: 2,
                         },
                         {
-                            label: 'Profit',
+                            label: `${grainLabel} Profit`,
                             data: data.profit_trend,
                             borderColor: profitColor,
                             backgroundColor: isDark ? 'rgba(52, 211, 153, 0.12)' : 'rgba(16, 185, 129, 0.1)',
@@ -464,6 +493,35 @@ document.addEventListener('DOMContentLoaded', () => {
                             padding: 12,
                             cornerRadius: 12,
                             boxPadding: 4,
+                            callbacks: {
+                                // Only this point's date + figures (no period totals)
+                                title: (items) => {
+                                    if (!items || !items.length) return '';
+                                    const i = items[0].dataIndex;
+                                    const dates = data.date_labels || data.labels || [];
+                                    return dates[i] || items[0].label || '';
+                                },
+                                label: () => null,
+                                afterBody: (items) => {
+                                    if (!items || !items.length) return [];
+                                    const i = items[0].dataIndex;
+                                    const sales = Number((data.sales_trend || [])[i] ?? 0);
+                                    const net = Number((data.profit_trend || [])[i] ?? 0);
+                                    const expenses = Number((data.expense_trend || [])[i] ?? 0);
+                                    let gross = Number((data.gross_trend || [])[i]);
+                                    if (!Number.isFinite(gross)) gross = net + expenses;
+                                    let cogs = Number((data.cogs_trend || [])[i]);
+                                    if (!Number.isFinite(cogs)) cogs = sales - gross;
+                                    return [
+                                        `Sale amount: ${money(sales)}`,
+                                        `Cost amount (COGS): ${money(cogs)}`,
+                                        `Gross profit: ${money(gross)}`,
+                                        `Expense: ${money(expenses)}`,
+                                        `Net profit: ${money(net)}`,
+                                    ];
+                                },
+                                footer: () => null,
+                            }
                         }
                     },
                     scales: {
@@ -480,6 +538,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
+        })
+        .catch(() => {
+            const wrap = document.querySelector('.chart-wrap');
+            if (wrap) {
+                wrap.innerHTML = '<p class="text-muted-custom mb-0 py-4 text-center">Chart could not be loaded.</p>';
+            }
         });
 });
 </script>

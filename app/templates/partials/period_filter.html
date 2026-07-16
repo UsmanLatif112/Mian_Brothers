@@ -17,15 +17,21 @@
 <span class="period-range-badge d-inline-flex mb-3"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
 <script>
 (function () {
+    const form = document.getElementById('period-filter-form');
     const sel = document.getElementById('period-select');
-    if (!sel) return;
-    sel.addEventListener('change', () => {
+    if (!form || !sel) return;
+    const dateInputs = form.querySelectorAll('[name="start_date"], [name="end_date"]');
+    const syncDates = () => {
+        const isCustom = sel.value === 'custom';
+        dateInputs.forEach((el) => { el.disabled = !isCustom; });
         document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', sel.value !== 'custom');
+            el.classList.toggle('d-none', !isCustom);
         });
-        if (sel.value !== 'custom') {
-            document.getElementById('period-filter-form').submit();
-        }
+    };
+    syncDates();
+    sel.addEventListener('change', () => {
+        syncDates();
+        if (sel.value !== 'custom') form.submit();
     });
 })();
 </script>
