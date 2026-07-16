@@ -451,6 +451,14 @@ h1, h2, h3, h4, h5, h6 {
     transform: translateY(0);
 }
 
+.btn.is-submitting,
+button.is-submitting,
+input.is-submitting {
+    opacity: 0.75;
+    cursor: wait !important;
+    pointer-events: none;
+}
+
 /* Tables styling — modern SaaS look */
 .table-custom {
     --bs-table-bg: transparent;

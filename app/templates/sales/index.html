@@ -517,6 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnMachine = document.getElementById('btn-add-machine');
     if (btnMachine) {
         btnMachine.addEventListener('click', async () => {
+            if (btnMachine.dataset.locked === '1') return;
             const fuelId = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
             if (!fuelId) {
                 alert('Select a fuel type first.');
@@ -524,17 +525,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const name = prompt('New machine name:');
             if (!name || !name.trim()) return;
-            const res = await fetch('{{ url_for("sales.quick_machine") }}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name: name.trim(), fuel_type_id: fuelId })
-            });
-            const data = await res.json();
-            if (!data.ok) {
-                alert(data.error || 'Could not add machine');
-                return;
+            if (typeof window.lockSubmitButton === 'function') {
+                window.lockSubmitButton(btnMachine, 'Adding...');
+            } else {
+                btnMachine.disabled = true;
             }
-            location.reload();
+            try {
+                const res = await fetch('{{ url_for("sales.quick_machine") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: name.trim(), fuel_type_id: fuelId })
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    if (typeof window.unlockSubmitButton === 'function') {
+                        window.unlockSubmitButton(btnMachine);
+                    } else {
+                        btnMachine.disabled = false;
+                    }
+                    alert(data.error || 'Could not add machine');
+                    return;
+                }
+                location.reload();
+            } catch (err) {
+                if (typeof window.unlockSubmitButton === 'function') {
+                    window.unlockSubmitButton(btnMachine);
+                } else {
+                    btnMachine.disabled = false;
+                }
+                alert('Could not add machine');
+            }
         });
     }
 

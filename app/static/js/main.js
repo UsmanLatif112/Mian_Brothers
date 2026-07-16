@@ -23,6 +23,105 @@ document.addEventListener('DOMContentLoaded', () => {
         themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
 
+    // -------------------------------------------------------
+    // Prevent duplicate submits / double-clicks (global)
+    // -------------------------------------------------------
+    function getFormSubmitButtons(form) {
+        return Array.from(
+            form.querySelectorAll('button[type="submit"], input[type="submit"]')
+        );
+    }
+
+    function lockSubmitButton(btn, label) {
+        if (!btn || btn.dataset.locked === '1') return;
+        btn.dataset.locked = '1';
+        if (btn.dataset.originalDisabled == null) {
+            btn.dataset.originalDisabled = btn.disabled ? '1' : '0';
+        }
+        if (!btn.dataset.originalHtml) {
+            btn.dataset.originalHtml = btn.tagName === 'INPUT' ? btn.value : btn.innerHTML;
+        }
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.classList.add('is-submitting');
+        if (btn.tagName === 'INPUT') {
+            btn.value = label;
+        } else {
+            btn.innerHTML =
+                `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${label}`;
+        }
+    }
+
+    function unlockSubmitButton(btn) {
+        if (!btn) return;
+        btn.disabled = btn.dataset.originalDisabled === '1';
+        btn.classList.remove('is-submitting');
+        btn.removeAttribute('aria-busy');
+        delete btn.dataset.locked;
+        delete btn.dataset.originalDisabled;
+        if (btn.dataset.originalHtml != null) {
+            if (btn.tagName === 'INPUT') btn.value = btn.dataset.originalHtml;
+            else btn.innerHTML = btn.dataset.originalHtml;
+            delete btn.dataset.originalHtml;
+        }
+    }
+
+    function lockFormButtons(form, busyLabel) {
+        const label = busyLabel || form.dataset.busyLabel || 'Saving...';
+        getFormSubmitButtons(form).forEach((btn) => {
+            const isFilterBtn = btn.classList.contains('period-filter-submit');
+            lockSubmitButton(btn, isFilterBtn ? '…' : label);
+        });
+    }
+
+    function unlockForm(form) {
+        if (!form) return;
+        delete form.dataset.submitting;
+        getFormSubmitButtons(form).forEach(unlockSubmitButton);
+    }
+
+    window.lockSubmitButton = lockSubmitButton;
+    window.unlockSubmitButton = unlockSubmitButton;
+    window.unlockFormSubmit = unlockForm;
+
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.dataset.allowMultiSubmit === '1') return;
+        // Already cancelled (e.g. onsubmit="return confirm(...)" → false)
+        if (e.defaultPrevented) return;
+
+        // Block immediate double-submit
+        if (form.dataset.submitting === '1') {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
+        form.dataset.submitting = '1';
+
+        // Defer disable so the clicked submitter still serializes into the request
+        setTimeout(() => {
+            if (e.defaultPrevented) {
+                unlockForm(form);
+                return;
+            }
+            lockFormButtons(form);
+        }, 0);
+    });
+
+    // Programmatic form.submit() does not fire the submit event — cover it too
+    const nativeFormSubmit = HTMLFormElement.prototype.submit;
+    HTMLFormElement.prototype.submit = function patchedFormSubmit() {
+        if (this.dataset.allowMultiSubmit === '1') {
+            return nativeFormSubmit.call(this);
+        }
+        if (this.dataset.submitting === '1') return;
+        this.dataset.submitting = '1';
+        lockFormButtons(this);
+        return nativeFormSubmit.call(this);
+    };
+
     async function postJson(url, body) {
         const res = await fetch(url, {
             method: 'POST',
