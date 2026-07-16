@@ -200,6 +200,8 @@ def ensure_journal_schema():
             alters.append("ALTER TABLE credit_sales ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'sale'")
         else:
             alters.append("ALTER TABLE credit_sales ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'sale'")
+    if 'discount' not in existing:
+        alters.append("ALTER TABLE credit_sales ADD COLUMN discount NUMERIC(12, 2) NOT NULL DEFAULT 0")
 
     if not alters:
         return
@@ -207,7 +209,7 @@ def ensure_journal_schema():
     with db.engine.begin() as conn:
         for stmt in alters:
             conn.execute(text(stmt))
-    print("Upgraded credit_sales for amount_paid / entry_type (journal).")
+    print("Upgraded credit_sales for amount_paid / entry_type / discount (journal).")
 
 
 def ensure_inventory_schema():

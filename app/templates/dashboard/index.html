@@ -35,51 +35,14 @@
             <p class="page-eyebrow">Overview</p>
             <h1 class="page-title">Dashboard</h1>
         </div>
-        <form method="GET" class="period-filter period-filter-compact" id="period-filter-form">
-            <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
-                {% for value, label in period_choices %}
-                <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From">
-                <span class="period-date-sep">–</span>
-                <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To">
-                <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
-                    <i class="bi bi-check-lg"></i>
-                </button>
-            </div>
-        </form>
+        <div class="page-header-toolbar mt-0">
+            {% include "partials/period_filter.html" %}
+        </div>
     </div>
     <div class="page-header-meta">
         <p class="page-subtitle">Sales, stock, and cash performance for the selected period.</p>
-        <span class="period-range-badge">
-            <i class="bi bi-calendar3"></i>
-            {{ start_date }} → {{ end_date }}
-        </span>
     </div>
 </header>
-
-<script>
-(function () {
-    const form = document.getElementById('period-filter-form');
-    const sel = document.getElementById('period-select');
-    if (!form || !sel) return;
-    const dateInputs = form.querySelectorAll('[name="start_date"], [name="end_date"]');
-    const syncDates = () => {
-        const isCustom = sel.value === 'custom';
-        dateInputs.forEach((el) => { el.disabled = !isCustom; });
-        document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', !isCustom);
-        });
-    };
-    syncDates();
-    sel.addEventListener('change', () => {
-        syncDates();
-        if (sel.value !== 'custom') form.submit();
-    });
-})();
-</script>
 
 <!-- KPI grid -->
 <section class="kpi-grid" aria-label="Period statistics">

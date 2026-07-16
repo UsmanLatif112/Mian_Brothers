@@ -133,8 +133,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (typeof TomSelect !== 'undefined') {
         const shared = {
-            maxOptions: null,
+            maxOptions: null,          // show all matches; list scrolls
             allowEmptyOption: true,
+            openOnFocus: true,         // open list when field is clicked/focused
+            closeAfterSelect: true,
+            hideSelected: false,
+            searchField: ['text'],
             sortField: { field: 'text', direction: 'asc' },
             render: {
                 no_results: (data, escape) =>
@@ -144,15 +148,17 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         };
 
+        const dropdownParentFor = (el) => (el.closest('.modal') ? 'body' : undefined);
+
         document.querySelectorAll('select.js-search-customer').forEach((el) => {
             if (el.tomselect) return;
             const createUrl = el.dataset.createUrl;
             const canCreate = el.classList.contains('js-create-customer') && createUrl;
             const tom = new TomSelect(el, {
                 ...shared,
-                placeholder: el.dataset.placeholder || 'Search by name or phone...',
+                placeholder: el.dataset.placeholder || 'Type to search customer...',
                 searchField: ['text', 'phone'],
-                dropdownParent: el.closest('.modal') ? 'body' : undefined,
+                dropdownParent: dropdownParentFor(el),
                 create: canCreate
                     ? (input, callback) => {
                           const phone = window.prompt(`Phone for "${input}" (optional):`, '') || '';
@@ -187,9 +193,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const tom = new TomSelect(el, {
                 ...shared,
-                placeholder: el.dataset.placeholder || 'Search by name...',
+                placeholder: el.dataset.placeholder || 'Type to search...',
                 searchField: ['text'],
-                dropdownParent: el.closest('.modal') ? 'body' : undefined,
+                dropdownParent: dropdownParentFor(el),
                 create: createFuel || createItem
                     ? (input, callback) => {
                           if (createFuel) {
@@ -241,14 +247,27 @@ document.addEventListener('DOMContentLoaded', () => {
                               });
                       }
                     : false,
-                render: createFuel
-                    ? {
-                          option_create: (data, escape) =>
-                              `<div class="create">Add fuel type <strong>${escape(data.input)}</strong>…</div>`,
-                      }
-                    : undefined,
+                render: {
+                    ...shared.render,
+                    ...(createFuel
+                        ? {
+                              option_create: (data, escape) =>
+                                  `<div class="create">Add fuel type <strong>${escape(data.input)}</strong>…</div>`,
+                          }
+                        : {}),
+                },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
+        });
+
+        // Keep Tom Select usable inside Bootstrap modals (focus + position)
+        document.querySelectorAll('.modal').forEach((modalEl) => {
+            modalEl.addEventListener('shown.bs.modal', () => {
+                modalEl.querySelectorAll('select.js-search-item, select.js-search-customer').forEach((el) => {
+                    if (!el.tomselect) return;
+                    el.tomselect.positionDropdown();
+                });
+            });
         });
     }
 

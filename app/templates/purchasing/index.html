@@ -21,9 +21,15 @@
                 {% endfor %}
             </select>
             <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
+                <div class="period-date-field">
+                    <span class="period-date-label">From</span>
+                    <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
+                </div>
                 <span class="period-date-sep">–</span>
-                <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
+                <div class="period-date-field">
+                    <span class="period-date-label">To</span>
+                    <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
+                </div>
                 <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
                     <i class="bi bi-check-lg"></i>
                 </button>
@@ -43,19 +49,79 @@
     const catSel = document.getElementById('category-select');
     if (!form || !periodSel) return;
 
-    const toggleCustom = () => {
-        document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', periodSel.value !== 'custom');
-        });
+    const startInput = form.querySelector('[name="start_date"]');
+    const endInput = form.querySelector('[name="end_date"]');
+    const customWrap = form.querySelector('.custom-dates');
+    const todayStr = () => {
+        const d = new Date();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${m}-${day}`;
     };
 
+    const setCustomEnabled = (enabled) => {
+        if (customWrap) customWrap.classList.toggle('d-none', !enabled);
+        if (!startInput || !endInput) return;
+        startInput.name = enabled ? 'start_date' : '';
+        endInput.name = enabled ? 'end_date' : '';
+        startInput.disabled = false;
+        endInput.disabled = false;
+    };
+
+    const daySpan = (start, end) => {
+        const a = Date.parse(start);
+        const b = Date.parse(end);
+        if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+        return Math.abs(b - a) / 86400000;
+    };
+
+    const snapToSingleDay = () => {
+        const day = (endInput && endInput.value) || todayStr();
+        if (startInput) startInput.value = day;
+        if (endInput) endInput.value = day;
+    };
+
+    const isLeftoverAllRange = (maxDays) => {
+        if (!startInput || !endInput) return false;
+        const start = startInput.value;
+        const end = endInput.value;
+        if (!start || !end) return true;
+        const span = daySpan(start, end);
+        if (Number.isNaN(span)) return true;
+        if (span > maxDays) return true;
+        return start.slice(5) === end.slice(5) && start.slice(0, 4) !== end.slice(0, 4) && span > 60;
+    };
+
+    setCustomEnabled(periodSel.value === 'custom');
+
+    if (periodSel.value === 'custom' && isLeftoverAllRange(365)) {
+        snapToSingleDay();
+        form.submit();
+        return;
+    }
+
     periodSel.addEventListener('change', () => {
-        toggleCustom();
-        if (periodSel.value !== 'custom') form.submit();
+        const isCustom = periodSel.value === 'custom';
+        setCustomEnabled(isCustom);
+        if (!isCustom) {
+            form.submit();
+            return;
+        }
+        if (isLeftoverAllRange(90)) snapToSingleDay();
     });
     if (catSel) {
         catSel.addEventListener('change', () => form.submit());
     }
+    form.addEventListener('submit', () => {
+        if (periodSel.value !== 'custom') {
+            if (startInput) startInput.name = '';
+            if (endInput) endInput.name = '';
+            return;
+        }
+        if (startInput) startInput.name = 'start_date';
+        if (endInput) endInput.name = 'end_date';
+    });
+    form.setAttribute('data-allow-multi-submit', '1');
 })();
 </script>
 

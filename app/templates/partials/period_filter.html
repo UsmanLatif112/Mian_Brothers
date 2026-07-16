@@ -1,37 +1,123 @@
 {# Shared compact period filter — expects period, start_date, end_date, period_choices #}
-<form method="GET" class="period-filter period-filter-compact mb-3" id="period-filter-form">
+<form method="GET" class="period-filter period-filter-compact" id="period-filter-form" data-allow-multi-submit="1">
     <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
         {% for value, label in period_choices %}
         <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
     </select>
     <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
-        <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
+        <div class="period-date-field">
+            <span class="period-date-label">From</span>
+            <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
+        </div>
         <span class="period-date-sep">–</span>
-        <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
+        <div class="period-date-field">
+            <span class="period-date-label">To</span>
+            <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
+        </div>
         <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
             <i class="bi bi-check-lg"></i>
         </button>
     </div>
 </form>
-<span class="period-range-badge d-inline-flex mb-3"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
+{% if start_date and end_date %}
+<span class="period-range-badge d-inline-flex"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
+{% endif %}
 <script>
 (function () {
     const form = document.getElementById('period-filter-form');
     const sel = document.getElementById('period-select');
     if (!form || !sel) return;
-    const dateInputs = form.querySelectorAll('[name="start_date"], [name="end_date"]');
-    const syncDates = () => {
-        const isCustom = sel.value === 'custom';
-        dateInputs.forEach((el) => { el.disabled = !isCustom; });
-        document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', !isCustom);
-        });
+
+    const startInput = form.querySelector('[name="start_date"]');
+    const endInput = form.querySelector('[name="end_date"]');
+    const customWrap = form.querySelector('.custom-dates');
+    if (!startInput || !endInput || !customWrap) return;
+
+    const todayStr = () => {
+        const d = new Date();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${m}-${day}`;
     };
-    syncDates();
+
+    const setCustomEnabled = (enabled) => {
+        customWrap.classList.toggle('d-none', !enabled);
+        // Toggle name (not disabled) so From/To always submit when custom
+        startInput.name = enabled ? 'start_date' : '';
+        endInput.name = enabled ? 'end_date' : '';
+        startInput.disabled = false;
+        endInput.disabled = false;
+    };
+
+    const daySpan = (start, end) => {
+        const startMs = Date.parse(start);
+        const endMs = Date.parse(end);
+        if (Number.isNaN(startMs) || Number.isNaN(endMs)) return NaN;
+        return Math.abs(endMs - startMs) / 86400000;
+    };
+
+    const snapToSingleDay = () => {
+        // Keep the To day — that is the date users usually mean when both show "13"
+        const end = endInput.value || todayStr();
+        startInput.value = end;
+        endInput.value = end;
+    };
+
+    const isLeftoverAllRange = (maxDays) => {
+        const start = startInput.value;
+        const end = endInput.value;
+        if (!start || !end) return true;
+        const span = daySpan(start, end);
+        if (Number.isNaN(span)) return true;
+        if (span > maxDays) return true;
+        // Same month-day, different year (e.g. 2023-07-13 → 2026-07-13)
+        return start.slice(5) === end.slice(5) && start.slice(0, 4) !== end.slice(0, 4) && span > 60;
+    };
+
+    setCustomEnabled(sel.value === 'custom');
+
+    // Fix stale URLs like start=2023-07-13&end=2026-07-13 (day "13" but includes the 12th)
+    if (sel.value === 'custom' && isLeftoverAllRange(365)) {
+        snapToSingleDay();
+        form.submit();
+        return;
+    }
+
     sel.addEventListener('change', () => {
-        syncDates();
-        if (sel.value !== 'custom') form.submit();
+        const isCustom = sel.value === 'custom';
+        setCustomEnabled(isCustom);
+        if (!isCustom) {
+            form.submit();
+            return;
+        }
+        if (isLeftoverAllRange(90)) snapToSingleDay();
+        startInput.focus();
+    });
+
+    // Keep From/To linked when editing one side for a single-day filter
+    let linking = false;
+    const linkIfSameDay = (source, target) => {
+        if (linking) return;
+        if (startInput.value && endInput.value && startInput.value === endInput.value) {
+            linking = true;
+            target.value = source.value;
+            linking = false;
+        }
+    };
+    startInput.addEventListener('change', () => linkIfSameDay(startInput, endInput));
+    endInput.addEventListener('change', () => linkIfSameDay(endInput, startInput));
+
+    form.addEventListener('submit', () => {
+        if (sel.value !== 'custom') {
+            startInput.name = '';
+            endInput.name = '';
+            return;
+        }
+        startInput.name = 'start_date';
+        endInput.name = 'end_date';
+        if (!startInput.value) startInput.value = todayStr();
+        if (!endInput.value) endInput.value = startInput.value || todayStr();
     });
 })();
 </script>

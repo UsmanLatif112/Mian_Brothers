@@ -152,6 +152,7 @@ class CreditSale(db.Model):
     liters = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # liters/qty; 0 for advance/loan
     rate = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
+    discount = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # PKR off list total (other items)
     amount_paid = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash received now
     entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan | opening
     payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid / partial

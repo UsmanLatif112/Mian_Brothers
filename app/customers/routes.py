@@ -285,7 +285,10 @@ def ledger(customer_id):
         else:
             paid = float(p.amount_paid or 0)
             credit = max(float(p.amount or 0) - paid, 0.0)
+            disc = float(getattr(p, 'discount', 0) or 0)
             desc = f"{float(p.liters):.2f} {unit} of {p.item_name} @ PKR {float(p.rate):,.2f}"
+            if disc > 0:
+                desc += f" (−{disc:,.2f} discount)"
             if paid > 0 and credit > 0:
                 desc += f" (paid {paid:,.2f}, credit {credit:,.2f})"
             ledger_entries.append({

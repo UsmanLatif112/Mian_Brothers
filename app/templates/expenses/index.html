@@ -8,54 +8,18 @@
         <div class="page-header-text">
             <p class="page-eyebrow">Finance</p>
             <h1 class="page-title">Expenses</h1>
+            <p class="page-subtitle mt-1">Record, review, and control operating costs with clean period tracking.</p>
         </div>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <form method="GET" class="period-filter period-filter-compact" id="period-filter-form">
-                <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
-                    {% for value, label in period_choices %}
-                    <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-                <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                    <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
-                    <span class="period-date-sep">–</span>
-                    <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
-                    <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
-                        <i class="bi bi-check-lg"></i>
-                    </button>
-                </div>
-            </form>
+        <div class="page-header-actions">
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
                 <i class="bi bi-plus-circle me-1"></i> Add Expense
             </button>
         </div>
     </div>
-    <div class="page-header-meta">
-        <p class="page-subtitle">Record, review, and control operating costs with clean period tracking.</p>
-        <span class="period-range-badge"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
+    <div class="page-header-toolbar">
+        {% include "partials/period_filter.html" %}
     </div>
 </header>
-
-<script>
-(function () {
-    const form = document.getElementById('period-filter-form');
-    const sel = document.getElementById('period-select');
-    if (!form || !sel) return;
-    const dateInputs = form.querySelectorAll('[name="start_date"], [name="end_date"]');
-    const syncDates = () => {
-        const isCustom = sel.value === 'custom';
-        dateInputs.forEach((el) => { el.disabled = !isCustom; });
-        document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', !isCustom);
-        });
-    };
-    syncDates();
-    sel.addEventListener('change', () => {
-        syncDates();
-        if (sel.value !== 'custom') form.submit();
-    });
-})();
-</script>
 
 <div class="row g-4 mb-4">
     <div class="col-12 col-md-4">

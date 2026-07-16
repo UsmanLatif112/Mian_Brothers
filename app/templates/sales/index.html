@@ -9,42 +9,25 @@
             <p class="page-eyebrow">Operations</p>
             <h1 class="page-title">Sales</h1>
         </div>
-        <form method="GET" class="period-filter period-filter-compact" id="period-filter-form">
-            <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
-                {% for value, label in period_choices %}
-                <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
-                <span class="period-date-sep">–</span>
-                <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
-                <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
-                    <i class="bi bi-check-lg"></i>
-                </button>
-            </div>
-        </form>
+        <div class="page-header-actions">
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#meterSaleModal">
+                <i class="bi bi-speedometer2 me-1"></i> Meter Sale
+            </button>
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#otherSaleModal">
+                <i class="bi bi-cart-plus me-1"></i> Other Sale
+            </button>
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ftSaleModal">
+                <i class="bi bi-droplet me-1"></i> FT Sale
+            </button>
+        </div>
     </div>
     <div class="page-header-meta">
         <p class="page-subtitle">Meter, other items, and FT mobile oil with payment status insights.</p>
-        <span class="period-range-badge"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
+    </div>
+    <div class="page-header-toolbar">
+        {% include "partials/period_filter.html" %}
     </div>
 </header>
-
-<script>
-(function () {
-    const sel = document.getElementById('period-select');
-    if (!sel) return;
-    sel.addEventListener('change', () => {
-        document.querySelectorAll('.custom-dates').forEach(el => {
-            el.classList.toggle('d-none', sel.value !== 'custom');
-        });
-        if (sel.value !== 'custom') {
-            document.getElementById('period-filter-form').submit();
-        }
-    });
-})();
-</script>
 
 <!-- Period stats (same style as dashboard) -->
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-4 dashboard-stats">
@@ -121,22 +104,89 @@
     </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <!-- Meter Sale = all fuel sale of day -->
-    <div class="col-12 col-lg-6">
-        <div class="card card-premium h-100">
-            <div class="card-header-premium d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="mb-0 fw-bold">1. Meter Sale</h5>
-                    <small class="text-muted-custom">All fuel sale of the day (from machine readings)</small>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-add-machine" title="Add machine">
-                    <i class="bi bi-plus-lg"></i> Machine
-                </button>
+<!-- Period ledger -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Period Entries</h5>
+                <small class="text-muted-custom">Other sales, credit / unpaid / partial, and loans recorded in the selected filter dates</small>
             </div>
-            <div class="card-body card-body-premium">
-                <form method="POST" action="{{ url_for('sales.index') }}" id="meter-sale-form">
-                    <input type="hidden" name="action" value="meter_sale">
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Customer</th>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Amount</th>
+                            <th>Paid</th>
+                            <th>Credit</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if period_entries %}
+                            {% for cs in period_entries %}
+                            <tr>
+                                <td class="fw-semibold">#{{ cs.id }}</td>
+                                <td>{{ cs.sale_date }}</td>
+                                <td><span class="badge bg-secondary text-uppercase">{{ cs.entry_type }}</span></td>
+                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
+                                <td>{{ cs.item_name }}</td>
+                                <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}{% else %}—{% endif %}</td>
+                                <td>
+                                    {{ cs.amount | money }}
+                                    {% if (cs.discount or 0)|float > 0 %}
+                                    <div class="small text-danger">−{{ cs.discount | money }} disc</div>
+                                    {% endif %}
+                                </td>
+                                <td>{{ (cs.amount_paid or 0) | money }}</td>
+                                <td class="text-warning">{{ cs.credit_amount | money }}</td>
+                                <td>
+                                    <span class="badge {% if cs.payment_status == 'paid' %}bg-success{% elif cs.payment_status == 'partial' %}bg-info{% else %}bg-warning text-dark{% endif %}">
+                                        {{ cs.payment_status | upper }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="10" class="text-center text-muted-custom py-4">No entries in this period.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            {% with pagination=entries_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date} %}
+                {% include "partials/pagination.html" %}
+            {% endwith %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{# 1. Meter Sale #}
+<div class="modal fade" id="meterSaleModal" tabindex="-1" aria-labelledby="meterSaleModalLabel" aria-hidden="true" data-bs-focus="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered sale-form-modal">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('sales.index') }}" id="meter-sale-form">
+                <input type="hidden" name="action" value="meter_sale">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="meterSaleModalLabel">Meter Sale</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">All fuel sale of the day from machine readings.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-add-machine" title="Add machine">
+                            <i class="bi bi-plus-lg"></i> Machine
+                        </button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="modal-body pt-3">
                     <div class="mb-4">
                         <label for="fuel_type_id" class="form-label form-label-custom">Fuel Type</label>
                         <select class="form-select form-control-custom js-search-item js-create-fuel" id="fuel_type_id" name="fuel_type_id" required
@@ -205,33 +255,40 @@
                         <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Total Sale</span><strong class="text-success">PKR <span id="total-amount">0.00</span></strong></div>
                     </div>
 
-                    <div class="mb-3">
+                    <div class="mb-1">
                         <label class="form-label form-label-custom" for="meter_entry_date">Sale Date</label>
                         <input type="date" class="form-control form-control-custom" id="meter_entry_date" name="entry_date" value="{{ today }}">
                     </div>
-
-                    <button type="submit" class="btn btn-primary-custom w-100" id="meter-submit" disabled>
-                        <i class="bi bi-save me-1"></i> Save Meter Sale &amp; Update Inventory
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4" id="meter-submit" disabled>
+                        <i class="bi bi-save me-1"></i> Save Meter Sale
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <!-- Other Sale = fuel credit / shop items -->
-    <div class="col-12 col-lg-6">
-        <div class="card card-premium h-100">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">2. Other Sale</h5>
-                <small class="text-muted-custom">Fuel credit (customer required) · Shop items paid / unpaid / partial</small>
-            </div>
-            <div class="card-body card-body-premium">
-                <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
-                    <strong>Fuel:</strong> customer required, no walk-in (credit / paid / partial).<br>
-                    <strong>Other items:</strong> Paid, Unpaid, or Partial — e.g. total 200k, cash 150k, credit 50k.
+{# 2. Other Sale #}
+<div class="modal fade" id="otherSaleModal" tabindex="-1" aria-labelledby="otherSaleModalLabel" aria-hidden="true" data-bs-focus="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered sale-form-modal">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('sales.index') }}" id="item-sale-form">
+                <input type="hidden" name="action" value="credit_sale">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="otherSaleModalLabel">Other Sale</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Fuel credit · shop items · paid / unpaid / partial.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" action="{{ url_for('sales.index') }}" id="item-sale-form">
-                    <input type="hidden" name="action" value="credit_sale">
+                <div class="modal-body pt-3">
+                    <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
+                        <strong>Fuel:</strong> customer required, no walk-in (credit / paid / partial).<br>
+                        <strong>Other items:</strong> Paid, Unpaid, or Partial — e.g. total 200k, cash 150k, credit 50k.
+                    </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="credit_customer">
                             Customer <span class="text-muted-custom fw-normal" id="customer_hint">(required)</span>
@@ -276,6 +333,14 @@
                         <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="liters" id="credit_liters" required>
                         <small class="text-muted-custom" id="stock_hint"></small>
                     </div>
+                    <div class="mb-3 d-none" id="discount_wrap">
+                        <label class="form-label form-label-custom" for="credit_discount">Discount (PKR)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="credit_discount" value="0" placeholder="0.00">
+                        </div>
+                        <small class="text-muted-custom">Optional — subtracted from qty × sale price for other items.</small>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="payment_status">Payment</label>
                         <select class="form-select form-control-custom" name="payment_status" id="payment_status">
@@ -297,32 +362,45 @@
                         <label class="form-label form-label-custom" for="other_entry_date">Sale Date</label>
                         <input type="date" class="form-control form-control-custom" id="other_entry_date" name="entry_date" value="{{ today }}">
                     </div>
-                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
+                    <div class="p-3 rounded mb-1" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
+                        <div class="d-none" id="credit_subtotal_row">
+                            Subtotal: <span id="credit_subtotal">0.00</span>
+                            <span class="mx-1">·</span>
+                            Discount: <strong class="text-danger">−PKR <span id="credit_discount_disp">0.00</span></strong>
+                        </div>
                         Total: <strong>PKR <span id="credit_amount">0.00</span></strong>
                         <span class="ms-2" id="partial_hint"></span>
                     </div>
-                    <button type="submit" class="btn btn-primary-custom w-100">
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">
                         <i class="bi bi-journal-plus me-1"></i> Record Other Sale
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <!-- FT Mobile Oil Sale -->
-    <div class="col-12 col-lg-6">
-        <div class="card card-premium h-100">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">3. FT Sale</h5>
-                <small class="text-muted-custom">FT Mobile Oil by liters — paid walk-in, or unpaid / partial with customer</small>
-            </div>
-            <div class="card-body card-body-premium">
-                <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
-                    <strong>Paid:</strong> select company + liters (walk-in OK).<br>
-                    <strong>Unpaid / Partial:</strong> customer required (same as other sales).
+{# 3. FT Sale #}
+<div class="modal fade" id="ftSaleModal" tabindex="-1" aria-labelledby="ftSaleModalLabel" aria-hidden="true" data-bs-focus="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered sale-form-modal">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('sales.index') }}" id="ft-sale-form">
+                <input type="hidden" name="action" value="ft_sale">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="ftSaleModalLabel">FT Sale</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">FT Mobile Oil by liters — paid, unpaid, or partial.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" action="{{ url_for('sales.index') }}" id="ft-sale-form">
-                    <input type="hidden" name="action" value="ft_sale">
+                <div class="modal-body pt-3">
+                    <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
+                        <strong>Paid:</strong> select company + liters (walk-in OK).<br>
+                        <strong>Unpaid / Partial:</strong> customer required (same as other sales).
+                    </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_customer">
                             Customer <span class="text-muted-custom fw-normal" id="ft_customer_hint">(optional for paid)</span>
@@ -384,73 +462,19 @@
                         <label class="form-label form-label-custom" for="ft_entry_date">Sale Date</label>
                         <input type="date" class="form-control form-control-custom" id="ft_entry_date" name="entry_date" value="{{ today }}">
                     </div>
-                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
+                    <div class="p-3 rounded mb-1" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
                         <div class="d-flex justify-content-between"><span class="text-muted-custom">Cost</span><strong>PKR <span id="ft_cost_total">0.00</span></strong></div>
                         <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Sale total</span><strong class="text-success">PKR <span id="ft_sale_total">0.00</span></strong></div>
                         <div class="mt-1" id="ft_partial_hint"></div>
                     </div>
-                    <button type="submit" class="btn btn-primary-custom w-100" {% if not ft_items %}disabled{% endif %}>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4" {% if not ft_items %}disabled{% endif %}>
                         <i class="bi bi-droplet me-1"></i> Record FT Sale
                     </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Period ledger -->
-<div class="row g-4">
-    <div class="col-12">
-        <div class="card card-premium">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Period Entries</h5>
-                <small class="text-muted-custom">Other sales, credit / unpaid / partial, and loans recorded in the selected filter dates</small>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Customer</th>
-                            <th>Item</th>
-                            <th>Qty</th>
-                            <th>Amount</th>
-                            <th>Paid</th>
-                            <th>Credit</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if period_entries %}
-                            {% for cs in period_entries %}
-                            <tr>
-                                <td class="fw-semibold">#{{ cs.id }}</td>
-                                <td>{{ cs.sale_date }}</td>
-                                <td><span class="badge bg-secondary text-uppercase">{{ cs.entry_type }}</span></td>
-                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
-                                <td>{{ cs.item_name }}</td>
-                                <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}{% else %}—{% endif %}</td>
-                                <td>{{ cs.amount | money }}</td>
-                                <td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td class="text-warning">{{ cs.credit_amount | money }}</td>
-                                <td>
-                                    <span class="badge {% if cs.payment_status == 'paid' %}bg-success{% elif cs.payment_status == 'partial' %}bg-info{% else %}bg-warning text-dark{% endif %}">
-                                        {{ cs.payment_status | upper }}
-                                    </span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr><td colspan="10" class="text-center text-muted-custom py-4">No entries in this period.</td></tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
-            {% with pagination=entries_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date} %}
-                {% include "partials/pagination.html" %}
-            {% endwith %}
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -515,6 +539,65 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const btnMachine = document.getElementById('btn-add-machine');
+    const appendMachineRow = (fuelId, machineId, machineName) => {
+        let block = document.querySelector(`.machine-block[data-fuel="${fuelId}"]`);
+        if (!block) {
+            // Fuel type exists in select but block missing (edge case) — reload once
+            location.reload();
+            return;
+        }
+        const rowHost = block.querySelector('.row.g-3.mb-2') || block;
+        // Remove empty-state message if present
+        rowHost.querySelectorAll('.col-12').forEach((col) => {
+            if (col.textContent.includes('No machines')) col.remove();
+        });
+        const col = document.createElement('div');
+        col.className = 'col-12';
+        col.innerHTML = `
+            <div class="p-3 rounded mb-2" style="background: rgba(94,94,94,0.05); border: 1px solid var(--border-color);">
+                <div class="fw-semibold mb-3 machine-name"></div>
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label form-label-custom">Reading 1 (Opening)</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" min="0"
+                                   class="form-control form-control-custom meter-open"
+                                   name="opening_${machineId}"
+                                   data-machine="${machineId}" value="">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label form-label-custom">Reading 2 (Closing)</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" min="0"
+                                   class="form-control form-control-custom meter-close"
+                                   name="closing_${machineId}"
+                                   data-machine="${machineId}" value="">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                        </div>
+                    </div>
+                </div>
+                <small class="text-muted-custom d-block mt-2">
+                    Sold: <strong class="sold-line" data-machine="${machineId}">0.00</strong> L
+                </small>
+            </div>`;
+        col.querySelector('.machine-name').textContent = machineName;
+        rowHost.appendChild(col);
+        col.querySelectorAll('.meter-open, .meter-close').forEach((el) => {
+            el.addEventListener('input', recalcTotals);
+        });
+        // Enable inputs if this fuel block is currently visible
+        const fuelIdSel = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
+        const active = String(fuelIdSel) === String(fuelId);
+        block.classList.toggle('d-none', !active);
+        col.querySelectorAll('input').forEach((input) => {
+            input.disabled = !active;
+            input.required = active;
+        });
+        recalcTotals();
+    };
+
     if (btnMachine) {
         btnMachine.addEventListener('click', async () => {
             if (btnMachine.dataset.locked === '1') return;
@@ -537,16 +620,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ name: name.trim(), fuel_type_id: fuelId })
                 });
                 const data = await res.json();
+                if (typeof window.unlockSubmitButton === 'function') {
+                    window.unlockSubmitButton(btnMachine);
+                } else {
+                    btnMachine.disabled = false;
+                }
                 if (!data.ok) {
-                    if (typeof window.unlockSubmitButton === 'function') {
-                        window.unlockSubmitButton(btnMachine);
-                    } else {
-                        btnMachine.disabled = false;
-                    }
                     alert(data.error || 'Could not add machine');
                     return;
                 }
-                location.reload();
+                appendMachineRow(data.fuel_type_id || fuelId, data.id, data.name || data.text || name.trim());
             } catch (err) {
                 if (typeof window.unlockSubmitButton === 'function') {
                     window.unlockSubmitButton(btnMachine);
@@ -561,6 +644,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const creditItem = document.getElementById('credit_item');
     const creditLiters = document.getElementById('credit_liters');
     const creditAmount = document.getElementById('credit_amount');
+    const creditSubtotal = document.getElementById('credit_subtotal');
+    const creditSubtotalRow = document.getElementById('credit_subtotal_row');
+    const creditDiscount = document.getElementById('credit_discount');
+    const creditDiscountDisp = document.getElementById('credit_discount_disp');
+    const discountWrap = document.getElementById('discount_wrap');
     const creditQtyLabel = document.getElementById('credit_qty_label');
     const creditCustomer = document.getElementById('credit_customer');
     const paymentStatus = document.getElementById('payment_status');
@@ -605,7 +693,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         const qty = Number(creditLiters?.value || 0);
-        const total = rate * qty;
+        const gross = rate * qty;
+        const shop = isShopSelected();
+        if (discountWrap) discountWrap.classList.toggle('d-none', !shop);
+        if (!shop && creditDiscount) creditDiscount.value = '0';
+        let discount = shop ? Number(creditDiscount?.value || 0) : 0;
+        if (!Number.isFinite(discount) || discount < 0) discount = 0;
+        if (discount > gross) discount = gross;
+        const total = Math.max(gross - discount, 0);
         if (creditQtyLabel) creditQtyLabel.textContent = unit === 'L' ? 'Liters' : 'Quantity';
         if (creditLiters) {
             creditLiters.step = unit === 'L' ? '0.01' : '1';
@@ -615,6 +710,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (stock !== undefined && unit === 'qty') stockHint.textContent = `In stock: ${stock}`;
             else stockHint.textContent = unit === 'L' ? 'Fuel stock updates from meters only — this is ledger/credit.' : '';
         }
+        if (creditSubtotalRow) creditSubtotalRow.classList.toggle('d-none', !(shop && discount > 0));
+        if (creditSubtotal) creditSubtotal.textContent = gross.toFixed(2);
+        if (creditDiscountDisp) creditDiscountDisp.textContent = discount.toFixed(2);
         if (creditAmount) creditAmount.textContent = total.toFixed(2);
         if (partialHint && paymentStatus?.value === 'partial' && amountPaid) {
             const paid = Number(amountPaid.value || 0);
@@ -643,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     if (creditLiters) creditLiters.addEventListener('input', syncCredit);
+    if (creditDiscount) creditDiscount.addEventListener('input', syncCredit);
     if (paymentStatus) paymentStatus.addEventListener('change', syncCredit);
     if (amountPaid) amountPaid.addEventListener('input', syncCredit);
     syncCustomerRequirement();
@@ -661,6 +760,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 alert('Customer is required when other items are unpaid or partially paid.');
                 return;
+            }
+            if (isShopSelected() && creditDiscount) {
+                const disc = Number(creditDiscount.value || 0);
+                const net = Number(creditAmount?.textContent || 0);
+                const gross = Number(creditSubtotal?.textContent || 0) || (net + Math.max(disc, 0));
+                if (!(disc >= 0)) {
+                    e.preventDefault();
+                    alert('Discount cannot be negative.');
+                    return;
+                }
+                if (disc > gross + 0.0001) {
+                    e.preventDefault();
+                    alert('Discount cannot exceed the sale subtotal.');
+                    return;
+                }
             }
             if (pay === 'partial' && amountPaid) {
                 const total = Number(creditAmount?.textContent || 0);

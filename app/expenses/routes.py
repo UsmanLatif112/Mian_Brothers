@@ -64,14 +64,20 @@ def index():
         return redirect(url_for('expenses.index'))
 
     period, start, end = parse_period(request.args)
+    from sqlalchemy import func
+
+    # Sum must use a separate query — Query.with_entities() mutates in place
+    # and would break the list/pagination query if chained on the same object.
+    total = float(
+        db.session.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.expense_date >= start, Expense.expense_date <= end)
+        .scalar()
+        or 0
+    )
     expenses_q = (
         Expense.query
         .filter(Expense.expense_date >= start, Expense.expense_date <= end)
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
-    )
-    from sqlalchemy import func
-    total = float(
-        expenses_q.with_entities(func.coalesce(func.sum(Expense.amount), 0)).scalar() or 0
     )
     expenses, expenses_pagination = paginate(expenses_q, request.args.get('page', 1), PER_PAGE)
 
@@ -89,13 +95,25 @@ def index():
 
 
 def _filter_args():
+    """Preserve period filter after create/delete (from query string or referrer)."""
     args = {}
-    period = request.args.get('period') or request.form.get('period')
+    period = (request.args.get('period') or request.form.get('period') or '').strip()
+    start = (request.args.get('start_date') or request.form.get('start_date') or '').strip()
+    end = (request.args.get('end_date') or request.form.get('end_date') or '').strip()
+
+    # POST forms don't include period fields — fall back to referrer query
+    if not period and request.referrer:
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(request.referrer).query)
+        period = (qs.get('period') or [''])[0]
+        start = start or (qs.get('start_date') or [''])[0]
+        end = end or (qs.get('end_date') or [''])[0]
+
     if period:
         args['period'] = period
-    if period == 'custom' or request.args.get('start_date'):
-        if request.args.get('start_date') or request.form.get('start_date'):
-            args['start_date'] = request.args.get('start_date') or request.form.get('start_date')
-        if request.args.get('end_date') or request.form.get('end_date'):
-            args['end_date'] = request.args.get('end_date') or request.form.get('end_date')
+    if period == 'custom':
+        if start:
+            args['start_date'] = start
+        if end:
+            args['end_date'] = end
     return args

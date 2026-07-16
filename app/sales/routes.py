@@ -173,6 +173,7 @@ def index():
             customer_id = (request.form.get('customer_id') or '').strip() or None
             item_key = (request.form.get('item_key') or '').strip()
             qty_raw = request.form.get('liters')
+            discount_raw = request.form.get('discount')
             remarks = (request.form.get('remarks') or '').strip() or None
             payment_status = request.form.get('payment_status', 'unpaid')
             amount_paid_raw = request.form.get('amount_paid')
@@ -253,7 +254,25 @@ def index():
                 flash('Invalid item selection.', 'danger')
                 return redirect(url_for('sales.index'))
 
-            amount = qty_val * rate
+            gross = qty_val * rate
+            discount = 0.0
+            if is_shop_sale:
+                try:
+                    discount = float(discount_raw or 0)
+                except (TypeError, ValueError):
+                    flash('Invalid discount amount.', 'danger')
+                    return redirect(url_for('sales.index'))
+                if discount < 0:
+                    flash('Discount cannot be negative.', 'danger')
+                    return redirect(url_for('sales.index'))
+                if discount > gross:
+                    flash(
+                        f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
+                        'danger'
+                    )
+                    return redirect(url_for('sales.index'))
+
+            amount = max(gross - discount, 0.0)
 
             # Resolve cash paid now (supports half paid / half credit)
             if payment_status == 'paid':
@@ -295,6 +314,7 @@ def index():
                 liters=qty_val,
                 rate=rate,
                 amount=amount,
+                discount=discount,
                 amount_paid=amount_paid,
                 entry_type='sale',
                 payment_status=payment_status,
@@ -304,9 +324,10 @@ def index():
             db.session.commit()
 
             who = customer.name if customer else 'Walk-in'
+            disc_note = f', discount {discount:,.2f}' if discount > 0 else ''
             flash(
-                f'Sale recorded for {who}: {item_label} — paid {amount_paid:,.2f}, '
-                f'credit {credit_amt:,.2f} — {stock_note}.',
+                f'Sale recorded for {who}: {item_label} — total {amount:,.2f}{disc_note} — '
+                f'paid {amount_paid:,.2f}, credit {credit_amt:,.2f} — {stock_note}.',
                 'success'
             )
             return redirect(url_for('sales.index'))
@@ -603,4 +624,10 @@ def quick_machine():
     machine = Machine(name=name, fuel_type_id=fuel.id, is_active=True)
     db.session.add(machine)
     db.session.commit()
-    return jsonify({'ok': True, 'id': machine.id, 'text': machine.name, 'fuel_type_id': fuel.id})
+    return jsonify({
+        'ok': True,
+        'id': machine.id,
+        'text': machine.name,
+        'name': machine.name,
+        'fuel_type_id': fuel.id,
+    })
