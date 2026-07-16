@@ -9,6 +9,9 @@ venv/
 # Local SQLite (legacy)
 instance/*.db
 
+# Database backup dumps
+backups/
+
 # IDE / OS
 .idea/
 .vscode/

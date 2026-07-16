@@ -70,6 +70,13 @@
                             <i class="bi bi-receipt me-1"></i> Expenses
                         </a>
                     </li>
+                    {% if current_user.role == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'backup' %}active{% endif %}" href="{{ url_for('backup.index') }}">
+                            <i class="bi bi-cloud-arrow-up me-1"></i> Backup
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
                 
                 <div class="d-flex align-items-center gap-3">

@@ -34,3 +34,7 @@ class Config:
         'pool_pre_ping': True,
         'pool_recycle': 280,
     }
+
+    # Full-data backups (JSON dumps under project /backups)
+    _base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    BACKUP_DIR = os.environ.get('BACKUP_DIR', os.path.join(_base_dir, 'backups'))

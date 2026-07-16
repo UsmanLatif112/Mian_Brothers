@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Backup — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">Data Backup & Restore</h2>
+        <p class="text-muted-custom">
+            Create full database backups and restore when needed.
+            Backup files are kept for {{ retention_days }} days; older files are removed automatically.
+        </p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Create Backup -->
+    <div class="col-12 col-lg-5">
+        <div class="card card-premium h-100">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-up me-2"></i>Create Backup</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <p class="text-muted-custom mb-3">
+                    Saves a full copy of all application data. Files are named
+                    <code>Mianbrothers</code> with the date and time of the backup.
+                </p>
+                <form action="{{ url_for('backup.create') }}" method="POST">
+                    <button type="submit" class="btn btn-primary-custom w-100">
+                        <i class="bi bi-download me-1"></i> Create Backup Now
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Backup -->
+    <div class="col-12 col-lg-7">
+        <div class="card card-premium h-100">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-down me-2"></i>Restore Full Data</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <div class="alert alert-warning border-0 shadow-sm mb-3" role="alert" style="border-radius: 10px;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Warning:</strong> Restoring will replace all current data.
+                    Your live data will be lost and cannot be recovered unless you have another backup.
+                    Only restore if you are sure.
+                </div>
+
+                {% if backups %}
+                <form action="{{ url_for('backup.restore') }}" method="POST" id="restore-form">
+                    <div class="mb-3">
+                        <label for="backup_file" class="form-label form-label-custom">Select Backup</label>
+                        <select class="form-select form-control-custom" id="backup_file" name="backup_file" required>
+                            <option value="">Choose a backup…</option>
+                            {% for b in backups %}
+                            <option value="{{ b.filename }}">
+                                {{ b.label }} ({{ b.size_kb }} KB)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" value="yes" id="confirm_restore" name="confirm_restore" required>
+                        <label class="form-check-label" for="confirm_restore">
+                            I understand current data will be permanently replaced by this backup.
+                        </label>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-danger" id="btn-restore-open">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Confirm &amp; Apply
+                        </button>
+                        <a href="{{ url_for('backup.index') }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+                {% else %}
+                <p class="text-muted-custom mb-0">
+                    No backups available yet. Create a backup first.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Available backups list -->
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">Available Backups (last {{ retention_days }} days)</h5>
+                <span class="badge bg-secondary">{{ backups | length }} file{{ 's' if backups | length != 1 else '' }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Backup Name</th>
+                            <th>Created</th>
+                            <th>Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if backups %}
+                            {% for b in backups %}
+                            <tr>
+                                <td><code>{{ b.filename }}</code></td>
+                                <td>{{ b.created.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ b.size_kb }} KB</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted-custom py-4">No backup files found.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="restoreConfirmModal" tabindex="-1" aria-labelledby="restoreConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--card-bg); border: var(--card-border);">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold text-danger" id="restoreConfirmModalLabel">
+                    <i class="bi bi-exclamation-octagon-fill me-2"></i>Restore will erase current data
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">You are about to restore:</p>
+                <p class="fw-semibold mb-3" id="restore-selected-name">—</p>
+                <p class="text-muted-custom mb-0">
+                    All current records will be deleted and replaced. If this backup is wrong or incomplete,
+                    that data may be permanently lost. This cannot be undone except by restoring another backup.
+                </p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="btn-restore-submit">
+                    Yes, restore full data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const form = document.getElementById('restore-form');
+    if (!form) return;
+
+    const select = document.getElementById('backup_file');
+    const confirmBox = document.getElementById('confirm_restore');
+    const openBtn = document.getElementById('btn-restore-open');
+    const submitBtn = document.getElementById('btn-restore-submit');
+    const nameEl = document.getElementById('restore-selected-name');
+    const modalEl = document.getElementById('restoreConfirmModal');
+    const modal = new bootstrap.Modal(modalEl);
+
+    openBtn.addEventListener('click', function () {
+        if (!select.value) {
+            select.reportValidity();
+            return;
+        }
+        if (!confirmBox.checked) {
+            confirmBox.reportValidity();
+            return;
+        }
+        const opt = select.options[select.selectedIndex];
+        nameEl.textContent = opt ? opt.text.trim() : select.value;
+        modal.show();
+    });
+
+    submitBtn.addEventListener('click', function () {
+        modal.hide();
+        form.submit();
+    });
+})();
+</script>
+{% endblock %}

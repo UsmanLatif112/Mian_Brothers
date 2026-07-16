@@ -44,6 +44,7 @@ def create_app():
     from app.customers.routes import customers_bp
     from app.expenses import expenses_bp
     from app.purchasing import purchasing_bp
+    from app.backup import backup_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -53,6 +54,7 @@ def create_app():
     app.register_blueprint(sales_bp, url_prefix='/sales')
     app.register_blueprint(customers_bp, url_prefix='/customers')
     app.register_blueprint(expenses_bp, url_prefix='/expenses')
+    app.register_blueprint(backup_bp, url_prefix='/backup')
     
     # Root route redirect
     @app.route('/')
