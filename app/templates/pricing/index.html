@@ -3,12 +3,17 @@
 {% block title %}Pricing — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <h2 class="fw-bold mb-1">Price Management</h2>
-        <p class="text-muted-custom">Update sale prices for fuel and inventory. Each product (company + type) keeps its own price.</p>
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Commercial</p>
+            <h1 class="page-title">Price Management</h1>
+        </div>
     </div>
-</div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Update fuel and inventory prices with clear history for compliance and review.</p>
+    </div>
+</header>
 
 <!-- Current Fuel Prices -->
 <div class="row g-4 mb-4">
@@ -32,7 +37,7 @@
     <div class="col-12 col-lg-4">
         <div class="card card-premium h-100">
             <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Update Price</h5>
+                <h2 class="panel-title mb-0">Update Price</h2>
             </div>
             <div class="card-body card-body-premium">
                 <form action="{{ url_for('pricing.index') }}" method="POST" id="price-form">
@@ -82,9 +87,9 @@
     <div class="col-12 col-lg-8">
         <div class="card card-premium">
             <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Price Revision Log</h5>
+                <h2 class="panel-title mb-0">Price Revision Log</h2>
             </div>
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <div class="table-responsive table-scroll">
                 <table class="table table-custom table-hover mb-0">
                     <thead>
                         <tr>

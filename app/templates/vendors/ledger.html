@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Ledger: {{ vendor.name }} — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text d-flex align-items-start gap-3">
+            <a href="{{ url_for('vendors.index') }}" class="btn-back" title="Back to Vendors">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <p class="page-eyebrow">Vendor Ledger</p>
+                <h1 class="page-title">{{ vendor.name }}</h1>
+            </div>
+        </div>
+    </div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Purchases from inventory, payments made, and remaining balance payable.</p>
+    </div>
+</header>
+
+<div class="stat-row">
+    <div class="stat-card {% if vendor.current_balance_payable > 0 %}stat-warning{% else %}stat-success{% endif %}">
+        <div class="stat-card-label">Balance Payable</div>
+        <div class="stat-card-value {% if vendor.current_balance_payable <= 0 %}text-success{% else %}text-warning{% endif %}">
+            {{ vendor.current_balance_payable | money }}
+        </div>
+        <div class="stat-card-meta">Amount still owed to this vendor</div>
+    </div>
+    <div class="stat-card stat-info">
+        <div class="stat-card-label">Total Purchased</div>
+        <div class="stat-card-value">{{ total_purchased | money }}</div>
+        <div class="stat-card-meta">All inventory purchase batches</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Total Paid</div>
+        <div class="stat-card-value text-success">{{ total_paid | money }}</div>
+        <div class="stat-card-meta">Payments recorded to vendor</div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-4">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h2 class="panel-title mb-0">Record Payment</h2>
+                <p class="panel-subtitle mb-0">Pay vendor and reduce payable balance</p>
+            </div>
+            <div class="card-body card-body-premium">
+                <form action="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="amount_paid" class="form-label form-label-custom">Payment Amount (PKR)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">PKR</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="amount_paid" name="amount_paid" required placeholder="Enter amount">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payment_entry_date" class="form-label form-label-custom">Payment Date</label>
+                        <input type="date" class="form-control form-control-custom" id="payment_entry_date" name="entry_date" value="{{ today }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="method" class="form-label form-label-custom">Payment Method</label>
+                        <select class="form-select form-control-custom" id="method" name="method" required>
+                            <option value="Cash" selected>Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Mobile Wallet">Mobile Wallet</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="note" class="form-label form-label-custom">Note / Reference</label>
+                        <input type="text" class="form-control form-control-custom" id="note" name="note" placeholder="Cheque no., transfer ref...">
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">
+                        <i class="bi bi-wallet2 me-1"></i> Record Payment
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card card-premium mt-4">
+            <div class="card-body card-body-premium">
+                <div class="stat-card-meta mb-2"><i class="bi bi-person me-1"></i>{{ vendor.contact_person or 'No contact person' }}</div>
+                <div class="stat-card-meta mb-2"><i class="bi bi-telephone me-1"></i>{{ vendor.phone or 'No phone' }}</div>
+                <div class="stat-card-meta"><i class="bi bi-geo-alt me-1"></i>{{ vendor.address or 'No address' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="panel-title mb-0">Vendor Statement</h2>
+                    <p class="panel-subtitle mb-0">Purchases (+) and payments (−)</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary border-0" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i> Print
+                </button>
+            </div>
+            <div class="table-responsive table-scroll">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date / Time</th>
+                            <th>Reference</th>
+                            <th>Description</th>
+                            <th class="text-end">Purchase (+)</th>
+                            <th class="text-end">Paid (−)</th>
+                            <th class="text-end">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if ledger_entries %}
+                            {% for entry in ledger_entries %}
+                            <tr>
+                                <td class="text-muted-custom">{{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '—' }}</td>
+                                <td class="fw-semibold">{{ entry.ref_id }}</td>
+                                <td>
+                                    {{ entry.desc }}
+                                    {% if entry.pay_type %}
+                                    <span class="badge badge-custom badge-staff ms-1 text-uppercase" style="font-size: 0.6rem;">{{ entry.pay_type }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end text-danger fw-semibold">
+                                    {% if entry.debit > 0 %}+{{ entry.debit | money }}{% else %}—{% endif %}
+                                </td>
+                                <td class="text-end text-success fw-semibold">
+                                    {% if entry.credit > 0 %}-{{ entry.credit | money }}{% else %}—{% endif %}
+                                </td>
+                                <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="empty-state text-center py-5">
+                                    <div class="empty-state-icon"><i class="bi bi-journal-check"></i></div>
+                                    <p class="text-muted-custom">No transactions yet for this vendor.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

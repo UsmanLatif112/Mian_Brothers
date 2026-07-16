@@ -3,61 +3,62 @@
 {% block title %}Dashboard — OctaneFlow{% endblock %}
 
 {% block content %}
+<div class="dashboard-page">
+
 {% if dry_message %}
-<div class="row mb-4 justify-content-center">
-    <div class="col-12">
-        <div class="alert alert-danger border-0 shadow-sm d-flex justify-content-between align-items-center mb-0" style="border-radius: 12px;" role="alert">
-            <div>
-                <i class="bi bi-exclamation-octagon-fill fs-5 me-2"></i>
-                <strong>{{ dry_message }}</strong>
-                <span class="ms-2" style="opacity: 0.9;">
-                    {% if dry_message == 'Fuel Dry' %}
-                        Petrol {{ "{:,.1f}".format(petrol_stock or 0) }} L · Diesel {{ "{:,.1f}".format(diesel_stock or 0) }} L
-                    {% elif dry_message == 'Petrol Dry' %}
-                        Petrol left: {{ "{:,.1f}".format(petrol_stock or 0) }} L
-                    {% else %}
-                        Diesel left: {{ "{:,.1f}".format(diesel_stock or 0) }} L
-                    {% endif %}
-                </span>
-            </div>
-            <a href="{{ url_for('inventory.index') }}" class="btn btn-sm btn-outline-danger border-0 fw-semibold text-decoration-none">
-                Refuel Now <i class="bi bi-arrow-right"></i>
-            </a>
+<div class="alert alert-dry d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4" role="alert">
+    <div class="d-flex align-items-start gap-3">
+        <span class="alert-dry-icon"><i class="bi bi-exclamation-octagon-fill"></i></span>
+        <div>
+            <strong class="d-block">{{ dry_message }}</strong>
+            <span class="alert-dry-meta">
+                {% if dry_message == 'Fuel Dry' %}
+                    Petrol {{ "{:,.1f}".format(petrol_stock or 0) }} L · Diesel {{ "{:,.1f}".format(diesel_stock or 0) }} L
+                {% elif dry_message == 'Petrol Dry' %}
+                    Petrol left: {{ "{:,.1f}".format(petrol_stock or 0) }} L
+                {% else %}
+                    Diesel left: {{ "{:,.1f}".format(diesel_stock or 0) }} L
+                {% endif %}
+            </span>
         </div>
     </div>
+    <a href="{{ url_for('inventory.index') }}" class="btn btn-dry-action flex-shrink-0">
+        Refuel Now <i class="bi bi-arrow-right ms-1"></i>
+    </a>
 </div>
 {% endif %}
 
-<div class="row mb-4 align-items-start">
-    <div class="col">
-        <h2 class="fw-bold mb-1">Dashboard</h2>
-        <p class="text-muted-custom mb-0">Filter stats by today, week, month, 6 months, year, or custom dates.</p>
-    </div>
-    <div class="col-auto">
-        <form method="GET" class="d-flex flex-wrap align-items-end gap-2 justify-content-end" id="period-filter-form">
-            <div>
-                <label class="form-label form-label-custom mb-1 small">Period</label>
-                <select name="period" id="period-select" class="form-select form-control-custom form-select-sm" style="min-width: 140px;">
-                    {% for value, label in period_choices %}
-                    <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
+<!-- Page header -->
+<header class="page-header">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Overview</p>
+            <h1 class="page-title">Dashboard</h1>
+        </div>
+        <form method="GET" class="period-filter period-filter-compact" id="period-filter-form">
+            <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
+                {% for value, label in period_choices %}
+                <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
+                <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From">
+                <span class="period-date-sep">–</span>
+                <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To">
+                <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
+                    <i class="bi bi-check-lg"></i>
+                </button>
             </div>
-            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <label class="form-label form-label-custom mb-1 small">From</label>
-                <input type="date" name="start_date" class="form-control form-control-custom form-control-sm" value="{{ start_date }}">
-            </div>
-            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <label class="form-label form-label-custom mb-1 small">To</label>
-                <input type="date" name="end_date" class="form-control form-control-custom form-control-sm" value="{{ end_date }}">
-            </div>
-            <button type="submit" class="btn btn-primary-custom btn-sm">
-                <i class="bi bi-funnel me-1"></i> Apply
-            </button>
         </form>
-        <div class="text-muted-custom small text-end mt-1">{{ start_date }} → {{ end_date }}</div>
     </div>
-</div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Sales, stock, and cash performance for the selected period.</p>
+        <span class="period-range-badge">
+            <i class="bi bi-calendar3"></i>
+            {{ start_date }} → {{ end_date }}
+        </span>
+    </div>
+</header>
 
 <script>
 (function () {
@@ -74,332 +75,318 @@
 })();
 </script>
 
-<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-4 dashboard-stats">
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=petrol" class="text-decoration-none">
-            <div class="card card-premium metric-card stock h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Petrol Sale</span>
-                    <div class="metric-value fw-bold mb-0">{{ stats.petrol_sale | money }}</div>
-                    <small class="text-muted-custom">{{ "{:,.2f}".format(stats.petrol_liters) }} L</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=diesel" class="text-decoration-none">
-            <div class="card card-premium metric-card profit h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Diesel Sale</span>
-                    <div class="metric-value fw-bold mb-0 text-success">{{ stats.diesel_sale | money }}</div>
-                    <small class="text-muted-custom">{{ "{:,.2f}".format(stats.diesel_liters) }} L</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=other" class="text-decoration-none">
-            <div class="card card-premium metric-card h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Other Item Sale</span>
-                    <div class="metric-value fw-bold mb-0">{{ stats.other_sale | money }}</div>
-                    <small class="text-muted-custom">Cash {{ stats.other_cash | money }}</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=ft" class="text-decoration-none">
-            <div class="card card-premium metric-card profit h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">FT Sale</span>
-                    <div class="metric-value fw-bold mb-0">{{ stats.get('ft_sale', 0) | money }}</div>
-                    <small class="text-muted-custom">{{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L · Cash {{ stats.get('ft_cash', 0) | money }}</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=sale" class="text-decoration-none">
-            <div class="card card-premium metric-card h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Total Sale</span>
-                    <div class="metric-value fw-bold mb-0">{{ stats.total_sale | money }}</div>
-                    <small class="text-muted-custom">Fuel + Other + FT</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=credit" class="text-decoration-none">
-            <div class="card card-premium metric-card credit h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Credit</span>
-                    <div class="metric-value fw-bold mb-0 text-warning">{{ stats.period_credit | money }}</div>
-                    <small class="text-muted-custom">Fuel + other + loans · Due {{ stats.outstanding_credit | money }}</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=expense" class="text-decoration-none">
-            <div class="card card-premium metric-card credit h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Expense</span>
-                    <div class="metric-value fw-bold mb-0 text-danger">{{ stats.expense_total | money }}</div>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card stock h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Purchasing</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.purchase_total | money }}</div>
-                <small class="text-muted-custom">Inventory purchases in period</small>
-            </div>
+<!-- KPI grid -->
+<section class="kpi-grid" aria-label="Period statistics">
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=petrol" class="kpi-card kpi-petrol">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-fuel-pump-fill"></i></span>
+            <span class="kpi-label">Petrol Sale</span>
         </div>
-    </div>
-    <div class="col">
-        <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=cash" class="text-decoration-none">
-            <div class="card card-premium metric-card h-100">
-                <div class="card-body card-body-premium">
-                    <span class="metric-label text-muted-custom text-uppercase">Cash In Hand</span>
-                    <div class="metric-value fw-bold mb-0">{{ stats.cash_in_hand | money }}</div>
-                    <small class="text-muted-custom">Sales + deposits − credit − expenses</small>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card profit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Profit</span>
-                <div class="metric-value fw-bold mb-0 text-success">{{ total_profit | money }}</div>
-            </div>
-        </div>
-    </div>
-</div>
+        <div class="kpi-value">{{ stats.petrol_sale | money }}</div>
+        <div class="kpi-meta">{{ "{:,.2f}".format(stats.petrol_liters) }} L</div>
+    </a>
 
-<!-- Live stock (always current) -->
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card card-premium">
-            <div class="card-body card-body-premium d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="text-muted-custom text-uppercase small">Petrol Stock</span>
-                    <div class="metric-value fw-bold mb-0">{{ "{:,.0f}".format(stock_summary.get('Petrol', 0)) }} L</div>
-                </div>
-                <i class="bi bi-fuel-pump-fill fs-4 text-danger"></i>
-            </div>
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=diesel" class="kpi-card kpi-diesel">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-fuel-pump"></i></span>
+            <span class="kpi-label">Diesel Sale</span>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card card-premium">
-            <div class="card-body card-body-premium d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="text-muted-custom text-uppercase small">Diesel Stock</span>
-                    <div class="metric-value fw-bold mb-0 text-success">{{ "{:,.0f}".format(stock_summary.get('Diesel', 0)) }} L</div>
-                </div>
-                <i class="bi bi-fuel-pump fs-4 text-success"></i>
-            </div>
+        <div class="kpi-value text-success">{{ stats.diesel_sale | money }}</div>
+        <div class="kpi-meta">{{ "{:,.2f}".format(stats.diesel_liters) }} L</div>
+    </a>
+
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=other" class="kpi-card kpi-other">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-box-seam"></i></span>
+            <span class="kpi-label">Other Item Sale</span>
         </div>
+        <div class="kpi-value">{{ stats.other_sale | money }}</div>
+        <div class="kpi-meta">Cash {{ stats.other_cash | money }}</div>
+    </a>
+
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=ft" class="kpi-card kpi-ft">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-droplet-half"></i></span>
+            <span class="kpi-label">FT Sale</span>
+        </div>
+        <div class="kpi-value">{{ stats.get('ft_sale', 0) | money }}</div>
+        <div class="kpi-meta">{{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L · Cash {{ stats.get('ft_cash', 0) | money }}</div>
+    </a>
+
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=sale" class="kpi-card kpi-total">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></span>
+            <span class="kpi-label">Total Sale</span>
+        </div>
+        <div class="kpi-value">{{ stats.total_sale | money }}</div>
+        <div class="kpi-meta">Fuel + Other + FT</div>
+    </a>
+
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=credit" class="kpi-card kpi-credit">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-credit-card-2-front"></i></span>
+            <span class="kpi-label">Credit</span>
+        </div>
+        <div class="kpi-value text-warning">{{ stats.period_credit | money }}</div>
+        <div class="kpi-meta">Due {{ stats.outstanding_credit | money }}</div>
+    </a>
+
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=expense" class="kpi-card kpi-expense">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-receipt"></i></span>
+            <span class="kpi-label">Expense</span>
+        </div>
+        <div class="kpi-value text-danger">{{ stats.expense_total | money }}</div>
+        <div class="kpi-meta">Period expenses</div>
+    </a>
+
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-cart-plus"></i></span>
+            <span class="kpi-label">Total Purchasing</span>
+        </div>
+        <div class="kpi-value">{{ stats.purchase_total | money }}</div>
+        <div class="kpi-meta">Inventory purchases</div>
     </div>
-</div>
+
+    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=cash" class="kpi-card kpi-cash">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-wallet2"></i></span>
+            <span class="kpi-label">Cash In Hand</span>
+        </div>
+        <div class="kpi-value">{{ stats.cash_in_hand | money }}</div>
+        <div class="kpi-meta">Sales + deposits − credit − expenses</div>
+    </a>
+
+    <div class="kpi-card kpi-profit">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-trophy"></i></span>
+            <span class="kpi-label">Profit</span>
+        </div>
+        <div class="kpi-value text-success">{{ total_profit | money }}</div>
+        <div class="kpi-meta">Net margin</div>
+    </div>
+</section>
+
+<!-- Live stock -->
+{% set petrol_liters = stock_summary.get('Petrol', 0) or 0 %}
+{% set diesel_liters = stock_summary.get('Diesel', 0) or 0 %}
+{% set petrol_bar = [petrol_liters / 50000 * 100, 100]|min %}
+{% set diesel_bar = [diesel_liters / 50000 * 100, 100]|min %}
+<section class="stock-grid" aria-label="Live fuel stock">
+    <div class="stock-card stock-petrol">
+        <div class="stock-card-body">
+            <div>
+                <span class="stock-label">Petrol Stock</span>
+                <div class="stock-value">{{ "{:,.0f}".format(petrol_liters) }} <span class="stock-unit">L</span></div>
+            </div>
+            <span class="stock-icon"><i class="bi bi-fuel-pump-fill"></i></span>
+        </div>
+        <div class="stock-bar" aria-hidden="true"><span style="width: {{ petrol_bar if petrol_bar > 4 or petrol_liters == 0 else 4 }}%"></span></div>
+    </div>
+    <div class="stock-card stock-diesel">
+        <div class="stock-card-body">
+            <div>
+                <span class="stock-label">Diesel Stock</span>
+                <div class="stock-value text-success">{{ "{:,.0f}".format(diesel_liters) }} <span class="stock-unit">L</span></div>
+            </div>
+            <span class="stock-icon"><i class="bi bi-fuel-pump"></i></span>
+        </div>
+        <div class="stock-bar" aria-hidden="true"><span style="width: {{ diesel_bar if diesel_bar > 4 or diesel_liters == 0 else 4 }}%"></span></div>
+    </div>
+</section>
 
 {% if detail %}
-<div class="row g-4 mb-4">
-    <div class="col-12">
-        <div class="card card-premium">
-            <div class="card-header-premium d-flex justify-content-between">
-                <h5 class="mb-0 fw-bold">Details: {% if detail == 'ft' %}FT Sale{% else %}{{ detail | capitalize }}{% endif %}</h5>
-                <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-sm btn-outline-secondary">Close</a>
-            </div>
-            <div class="table-responsive">
-                {% if detail == 'expense' %}
-                <table class="table table-custom mb-0">
-                    <thead><tr><th>Date</th><th>Name</th><th>Description</th><th>Amount</th></tr></thead>
-                    <tbody>
-                        {% for e in stats.expenses %}
-                        <tr><td>{{ e.expense_date }}</td><td>{{ e.name }}</td><td>{{ e.description or '—' }}</td><td>{{ e.amount | money }}</td></tr>
-                        {% else %}
-                        <tr><td colspan="4" class="text-center text-muted-custom py-3">No expenses.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% elif detail == 'cash' %}
-                <div class="card-body">
-                    <p class="mb-2">Cash in hand: <strong>{{ stats.cash_in_hand | money }}</strong></p>
-                    {% if stats.counted_cash %}
-                    <p class="mb-2">Till counted: <strong>{{ stats.counted_cash | money }}</strong> (diff {{ stats.cash_variance | money }})</p>
-                    {% endif %}
-                    <hr>
-                    <p class="small text-muted-custom mb-0">
-                        Total sale {{ stats.total_sale | money }}
-                        + deposits {{ stats.deposits | money }}
-                        − credit {{ stats.period_credit | money }}
-                        − expenses {{ stats.expense_total | money }}
-                    </p>
-                </div>
-                {% elif detail == 'sale' %}
-                <div class="card-body">
-                    <p class="mb-2">Fuel (meter): <strong>{{ stats.meter_total | money }}</strong> ({{ "{:,.2f}".format(stats.meter_liters) }} L)</p>
-                    <p class="mb-2">Other items: <strong>{{ stats.other_sale | money }}</strong></p>
-                    <p class="mb-2">FT Mobile Oil: <strong>{{ stats.get('ft_sale', 0) | money }}</strong> ({{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L)</p>
-                    <p class="mb-0">Total sale: <strong>{{ stats.total_sale | money }}</strong></p>
-                </div>
-                {% else %}
-                <table class="table table-custom mb-0">
-                    <thead>
-                        <tr><th>#</th><th>Date</th><th>Type</th><th>Customer</th><th>Item</th><th>Amount</th><th>Paid</th><th>Credit</th><th>Status</th></tr>
-                    </thead>
-                    <tbody>
-                        {% set ns = namespace(rows=0) %}
-                        {% for cs in stats.entries %}
-                            {% if detail == 'petrol' and cs.fuel_type and 'petrol' in cs.fuel_type.name.lower() %}
-                            {% set ns.rows = ns.rows + 1 %}
-                            <tr>
-                                <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                                <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                            </tr>
-                            {% elif detail == 'diesel' and cs.fuel_type and 'diesel' in cs.fuel_type.name.lower() %}
-                            {% set ns.rows = ns.rows + 1 %}
-                            <tr>
-                                <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                                <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                            </tr>
-                            {% elif detail == 'other' and cs.other_item_id and (not cs.other_item or cs.other_item.category != 'ft_mobile') %}
-                            {% set ns.rows = ns.rows + 1 %}
-                            <tr>
-                                <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                                <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                            </tr>
-                            {% elif detail == 'ft' and cs.other_item and cs.other_item.category == 'ft_mobile' %}
-                            {% set ns.rows = ns.rows + 1 %}
-                            <tr>
-                                <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                                <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                            </tr>
-                            {% elif detail == 'credit' and (cs.credit_amount > 0 or (cs.entry_type or '') == 'loan') %}
-                            {% set ns.rows = ns.rows + 1 %}
-                            <tr>
-                                <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                                <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                                <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                            </tr>
-                            {% endif %}
-                        {% endfor %}
-                        {% if ns.rows == 0 %}
-                        <tr><td colspan="9" class="text-center text-muted-custom py-3">No rows for this filter.</td></tr>
-                        {% endif %}
-                    </tbody>
-                </table>
+<section class="detail-panel mb-4">
+    <div class="card card-premium">
+        <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h2 class="panel-title mb-0">Details: {% if detail == 'ft' %}FT Sale{% else %}{{ detail | capitalize }}{% endif %}</h2>
+            <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-sm btn-outline-secondary border-0">
+                <i class="bi bi-x-lg me-1"></i> Close
+            </a>
+        </div>
+        <div class="table-responsive">
+            {% if detail == 'expense' %}
+            <table class="table table-custom mb-0">
+                <thead><tr><th>Date</th><th>Name</th><th>Description</th><th>Amount</th></tr></thead>
+                <tbody>
+                    {% for e in stats.expenses %}
+                    <tr><td>{{ e.expense_date }}</td><td>{{ e.name }}</td><td>{{ e.description or '—' }}</td><td>{{ e.amount | money }}</td></tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-center text-muted-custom py-4">No expenses.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% elif detail == 'cash' %}
+            <div class="card-body card-body-premium">
+                <p class="mb-2">Cash in hand: <strong>{{ stats.cash_in_hand | money }}</strong></p>
+                {% if stats.counted_cash %}
+                <p class="mb-2">Till counted: <strong>{{ stats.counted_cash | money }}</strong> (diff {{ stats.cash_variance | money }})</p>
                 {% endif %}
+                <hr class="detail-divider">
+                <p class="small text-muted-custom mb-0">
+                    Total sale {{ stats.total_sale | money }}
+                    + deposits {{ stats.deposits | money }}
+                    − credit {{ stats.period_credit | money }}
+                    − expenses {{ stats.expense_total | money }}
+                </p>
             </div>
+            {% elif detail == 'sale' %}
+            <div class="card-body card-body-premium">
+                <p class="mb-2">Fuel (meter): <strong>{{ stats.meter_total | money }}</strong> ({{ "{:,.2f}".format(stats.meter_liters) }} L)</p>
+                <p class="mb-2">Other items: <strong>{{ stats.other_sale | money }}</strong></p>
+                <p class="mb-2">FT Mobile Oil: <strong>{{ stats.get('ft_sale', 0) | money }}</strong> ({{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L)</p>
+                <p class="mb-0">Total sale: <strong>{{ stats.total_sale | money }}</strong></p>
+            </div>
+            {% else %}
+            <table class="table table-custom mb-0">
+                <thead>
+                    <tr><th>#</th><th>Date</th><th>Type</th><th>Customer</th><th>Item</th><th>Amount</th><th>Paid</th><th>Credit</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    {% set ns = namespace(rows=0) %}
+                    {% for cs in stats.entries %}
+                        {% if detail == 'petrol' and cs.fuel_type and 'petrol' in cs.fuel_type.name.lower() %}
+                        {% set ns.rows = ns.rows + 1 %}
+                        <tr>
+                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
+                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
+                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
+                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
+                        </tr>
+                        {% elif detail == 'diesel' and cs.fuel_type and 'diesel' in cs.fuel_type.name.lower() %}
+                        {% set ns.rows = ns.rows + 1 %}
+                        <tr>
+                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
+                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
+                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
+                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
+                        </tr>
+                        {% elif detail == 'other' and cs.other_item_id and (not cs.other_item or cs.other_item.category != 'ft_mobile') %}
+                        {% set ns.rows = ns.rows + 1 %}
+                        <tr>
+                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
+                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
+                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
+                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
+                        </tr>
+                        {% elif detail == 'ft' and cs.other_item and cs.other_item.category == 'ft_mobile' %}
+                        {% set ns.rows = ns.rows + 1 %}
+                        <tr>
+                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
+                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
+                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
+                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
+                        </tr>
+                        {% elif detail == 'credit' and (cs.credit_amount > 0 or (cs.entry_type or '') == 'loan') %}
+                        {% set ns.rows = ns.rows + 1 %}
+                        <tr>
+                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
+                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
+                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
+                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                    {% if ns.rows == 0 %}
+                    <tr><td colspan="9" class="text-center text-muted-custom py-4">No rows for this filter.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            {% endif %}
         </div>
     </div>
-</div>
+</section>
 {% endif %}
 
-<div class="row g-4 mb-4">
-    <div class="col-12 col-xl-8">
-        <div class="card card-premium h-100">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Revenue &amp; Margin (selected period)</h5>
-            </div>
-            <div class="card-body card-body-premium">
-                <div style="position: relative; height: 320px; width: 100%;">
-                    <canvas id="trendChart"></canvas>
-                </div>
+<!-- Chart + other stock -->
+<div class="dashboard-panels">
+    <div class="card card-premium dashboard-chart-card">
+        <div class="card-header-premium">
+            <h2 class="panel-title mb-0">Revenue &amp; Margin</h2>
+            <p class="panel-subtitle mb-0">Selected period trend</p>
+        </div>
+        <div class="card-body card-body-premium">
+            <div class="chart-wrap">
+                <canvas id="trendChart"></canvas>
             </div>
         </div>
     </div>
-    <div class="col-12 col-xl-4">
-        <div class="card card-premium h-100">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Other Items Stock</h5>
-            </div>
-            <div class="card-body p-0" style="max-height: 360px; overflow-y: auto;">
-                <table class="table table-custom mb-0">
-                    <thead><tr><th>Item</th><th class="text-end">Qty</th></tr></thead>
-                    <tbody>
-                        {% for item in other_items %}
-                        <tr><td>{{ item.display_name() }}</td><td class="text-end">{{ item.quantity }}</td></tr>
-                        {% else %}
-                        <tr><td colspan="2" class="text-center text-muted-custom py-3">No items.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <div class="card card-premium dashboard-side-card">
+        <div class="card-header-premium">
+            <h2 class="panel-title mb-0">Other Items Stock</h2>
+            <p class="panel-subtitle mb-0">Current quantities</p>
+        </div>
+        <div class="side-table-scroll">
+            <table class="table table-custom mb-0">
+                <thead><tr><th>Item</th><th class="text-end">Qty</th></tr></thead>
+                <tbody>
+                    {% for item in other_items %}
+                    <tr><td>{{ item.display_name() }}</td><td class="text-end fw-semibold">{{ item.quantity }}</td></tr>
+                    {% else %}
+                    <tr><td colspan="2" class="text-center text-muted-custom py-4">No items.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-12">
-        <div class="card card-premium">
-            <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                    <h5 class="mb-0 fw-bold">Top Credit Customers</h5>
-                    <small class="text-muted-custom">Due over PKR 200,000 and uncleared for more than 1 month</small>
-                </div>
-                <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary">All dues</a>
+<!-- Top credit customers -->
+<section class="mt-4">
+    <div class="card card-premium">
+        <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <h2 class="panel-title mb-1">Top Credit Customers</h2>
+                <p class="panel-subtitle mb-0">Due over PKR 200,000 and uncleared for more than 1 month</p>
             </div>
-            <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0">
-                    <thead>
+            <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0">All dues</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Customer</th>
+                        <th>Phone</th>
+                        <th>Credit Due</th>
+                        <th>Oldest Unpaid</th>
+                        <th>Days Overdue</th>
+                        <th>Last Payment</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if top_credit_customers %}
+                        {% for row in top_credit_customers %}
                         <tr>
-                            <th>#</th>
-                            <th>Customer</th>
-                            <th>Phone</th>
-                            <th>Credit Due</th>
-                            <th>Oldest Unpaid</th>
-                            <th>Days Overdue</th>
-                            <th>Last Payment</th>
-                            <th></th>
+                            <td>{{ loop.index }}</td>
+                            <td class="fw-semibold">{{ row.customer.name }}</td>
+                            <td>{{ row.customer.phone or '—' }}</td>
+                            <td class="text-warning fw-bold">{{ row.due | money }}</td>
+                            <td>{{ row.oldest_credit_date }}</td>
+                            <td><span class="badge badge-danger-custom">{{ row.days_overdue }} days</span></td>
+                            <td>{{ row.last_payment_date or 'Never' }}</td>
+                            <td>
+                                <a href="{{ url_for('customers.ledger', customer_id=row.customer.id) }}" class="btn btn-sm btn-ghost">
+                                    Ledger <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {% if top_credit_customers %}
-                            {% for row in top_credit_customers %}
-                            <tr>
-                                <td>{{ loop.index }}</td>
-                                <td class="fw-semibold">{{ row.customer.name }}</td>
-                                <td>{{ row.customer.phone or '—' }}</td>
-                                <td class="text-warning fw-bold">{{ row.due | money }}</td>
-                                <td>{{ row.oldest_credit_date }}</td>
-                                <td>
-                                    <span class="badge bg-danger">{{ row.days_overdue }} days</span>
-                                </td>
-                                <td>{{ row.last_payment_date or 'Never' }}</td>
-                                <td>
-                                    <a href="{{ url_for('customers.ledger', customer_id=row.customer.id) }}" class="btn btn-sm btn-outline-primary border-0">
-                                        Ledger
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="8" class="text-center text-muted-custom py-4">
-                                    No customers with credit over PKR 200,000 overdue for more than 1 month.
-                                </td>
-                            </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted-custom py-5">
+                                No customers with credit over PKR 200,000 overdue for more than 1 month.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
     </div>
+</section>
+
 </div>
 {% endblock %}
 
@@ -409,6 +396,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
     const qs = params.toString();
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99, 102, 241, 0.08)';
+    const tickColor = isDark ? '#94a3b8' : '#6b7280';
+    const salesColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-sales').trim() || '#6366f1';
+    const profitColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-profit').trim() || '#10b981';
+
     fetch(`{{ url_for('dashboard.chart_data') }}?${qs}`)
         .then(r => r.json())
         .then(data => {
@@ -419,15 +412,72 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: {
                     labels: data.labels,
                     datasets: [
-                        { label: 'Sales', data: data.sales_trend, borderColor: '#0ea5e9', tension: 0.3, fill: false },
-                        { label: 'Profit', data: data.profit_trend, borderColor: '#22c55e', tension: 0.3, fill: false },
+                        {
+                            label: 'Sales',
+                            data: data.sales_trend,
+                            borderColor: salesColor,
+                            backgroundColor: isDark ? 'rgba(129, 140, 248, 0.16)' : 'rgba(99, 102, 241, 0.14)',
+                            tension: 0.4,
+                            fill: true,
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6,
+                            pointHoverBackgroundColor: salesColor,
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2,
+                        },
+                        {
+                            label: 'Profit',
+                            data: data.profit_trend,
+                            borderColor: profitColor,
+                            backgroundColor: isDark ? 'rgba(52, 211, 153, 0.12)' : 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6,
+                            pointHoverBackgroundColor: profitColor,
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2,
+                        },
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { position: 'bottom' } },
-                    scales: { y: { beginAtZero: true } }
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: tickColor,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 20,
+                                font: { family: 'Outfit', size: 12, weight: '600' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: isDark ? '#1e1b4b' : '#111827',
+                            titleFont: { family: 'Outfit', weight: '700' },
+                            bodyFont: { family: 'Outfit', weight: '500' },
+                            padding: 12,
+                            cornerRadius: 12,
+                            boxPadding: 4,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: tickColor, font: { family: 'Outfit', size: 11, weight: '500' } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                            border: { display: false },
+                            ticks: { color: tickColor, font: { family: 'Outfit', size: 11, weight: '500' } }
+                        }
+                    }
                 }
             });
         });

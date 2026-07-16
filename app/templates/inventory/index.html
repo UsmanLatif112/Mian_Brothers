@@ -3,17 +3,20 @@
 {% block title %}Inventory — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-4 align-items-center">
-    <div class="col">
-        <h2 class="fw-bold mb-1">Inventory Control</h2>
-        <p class="text-muted-custom mb-0">Each Add Inventory creates a purchase batch in Purchasing. Selecting an existing fuel increases that live stock (does not create a new fuel).</p>
-    </div>
-    <div class="col-auto">
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Stock</p>
+            <h1 class="page-title">Inventory Control</h1>
+        </div>
         <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn">
             <i class="bi bi-plus-circle me-1"></i> Add Inventory
         </button>
     </div>
-</div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Every inventory add creates a purchase batch and updates live stock levels in real time.</p>
+    </div>
+</header>
 
 <!-- Live Fuel Stock Levels -->
 <div class="row g-4 mb-4">

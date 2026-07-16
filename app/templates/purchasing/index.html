@@ -3,44 +3,38 @@
 {% block title %}Purchasing — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-4 align-items-start">
-    <div class="col">
-        <h2 class="fw-bold mb-1">Purchasing</h2>
-        <p class="text-muted-custom mb-0">Each Inventory add is one purchase batch. Same fuel can appear many times with different cost/L — totals use cost × liters.</p>
-    </div>
-    <div class="col-auto">
-        <form method="GET" class="d-flex flex-wrap align-items-end gap-2 justify-content-end" id="period-filter-form">
-            <div>
-                <label class="form-label form-label-custom mb-1 small">Category</label>
-                <select name="category" id="category-select" class="form-select form-control-custom form-select-sm" style="min-width: 140px;">
-                    {% for value, label in category_choices %}
-                    <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Supply</p>
+            <h1 class="page-title">Purchasing</h1>
+        </div>
+        <form method="GET" class="period-filter period-filter-compact period-filter-wide" id="period-filter-form">
+            <select name="category" id="category-select" class="form-select form-control-custom period-select" aria-label="Category">
+                {% for value, label in category_choices %}
+                <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
+                {% for value, label in period_choices %}
+                <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
+                <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
+                <span class="period-date-sep">–</span>
+                <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
+                <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
+                    <i class="bi bi-check-lg"></i>
+                </button>
             </div>
-            <div>
-                <label class="form-label form-label-custom mb-1 small">Period</label>
-                <select name="period" id="period-select" class="form-select form-control-custom form-select-sm" style="min-width: 140px;">
-                    {% for value, label in period_choices %}
-                    <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <label class="form-label form-label-custom mb-1 small">From</label>
-                <input type="date" name="start_date" class="form-control form-control-custom form-control-sm" value="{{ start_date }}">
-            </div>
-            <div class="custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <label class="form-label form-label-custom mb-1 small">To</label>
-                <input type="date" name="end_date" class="form-control form-control-custom form-control-sm" value="{{ end_date }}">
-            </div>
-            <button type="submit" class="btn btn-primary-custom btn-sm">
-                <i class="bi bi-funnel me-1"></i> Apply
-            </button>
         </form>
-        <div class="text-muted-custom small text-end mt-1">{{ start_date }} → {{ end_date }}</div>
     </div>
-</div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Track purchase batches by category, period, and unit cost accuracy.</p>
+        <span class="period-range-badge"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
+    </div>
+</header>
 
 <script>
 (function () {

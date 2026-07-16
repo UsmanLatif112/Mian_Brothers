@@ -6,6 +6,7 @@ from app.models import (
     Sale, Machine, CreditSale, DailyFuelStock,
 )
 from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for
+from app.vendors.service import link_purchase_to_vendor
 from datetime import datetime
 
 
@@ -113,14 +114,15 @@ def index():
                     flash('Fuel type not found.', 'danger')
                     return redirect(url_for('inventory.index'))
 
-            db.session.add(StockEntry(
+            stock_entry = StockEntry(
                 fuel_type_id=fuel_type.id,
                 liters_added=liters_val,
                 cost_per_liter=cost_val,
                 supplier=vendor,
                 entry_date=entry_dt,
                 added_by=current_user.id
-            ))
+            )
+            db.session.add(stock_entry)
 
             inventory = Inventory.query.filter_by(fuel_type_id=fuel_type.id).first()
             if not inventory:
@@ -141,7 +143,7 @@ def index():
 
             # Every inventory add = one purchase log row (batch cost kept separately)
             batch_total = liters_val * cost_val
-            db.session.add(ItemPurchaseLog(
+            purchase_log = ItemPurchaseLog(
                 category='fuel',
                 item_name=fuel_type.name,
                 vendor=vendor,
@@ -151,7 +153,9 @@ def index():
                 fuel_type_id=fuel_type.id,
                 entry_date=entry_dt,
                 added_by=current_user.id
-            ))
+            )
+            db.session.add(purchase_log)
+            link_purchase_to_vendor(vendor, purchase_log, stock_entry)
             db.session.commit()
             flash(
                 f"Purchase logged: {liters_val:,.2f}L of {fuel_type.name} @ PKR {cost_val:,.2f}/L "
@@ -207,7 +211,7 @@ def index():
             shop_item.sale_price = sale_val
             shop_item.quantity = 0
 
-            db.session.add(ItemPurchaseLog(
+            purchase_log = ItemPurchaseLog(
                 category='ft_mobile',
                 item_name=item_name,
                 company=company,
@@ -219,7 +223,9 @@ def index():
                 liters=liters_val,
                 entry_date=entry_dt,
                 added_by=current_user.id,
-            ))
+            )
+            db.session.add(purchase_log)
+            link_purchase_to_vendor(vendor, purchase_log)
             db.session.commit()
             msg = (
                 f"Purchase logged: {liters_val:,.2f}L FT Mobile Oil ({company}) "
@@ -301,7 +307,7 @@ def index():
         )
         shop_item.sale_price = sale_val
 
-        db.session.add(ItemPurchaseLog(
+        purchase_log = ItemPurchaseLog(
             category=category,
             item_name=item_name,
             company=company,
@@ -313,7 +319,9 @@ def index():
             liters=liters_val,
             entry_date=entry_dt,
             added_by=current_user.id
-        ))
+        )
+        db.session.add(purchase_log)
+        link_purchase_to_vendor(vendor, purchase_log)
         db.session.commit()
         batch_total = qty_val * cost_val
         msg = (

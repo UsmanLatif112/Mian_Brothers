@@ -3,22 +3,24 @@
 {% block title %}Backup — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <h2 class="fw-bold mb-1">Data Backup & Restore</h2>
-        <p class="text-muted-custom">
-            Create full database backups and restore when needed.
-            Backup files are kept for {{ retention_days }} days; older files are removed automatically.
-        </p>
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">System</p>
+            <h1 class="page-title">Data Backup & Restore</h1>
+        </div>
     </div>
-</div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Create full database backups and restore when needed. Files are kept for {{ retention_days }} days.</p>
+    </div>
+</header>
 
 <div class="row g-4">
     <!-- Create Backup -->
     <div class="col-12 col-lg-5">
         <div class="card card-premium h-100">
             <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-up me-2"></i>Create Backup</h5>
+                <h2 class="panel-title mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Create Backup</h2>
             </div>
             <div class="card-body card-body-premium">
                 <p class="text-muted-custom mb-3">
@@ -38,10 +40,10 @@
     <div class="col-12 col-lg-7">
         <div class="card card-premium h-100">
             <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold"><i class="bi bi-cloud-arrow-down me-2"></i>Restore Full Data</h5>
+                <h2 class="panel-title mb-0"><i class="bi bi-cloud-arrow-down me-2"></i>Restore Full Data</h2>
             </div>
             <div class="card-body card-body-premium">
-                <div class="alert alert-warning border-0 shadow-sm mb-3" role="alert" style="border-radius: 10px;">
+                <div class="alert alert-warning border-0 mb-3" role="alert">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                     <strong>Warning:</strong> Restoring will replace all current data.
                     Your live data will be lost and cannot be recovered unless you have another backup.
@@ -93,8 +95,11 @@
     <div class="col-12">
         <div class="card card-premium">
             <div class="card-header-premium d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fw-bold">Available Backups (last {{ retention_days }} days)</h5>
-                <span class="badge bg-secondary">{{ backups | length }} file{{ 's' if backups | length != 1 else '' }}</span>
+                <div>
+                    <h2 class="panel-title mb-0">Available Backups</h2>
+                    <p class="panel-subtitle mb-0">Last {{ retention_days }} days</p>
+                </div>
+                <span class="badge badge-custom badge-staff">{{ backups | length }} file{{ 's' if backups | length != 1 else '' }}</span>
             </div>
             <div class="table-responsive">
                 <table class="table table-custom table-hover mb-0">
@@ -130,7 +135,7 @@
 {% block modals %}
 <div class="modal fade" id="restoreConfirmModal" tabindex="-1" aria-labelledby="restoreConfirmModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="background-color: var(--card-bg); border: var(--card-border);">
+        <div class="modal-content">
             <div class="modal-header border-0">
                 <h5 class="modal-title fw-bold text-danger" id="restoreConfirmModalLabel">
                     <i class="bi bi-exclamation-octagon-fill me-2"></i>Restore will erase current data

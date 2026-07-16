@@ -45,6 +45,7 @@ def create_app():
     from app.expenses import expenses_bp
     from app.purchasing import purchasing_bp
     from app.backup import backup_bp
+    from app.vendors import vendors_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -53,6 +54,7 @@ def create_app():
     app.register_blueprint(purchasing_bp, url_prefix='/purchasing')
     app.register_blueprint(sales_bp, url_prefix='/sales')
     app.register_blueprint(customers_bp, url_prefix='/customers')
+    app.register_blueprint(vendors_bp, url_prefix='/vendors')
     app.register_blueprint(expenses_bp, url_prefix='/expenses')
     app.register_blueprint(backup_bp, url_prefix='/backup')
     
@@ -70,6 +72,7 @@ def create_app():
         ensure_credit_sales_schema()
         ensure_journal_schema()
         ensure_customers_schema()
+        ensure_vendors_schema()
         
     return app
 
@@ -96,6 +99,82 @@ def ensure_customers_schema():
         for stmt in alters:
             conn.execute(text(stmt))
     print("Upgraded customers schema for old_book_no / previous_credit.")
+
+
+def ensure_vendors_schema():
+    """Create vendor tables/columns and backfill from existing purchase logs."""
+    from sqlalchemy import text, inspect
+    from app.models import Vendor, ItemPurchaseLog, StockEntry
+    from app.vendors.service import (
+        get_or_create_vendor,
+        normalize_vendor_name,
+        link_purchase_to_vendor,
+        recalculate_vendor_balance,
+    )
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+
+    alters = []
+    if 'item_purchase_logs' in tables:
+        existing = {col['name'] for col in inspector.get_columns('item_purchase_logs')}
+        if 'vendor_id' not in existing:
+            alters.append('ALTER TABLE item_purchase_logs ADD COLUMN vendor_id INTEGER')
+    if 'stock_entries' in tables:
+        existing = {col['name'] for col in inspector.get_columns('stock_entries')}
+        if 'vendor_id' not in existing:
+            alters.append('ALTER TABLE stock_entries ADD COLUMN vendor_id INTEGER')
+
+    if alters:
+        with db.engine.begin() as conn:
+            for stmt in alters:
+                conn.execute(text(stmt))
+        print('Upgraded purchase tables for vendor_id.')
+
+    if 'vendors' not in tables:
+        return
+
+    names = set()
+    if 'item_purchase_logs' in tables:
+        for log in ItemPurchaseLog.query.filter(ItemPurchaseLog.vendor.isnot(None)).all():
+            n = normalize_vendor_name(log.vendor)
+            if n:
+                names.add(n)
+    if 'stock_entries' in tables:
+        for entry in StockEntry.query.filter(StockEntry.supplier.isnot(None)).all():
+            n = normalize_vendor_name(entry.supplier)
+            if n:
+                names.add(n)
+
+    for name in names:
+        get_or_create_vendor(name)
+    db.session.commit()
+
+    linked_any = False
+    for log in ItemPurchaseLog.query.filter(
+        ItemPurchaseLog.vendor_id.is_(None),
+        ItemPurchaseLog.vendor.isnot(None),
+    ).all():
+        link_purchase_to_vendor(log.vendor, log, increment_balance=False)
+        linked_any = True
+
+    for entry in StockEntry.query.filter(
+        StockEntry.vendor_id.is_(None),
+        StockEntry.supplier.isnot(None),
+    ).all():
+        vendor = get_or_create_vendor(entry.supplier)
+        if vendor:
+            entry.vendor_id = vendor.id
+            entry.supplier = vendor.name
+            linked_any = True
+
+    if linked_any or alters:
+        db.session.commit()
+        for vendor in Vendor.query.all():
+            recalculate_vendor_balance(vendor)
+        db.session.commit()
+        if linked_any:
+            print('Backfilled vendor links from purchase history.')
 
 
 def ensure_journal_schema():

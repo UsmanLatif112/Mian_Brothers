@@ -86,6 +86,7 @@ class StockEntry(db.Model):
     liters_added = db.Column(db.Numeric(12, 2), nullable=False)
     cost_per_liter = db.Column(db.Numeric(10, 2), nullable=False)
     supplier = db.Column(db.String(100), nullable=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=True)
     entry_date = db.Column(db.DateTime, default=datetime.utcnow)
     added_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     
@@ -299,6 +300,40 @@ class Payment(db.Model):
         return f"<Payment {self.id}: {self.amount_paid} from customer {self.customer_id}>"
 
 
+class Vendor(db.Model):
+    __tablename__ = 'vendors'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    phone = db.Column(db.String(20), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    contact_person = db.Column(db.String(100), nullable=True)
+    previous_payable = db.Column(db.Numeric(12, 2), nullable=True)
+    current_balance_payable = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    payments = db.relationship('VendorPayment', backref='vendor', lazy=True)
+    purchase_logs = db.relationship('ItemPurchaseLog', backref='vendor_ref', lazy=True, foreign_keys='ItemPurchaseLog.vendor_id')
+    stock_entries = db.relationship('StockEntry', backref='vendor_ref', lazy=True, foreign_keys='StockEntry.vendor_id')
+
+    def __repr__(self):
+        return f"<Vendor {self.name} (Payable: {self.current_balance_payable})>"
+
+
+class VendorPayment(db.Model):
+    __tablename__ = 'vendor_payments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=False)
+    amount_paid = db.Column(db.Numeric(12, 2), nullable=False)
+    payment_date = db.Column(db.DateTime, default=datetime.utcnow)
+    method = db.Column(db.String(50), nullable=False, default='Cash')
+    note = db.Column(db.String(200), nullable=True)
+
+    def __repr__(self):
+        return f"<VendorPayment {self.id}: {self.amount_paid} to vendor {self.vendor_id}>"
+
+
 class OtherItem(db.Model):
     __tablename__ = 'other_items'
 
@@ -335,6 +370,7 @@ class ItemPurchaseLog(db.Model):
     company = db.Column(db.String(100), nullable=True)
     item_type = db.Column(db.String(100), nullable=True)
     vendor = db.Column(db.String(100), nullable=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=True)
     cost_price = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     sale_price = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     quantity = db.Column(db.Integer, nullable=True)

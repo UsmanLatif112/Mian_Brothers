@@ -2,7 +2,7 @@
 {% if pagination and pagination.pages > 1 %}
 {% set shown_end = pagination.page * pagination.per_page %}
 {% if shown_end > pagination.total %}{% set shown_end = pagination.total %}{% endif %}
-<nav class="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-3 border-top" style="border-color: var(--border-color) !important;">
+<nav class="pagination-app" aria-label="Pagination">
     <small class="text-muted-custom">
         Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }}–{{ shown_end }} of {{ pagination.total }}
     </small>

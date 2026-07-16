@@ -3,152 +3,85 @@
 {% block title %}Ledger: {{ customer.name }} — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-4 align-items-center">
-    <div class="col-12 col-md-8">
-        <div class="d-flex align-items-center gap-3">
-            <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary border-0 px-2 py-1" title="Back to Customers">
-                <i class="bi bi-arrow-left fs-4"></i>
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text d-flex align-items-start gap-3">
+            <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers">
+                <i class="bi bi-arrow-left"></i>
             </a>
             <div>
-                <h2 class="mb-1 fw-bold">Customer Ledger Statement</h2>
-                <p class="text-muted-custom mb-0">Detailed accounting history for <strong>{{ customer.name }}</strong>.</p>
+                <p class="page-eyebrow">Customer Ledger</p>
+                <h1 class="page-title">{{ customer.name }}</h1>
             </div>
         </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="payment">
+                <i class="bi bi-wallet2 me-1"></i> Record Payment
+            </button>
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="advance">
+                <i class="bi bi-cash-coin me-1"></i> Advance / Loan
+            </button>
+        </div>
     </div>
-    <div class="col-12 col-md-4 text-md-end mt-3 mt-md-0">
-        <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#advanceLoanModal">
-            <i class="bi bi-cash-coin me-1"></i> Advance / Loan
-        </button>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Detailed accounting history, payments, and running balance for this customer.</p>
     </div>
-</div>
+</header>
 
-<div class="row g-4 mb-4">
-    <!-- Balance Due Stat Card -->
-    <div class="col-12 col-md-4">
-        <div class="card card-premium metric-card {% if customer.current_balance_due > 0 %}credit{% elif customer.current_balance_due < 0 %}profit{% else %}stock{% endif %}">
-            <div class="card-body card-body-premium">
-                <h6 class="text-muted-custom text-uppercase mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">
-                    {% if customer.current_balance_due < 0 %}
-                    Advance Balance (prepaid)
-                    {% else %}
-                    Current Balance Due
-                    {% endif %}
-                </h6>
-                <h2 class="fw-bold mb-0 {% if customer.current_balance_due < 0 %}text-success{% endif %}">
-                    {{ customer.current_balance_due | money }}
-                </h2>
-                {% if customer.current_balance_due < 0 %}
-                <small class="text-muted-custom">Negative = customer advance on account</small>
-                {% endif %}
-            </div>
+<div class="stat-row">
+    <div class="stat-card {% if customer.current_balance_due < 0 %}stat-success{% elif customer.current_balance_due > 0 %}stat-warning{% else %}stat-info{% endif %}">
+        <div class="stat-card-label">
+            {% if customer.current_balance_due < 0 %}Advance Balance{% else %}Current Balance Due{% endif %}
         </div>
-    </div>
-    
-    <!-- Credit Limit Stat Card -->
-    <div class="col-12 col-md-4">
-        <div class="card card-premium metric-card stock">
-            <div class="card-body card-body-premium">
-                <h6 class="text-muted-custom text-uppercase mb-1" style="font-size: 0.75rem; letter-spacing: 1px;">Credit Limit Available</h6>
-                <h2 class="fw-bold mb-0">
-                    {% if customer.credit_limit %}
-                        {{ customer.credit_limit | money }}
-                        {% set remaining = customer.credit_limit - customer.current_balance_due %}
-                        <small class="d-block text-muted-custom fs-6 fw-normal mt-1">Remaining: {{ remaining | money }}</small>
-                    {% else %}
-                        No Limit
-                        <small class="d-block text-muted-custom fs-6 fw-normal mt-1">Unlimited credit access</small>
-                    {% endif %}
-                </h2>
-            </div>
-        </div>
+        <div class="stat-card-value {% if customer.current_balance_due < 0 %}text-success{% endif %}">{{ customer.current_balance_due | money }}</div>
+        {% if customer.current_balance_due < 0 %}
+        <div class="stat-card-meta">Negative = customer advance on account</div>
+        {% endif %}
     </div>
 
-    <!-- Contact Info Card -->
-    <div class="col-12 col-md-4">
-        <div class="card card-premium h-100">
-            <div class="card-body card-body-premium d-flex flex-column justify-content-center">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <i class="bi bi-telephone text-muted-custom"></i>
-                    <span>{{ customer.phone or 'No Phone' }}</span>
-                </div>
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <i class="bi bi-journal-bookmark text-muted-custom"></i>
-                    <span>Old Book No: {{ customer.old_book_no or '—' }}</span>
-                </div>
-                {% if customer.previous_credit %}
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <i class="bi bi-book text-muted-custom"></i>
-                    <span>Previous Credit: {{ customer.previous_credit | money }}</span>
-                </div>
-                {% endif %}
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-geo-alt text-muted-custom"></i>
-                    <span class="text-truncate">{{ customer.address or 'No Billing Address' }}</span>
-                </div>
-            </div>
+    <div class="stat-card stat-info">
+        <div class="stat-card-label">Credit Limit Available</div>
+        <div class="stat-card-value">
+            {% if customer.credit_limit %}
+                {{ customer.credit_limit | money }}
+            {% else %}
+                No Limit
+            {% endif %}
         </div>
+        {% if customer.credit_limit %}
+        {% set remaining = customer.credit_limit - customer.current_balance_due %}
+        <div class="stat-card-meta">Remaining: {{ remaining | money }}</div>
+        {% else %}
+        <div class="stat-card-meta">Unlimited credit access</div>
+        {% endif %}
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-card-label">Contact</div>
+        <div class="stat-card-meta mb-1"><i class="bi bi-telephone me-1"></i>{{ customer.phone or 'No Phone' }}</div>
+        <div class="stat-card-meta mb-1"><i class="bi bi-journal-bookmark me-1"></i>Old Book: {{ customer.old_book_no or '—' }}</div>
+        {% if customer.previous_credit %}
+        <div class="stat-card-meta mb-1"><i class="bi bi-book me-1"></i>Previous Credit: {{ customer.previous_credit | money }}</div>
+        {% endif %}
+        <div class="stat-card-meta text-truncate"><i class="bi bi-geo-alt me-1"></i>{{ customer.address or 'No Billing Address' }}</div>
     </div>
 </div>
 
 <div class="row g-4">
-    <!-- Record Payment Form -->
-    <div class="col-12 col-lg-4">
-        <div class="card card-premium">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Record Payment / Credit Clear</h5>
-            </div>
-            <div class="card-body card-body-premium">
-                <form action="{{ url_for('customers.ledger', customer_id=customer.id) }}" method="POST">
-                    <input type="hidden" name="action" value="payment">
-                    <div class="mb-3">
-                        <label for="amount_paid" class="form-label form-label-custom">Payment Amount (PKR)</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="amount_paid" name="amount_paid" placeholder="Enter amount" required>
-                        </div>
-                        <small class="text-muted-custom">Paying more than due creates a negative (advance) balance.</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="payment_entry_date" class="form-label form-label-custom">Payment Date</label>
-                        <input type="date" class="form-control form-control-custom" id="payment_entry_date" name="entry_date" value="{{ today }}">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="method" class="form-label form-label-custom">Payment Method</label>
-                        <select class="form-select form-control-custom" id="method" name="method" required>
-                            <option value="Cash" selected>Cash Payment</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="Cheque">Bank Cheque</option>
-                            <option value="Mobile Wallet">UPI / Mobile Pay</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="note" class="form-label form-label-custom">Note / Remarks</label>
-                        <input type="text" class="form-control form-control-custom" id="note" name="note" placeholder="Check number, trans ref...">
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary-custom w-100 mt-2">
-                        <i class="bi bi-wallet2 me-1"></i> Settle Balance
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Ledger Log Timeline -->
-    <div class="col-12 col-lg-8">
+    <div class="col-12">
         <div class="card card-premium">
             <div class="card-header-premium d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 fw-bold">Account Statement</h5>
+                <div>
+                    <h2 class="panel-title mb-0">Account Statement</h2>
+                    <p class="panel-subtitle mb-0">Debit, credit, and running balance</p>
+                </div>
                 <button class="btn btn-sm btn-outline-secondary border-0" onclick="window.print()">
-                    <i class="bi bi-printer me-1"></i> Print Ledger
+                    <i class="bi bi-printer me-1"></i> Print
                 </button>
             </div>
             
-            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                <table class="table table-custom table-hover mb-0">
+            <div class="table-responsive table-scroll">
+                <table class="table table-custom table-hover mb-0 ledger-table">
                     <thead>
                         <tr>
                             <th>Date / Time</th>
@@ -166,12 +99,14 @@
                                 <td style="font-size: 0.85rem;" class="text-muted-custom">
                                     {{ entry.date.strftime('%Y-%m-%d %H:%M') }}
                                 </td>
-                                <td class="fw-semibold">{{ entry.ref_id }}</td>
-                                <td>
-                                    {{ entry.desc }}
-                                    {% if entry.pay_type %}
-                                    <span class="badge bg-secondary ms-1 text-uppercase" style="font-size: 0.6rem;">{{ entry.pay_type }}</span>
-                                    {% endif %}
+                                <td class="fw-semibold ledger-ref">{{ entry.ref_id }}</td>
+                                <td class="ledger-desc-cell">
+                                    <div class="ledger-desc-wrap">
+                                        <span class="ledger-desc-text">{{ entry.desc }}</span>
+                                        {% if entry.pay_type %}
+                                        <span class="ledger-badge badge badge-custom badge-staff text-uppercase">{{ entry.pay_type }}</span>
+                                        {% endif %}
+                                    </div>
                                 </td>
                                 <td class="text-end text-danger fw-semibold">
                                     {% if entry.debit > 0 %}
@@ -209,49 +144,65 @@
 {% endblock %}
 
 {% block modals %}
-<div class="modal fade" id="advanceLoanModal" tabindex="-1" aria-labelledby="advanceLoanModalLabel" aria-hidden="true">
+<div class="modal fade" id="ledgerModal" tabindex="-1" aria-labelledby="ledgerModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
-            <form action="{{ url_for('customers.ledger', customer_id=customer.id) }}" method="POST">
-                <input type="hidden" name="action" value="advance_loan">
+        <div class="modal-content">
+            <form action="{{ url_for('customers.ledger', customer_id=customer.id) }}" method="POST" id="ledgerModalForm">
+                <input type="hidden" name="action" id="ledger_action" value="payment">
+                <input type="hidden" name="entry_kind" id="ledger_entry_kind" value="advance">
+                <input type="hidden" name="amount_paid" id="ledger_amount_paid" value="">
+                <input type="hidden" name="amount" id="ledger_amount" value="">
+
                 <div class="modal-header border-0 pb-0">
                     <div>
-                        <h5 class="modal-title fw-bold" id="advanceLoanModalLabel">Advance / Loan</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Save amount against {{ customer.name }}.</p>
+                        <h5 class="modal-title fw-bold" id="ledgerModalLabel">Settlement / Advance / Loan</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Choose the action and record the transaction.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+
                 <div class="modal-body pt-3">
                     <div class="mb-3">
-                        <label for="entry_kind" class="form-label form-label-custom">Type</label>
-                        <select class="form-select form-control-custom" id="entry_kind" name="entry_kind" required>
-                            <option value="" disabled selected>Select...</option>
+                        <label for="ledger_type" class="form-label form-label-custom">Type</label>
+                        <select class="form-select form-control-custom" id="ledger_type" required>
+                            <option value="payment" selected>Payment / Credit Clear</option>
                             <option value="advance">Advance (customer prepaid)</option>
                             <option value="loan">Loan (cash given to customer)</option>
                         </select>
                     </div>
+
                     <div class="mb-3">
-                        <label for="al_amount" class="form-label form-label-custom">Amount</label>
+                        <label for="ledger_amount_input" class="form-label form-label-custom">Amount (PKR)</label>
                         <div class="input-group">
                             <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
-                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="al_amount" name="amount" placeholder="Enter amount" required>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="ledger_amount_input" placeholder="Enter amount" required>
                         </div>
-                        <small class="text-muted-custom d-block mt-1">
-                            Advance reduces balance (can go negative). Loan increases balance due.
-                        </small>
                     </div>
+
                     <div class="mb-3">
-                        <label for="al_entry_date" class="form-label form-label-custom">Date</label>
-                        <input type="date" class="form-control form-control-custom" id="al_entry_date" name="entry_date" value="{{ today }}">
+                        <label for="ledger_entry_date" class="form-label form-label-custom">Date</label>
+                        <input type="date" class="form-control form-control-custom" id="ledger_entry_date" name="entry_date" value="{{ today }}">
                     </div>
+
+                    <div class="mb-3 ledger-method-wrap">
+                        <label for="ledger_method" class="form-label form-label-custom">Payment Method</label>
+                        <select class="form-select form-control-custom" id="ledger_method" name="method">
+                            <option value="Cash" selected>Cash Payment</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cheque">Bank Cheque</option>
+                            <option value="Mobile Wallet">UPI / Mobile Pay</option>
+                        </select>
+                    </div>
+
                     <div class="mb-1">
-                        <label for="al_note" class="form-label form-label-custom">Note (optional)</label>
-                        <input type="text" class="form-control form-control-custom" id="al_note" name="note" placeholder="Reason / reference">
+                        <label for="ledger_note" class="form-label form-label-custom">Note / Remarks</label>
+                        <input type="text" class="form-control form-control-custom" id="ledger_note" name="note" placeholder="Check number, trans ref...">
                     </div>
                 </div>
+
                 <div class="modal-footer border-0 pt-0 pb-3 gap-2">
                     <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary-custom px-4">
+                    <button type="submit" class="btn btn-primary-custom px-4" id="ledger_submit_btn">
                         <i class="bi bi-check-circle me-1"></i> Save
                     </button>
                 </div>
@@ -259,4 +210,67 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    const modalEl = document.getElementById('ledgerModal');
+    if (!modalEl) return;
+
+    const typeSel = document.getElementById('ledger_type');
+    const actionEl = document.getElementById('ledger_action');
+    const entryKindEl = document.getElementById('ledger_entry_kind');
+    const amountInput = document.getElementById('ledger_amount_input');
+    const amountPaidEl = document.getElementById('ledger_amount_paid');
+    const amountEl = document.getElementById('ledger_amount');
+    const methodWrap = modalEl.querySelector('.ledger-method-wrap');
+    const submitBtn = document.getElementById('ledger_submit_btn');
+
+    const applyType = (type) => {
+        if (type === 'payment') {
+            actionEl.value = 'payment';
+            entryKindEl.value = '';
+            if (methodWrap) methodWrap.style.display = '';
+            if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-wallet2 me-1"></i> Settle Balance';
+        } else if (type === 'advance') {
+            actionEl.value = 'advance_loan';
+            entryKindEl.value = 'advance';
+            if (methodWrap) methodWrap.style.display = 'none';
+            if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Advance';
+        } else {
+            actionEl.value = 'advance_loan';
+            entryKindEl.value = 'loan';
+            if (methodWrap) methodWrap.style.display = 'none';
+            if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Loan';
+        }
+
+        const val = amountInput ? amountInput.value : '';
+        if (actionEl.value === 'payment') {
+            amountPaidEl.value = val;
+            amountEl.value = '';
+        } else {
+            amountEl.value = val;
+            amountPaidEl.value = '';
+        }
+    };
+
+    if (typeSel) {
+        typeSel.addEventListener('change', () => applyType(typeSel.value));
+    }
+    if (amountInput) {
+        amountInput.addEventListener('input', () => applyType(typeSel ? typeSel.value : 'payment'));
+    }
+
+    // Set modal mode when header buttons are clicked
+    document.querySelectorAll('[data-ledger-mode]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-ledger-mode') || 'payment';
+            if (typeSel) typeSel.value = mode;
+            applyType(mode);
+        });
+    });
+
+    // Initialize
+    applyType(typeSel ? typeSel.value : 'payment');
+})();
+</script>
 {% endblock %}

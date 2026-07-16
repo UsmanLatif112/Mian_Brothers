@@ -3,24 +3,30 @@
 {% block title %}Manage Staff — OctaneFlow{% endblock %}
 
 {% block content %}
-<div class="row mb-4 align-items-center">
-    <div class="col-12 col-md-6">
-        <h2 class="mb-1 fw-bold">Manage Staff Accounts</h2>
-        <p class="text-muted-custom mb-0">Create, modify, and monitor operator access permissions.</p>
-    </div>
-    <div class="col-12 col-md-6 text-md-end mt-3 mt-md-0">
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Administration</p>
+            <h1 class="page-title">Manage Staff Accounts</h1>
+        </div>
         <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createStaffModal">
             <i class="bi bi-person-plus me-2"></i> Add Staff Operator
         </button>
     </div>
-</div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Create, modify, and monitor operator access permissions.</p>
+    </div>
+</header>
 
 <div class="row">
     <div class="col-12">
         <div class="card card-premium">
             <div class="card-header-premium d-flex justify-content-between align-items-center">
-                <span>Active Operators</span>
-                <span class="badge bg-secondary">{{ users | length }} total</span>
+                <div>
+                    <h2 class="panel-title mb-0">Active Operators</h2>
+                    <p class="panel-subtitle mb-0">Staff and admin accounts</p>
+                </div>
+                <span class="badge badge-custom badge-staff">{{ users | length }} total</span>
             </div>
             <div class="table-responsive">
                 <table class="table table-custom table-hover mb-0">
@@ -40,7 +46,7 @@
                         <tr>
                             <td>
                                 <div class="d-flex align-items-center gap-2">
-                                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white" style="width: 32px; height: 32px; font-weight: 500;">
+                                    <div class="user-avatar">
                                         {{ user.name[0] | upper }}
                                     </div>
                                     <span class="fw-semibold">{{ user.name }}</span>
@@ -101,10 +107,10 @@
 <!-- CREATE STAFF MODAL -->
 <div class="modal fade" id="createStaffModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content" style="background-color: var(--card-bg); border: var(--card-border); color: var(--text-primary);">
+        <div class="modal-content">
             <div class="modal-header border-bottom-0">
                 <h5 class="modal-title fw-bold">Add Staff Operator</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(var(--theme-invert, 0));"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="{{ url_for('auth.staff_accounts') }}" method="POST">
                 <input type="hidden" name="action" value="create">
@@ -134,7 +140,7 @@
                     </div>
                 </div>
                 <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-secondary border-0" data-bs-dismiss="modal" style="background-color: rgba(94, 94, 94, 0.15); color: var(--text-primary);">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary-custom">Create Account</button>
                 </div>
             </form>
@@ -145,10 +151,10 @@
 <!-- EDIT STAFF MODAL -->
 <div class="modal fade" id="editStaffModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content" style="background-color: var(--card-bg); border: var(--card-border); color: var(--text-primary);">
+        <div class="modal-content">
             <div class="modal-header border-bottom-0">
                 <h5 class="modal-title fw-bold">Edit Staff Operator</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(var(--theme-invert, 0));"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="{{ url_for('auth.staff_accounts') }}" method="POST">
                 <input type="hidden" name="action" value="edit">
@@ -179,7 +185,7 @@
                     </div>
                 </div>
                 <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-secondary border-0" data-bs-dismiss="modal" style="background-color: rgba(94, 94, 94, 0.15); color: var(--text-primary);">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary-custom">Save Changes</button>
                 </div>
             </form>
@@ -191,32 +197,17 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // Wire up data injection into the Edit Staff Modal
         const editButtons = document.querySelectorAll('.edit-user-btn');
         editButtons.forEach(btn => {
             btn.addEventListener('click', () => {
-                const id = btn.getAttribute('data-id');
-                const name = btn.getAttribute('data-name');
-                const email = btn.getAttribute('data-email');
-                const phone = btn.getAttribute('data-phone');
-                const role = btn.getAttribute('data-role');
-                
-                document.getElementById('edit_user_id').value = id;
-                document.getElementById('edit_name').value = name;
-                document.getElementById('edit_email').value = email;
-                document.getElementById('edit_phone').value = phone;
-                document.getElementById('edit_role').value = role;
-                document.getElementById('edit_password').value = ''; // clear password field
+                document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
+                document.getElementById('edit_name').value = btn.getAttribute('data-name');
+                document.getElementById('edit_email').value = btn.getAttribute('data-email');
+                document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
+                document.getElementById('edit_role').value = btn.getAttribute('data-role');
+                document.getElementById('edit_password').value = '';
             });
         });
-        
-        // Handle inverting closes on dark mode
-        const observer = new MutationObserver(() => {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            document.documentElement.style.setProperty('--theme-invert', isDark ? '1' : '0');
-        });
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-        document.documentElement.style.setProperty('--theme-invert', document.documentElement.getAttribute('data-theme') === 'dark' ? '1' : '0');
     });
 </script>
 {% endblock %}
