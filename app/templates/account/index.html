@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Account — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Till Account</p>
+            <h1 class="page-title">Account</h1>
+        </div>
+        <div class="page-header-actions">
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#previousBalanceModal">
+                <i class="bi bi-wallet2 me-1"></i> Set Previous Amount
+            </button>
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#cashTakenModal">
+                <i class="bi bi-cash-coin me-1"></i> Record Cash Taken
+            </button>
+        </div>
+    </div>
+    <div class="page-header-meta">
+        <p class="page-subtitle">Track cash taken from the till and carry the remaining balance forward.</p>
+    </div>
+    <div class="page-header-toolbar account-period-tools">
+        {% include "partials/period_filter.html" %}
+    </div>
+</header>
+
+<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5 dashboard-stats">
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Previous Balance</span>
+                <div class="metric-value fw-bold mb-0">{{ stats.previous_balance | money }}</div>
+                <small class="text-muted-custom">From last remaining</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Cash In Hand</span>
+                <div class="metric-value fw-bold mb-0">{{ stats.cash_in_hand | money }}</div>
+                <small class="text-muted-custom">Total available today</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card credit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Amount Taken</span>
+                <div class="metric-value fw-bold mb-0 text-danger">{{ stats.cash_taken_total | money }}</div>
+                <small class="text-muted-custom">Recorded out</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Remaining</span>
+                <div class="metric-value fw-bold mb-0 text-success">{{ stats.remaining_balance | money }}</div>
+                <small class="text-muted-custom">Next day previous</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Receiving</span>
+                <div class="metric-value fw-bold mb-0">{{ stats.total_receiving | money }}</div>
+                <small class="text-muted-custom">Payments + advances</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-premium">
+    <div class="card-header-premium">
+        <h5 class="mb-0 fw-bold">Cash Taken Records</h5>
+        <small class="text-muted-custom">
+            {{ start_date }}{% if start_date != end_date %} → {{ end_date }}{% endif %}
+            · Previous {{ stats.previous_balance | money }}
+            · Cash in hand {{ stats.cash_in_hand | money }}
+            · Remaining {{ stats.remaining_balance | money }}
+        </small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-custom table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Person</th>
+                    <th>Note</th>
+                    <th class="text-end">Previous Balance</th>
+                    <th class="text-end">Cash In Hand</th>
+                    <th class="text-end">Amount Taken</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if taken_rows %}
+                    {% for row in taken_rows %}
+                    <tr>
+                        <td>{{ row.taken_date }}</td>
+                        <td class="fw-semibold">{{ row.person_name }}</td>
+                        <td>{{ row.note or '—' }}</td>
+                        <td class="text-end">{{ stats.previous_balance | money }}</td>
+                        <td class="text-end">{{ stats.cash_in_hand | money }}</td>
+                        <td class="text-end text-danger">{{ row.amount | money }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted-custom py-4">
+                            No cash taken recorded for this date.
+                            <div class="mt-2 small">
+                                Previous {{ stats.previous_balance | money }} · Cash in hand {{ stats.cash_in_hand | money }} · Available {{ stats.remaining_balance | money }}
+                            </div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+            {% if taken_rows %}
+            <tfoot>
+                <tr class="fw-semibold">
+                    <td colspan="3">Day totals</td>
+                    <td class="text-end">{{ stats.previous_balance | money }}</td>
+                    <td class="text-end">{{ stats.cash_in_hand | money }}</td>
+                    <td class="text-end text-danger">{{ stats.cash_taken_total | money }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="previousBalanceModal" tabindex="-1" aria-labelledby="previousBalanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('account.index', period=period, start_date=start_date, end_date=end_date) }}">
+                <input type="hidden" name="action" value="set_previous">
+                <input type="hidden" name="period" value="{{ period }}">
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="previousBalanceModalLabel">Set Previous Amount</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Use this to start a day with opening cash.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06);">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Current Previous</span>
+                            <strong>{{ stats.previous_balance | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Cash In Hand</span>
+                            <strong>{{ stats.cash_in_hand | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Already Taken</span>
+                            <strong class="text-danger">{{ stats.cash_taken_total | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between border-top pt-2 mt-1">
+                            <span class="text-muted-custom">Remaining</span>
+                            <strong class="text-success">{{ stats.remaining_balance | money }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="balance_date">Start Date</label>
+                        <input type="date" class="form-control form-control-custom" id="balance_date" name="balance_date" value="{{ start_date }}" required>
+                        <small class="text-muted-custom">This amount will show as Previous Balance for this date.</small>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label form-label-custom" for="previous_amount">Previous Amount (PKR)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="previous_amount" name="previous_amount" value="{{ '%.2f'|format(stats.previous_balance) }}" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="bi bi-save me-1"></i> Save Previous
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="cashTakenModal" tabindex="-1" aria-labelledby="cashTakenModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('account.index') }}" id="cash-taken-form">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="cashTakenModalLabel">Record Cash Taken</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Check totals below, then enter how much to take.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06);">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Previous Balance</span>
+                            <strong>{{ stats.previous_balance | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Cash In Hand</span>
+                            <strong>{{ stats.cash_in_hand | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Already Taken</span>
+                            <strong class="text-danger">{{ stats.cash_taken_total | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between border-top pt-2 mt-1">
+                            <span class="text-muted-custom">Available to Take</span>
+                            <strong class="text-success">{{ stats.remaining_balance | money }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="taken_date">Date</label>
+                        <input type="date" class="form-control form-control-custom" id="taken_date" name="taken_date" value="{{ end_date }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="person_name">Taken By</label>
+                        <input type="text" class="form-control form-control-custom" id="person_name" name="person_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="amount">Amount to Take (PKR)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            max="{{ '%.2f'|format(stats.remaining_balance) }}"
+                            class="form-control form-control-custom"
+                            id="amount"
+                            name="amount"
+                            placeholder="Enter amount"
+                            required>
+                        <small class="text-muted-custom">
+                            Max available: <strong>{{ stats.remaining_balance | money }}</strong>
+                        </small>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label form-label-custom" for="note">Note</label>
+                        <input type="text" class="form-control form-control-custom" id="note" name="note" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="bi bi-save me-1"></i> Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('cash-taken-form');
+    const amountInput = document.getElementById('amount');
+    const maxAvailable = {{ '%.2f'|format(stats.remaining_balance) }};
+
+    if (form && amountInput) {
+        form.addEventListener('submit', (e) => {
+            const amount = Number(amountInput.value || 0);
+            if (!(amount > 0)) {
+                e.preventDefault();
+                alert('Enter an amount greater than zero.');
+                return;
+            }
+            if (amount > maxAvailable + 0.01) {
+                e.preventDefault();
+                alert(`Amount cannot exceed available cash (${maxAvailable.toFixed(2)}).`);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

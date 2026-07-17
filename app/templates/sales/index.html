@@ -29,80 +29,141 @@
     </div>
 </header>
 
-<!-- Period stats (same style as dashboard) -->
+<!-- Period stats -->
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-4 dashboard-stats">
+    {% set metric_cards = [
+        ('Petrol Total', stats.petrol_total, "{:,.2f} L".format(stats.petrol_total_liters), 'stock'),
+        ('Petrol Cash', stats.petrol_cash, "{:,.2f} L".format(stats.petrol_cash_liters), 'profit'),
+        ('Petrol Credit', stats.petrol_credit, "{:,.2f} L".format(stats.petrol_credit_liters), 'credit'),
+        ('Diesel Total', stats.diesel_total, "{:,.2f} L".format(stats.diesel_total_liters), 'stock'),
+        ('Diesel Cash', stats.diesel_cash, "{:,.2f} L".format(stats.diesel_cash_liters), 'profit'),
+        ('Diesel Credit', stats.diesel_credit, "{:,.2f} L".format(stats.diesel_credit_liters), 'credit'),
+        ('Other Cash', stats.other_cash, 'Paid other items', 'profit'),
+        ('Other Credit', stats.other_credit, 'Unpaid other items', 'credit'),
+        ('Other Total', stats.other_sale, 'Cash + credit', ''),
+        ('Total Credit Sale', stats.activity_credit, 'Fuel + other + FT + loans', 'credit'),
+        ('Expense', stats.expense_total, 'Cash out', 'credit'),
+        ('Total Receiving', stats.total_receiving, 'Payments + advances', 'profit'),
+        ('Previous Balance', stats.previous_balance, 'From prior remaining', ''),
+        ('Cash In Hand', stats.cash_in_hand, 'Before cash taken', 'stock'),
+        ('Cash Taken', stats.cash_taken_total, 'Recorded on Account', 'credit'),
+        ('Remaining', stats.remaining_balance, 'Next previous balance', 'profit')
+    ] %}
+    {% for label, value, meta, kind in metric_cards %}
     <div class="col">
-        <div class="card card-premium metric-card stock h-100">
+        <div class="card card-premium metric-card {{ kind }} h-100">
             <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Petrol Sale</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.petrol_sale | money }}</div>
-                <small class="text-muted-custom">{{ "{:,.2f}".format(stats.petrol_liters) }} L</small>
+                <span class="metric-label text-muted-custom text-uppercase">{{ label }}</span>
+                <div class="metric-value fw-bold mb-0">{{ value | money }}</div>
+                <small class="text-muted-custom">{{ meta }}</small>
             </div>
         </div>
     </div>
-    <div class="col">
-        <div class="card card-premium metric-card profit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Diesel Sale</span>
-                <div class="metric-value fw-bold mb-0 text-success">{{ stats.diesel_sale | money }}</div>
-                <small class="text-muted-custom">{{ "{:,.2f}".format(stats.diesel_liters) }} L</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Other Item Sale</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.other_sale | money }}</div>
-                <small class="text-muted-custom">Cash {{ stats.other_cash | money }}</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card profit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">FT Sale</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.get('ft_sale', 0) | money }}</div>
-                <small class="text-muted-custom">{{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L · Cash {{ stats.get('ft_cash', 0) | money }}</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Sale</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.total_sale | money }}</div>
-                <small class="text-muted-custom">Fuel + Other + FT</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card credit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Credit</span>
-                <div class="metric-value fw-bold mb-0 text-warning">{{ stats.period_credit | money }}</div>
-                <small class="text-muted-custom">Fuel + other + loans</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card credit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Expense</span>
-                <div class="metric-value fw-bold mb-0 text-danger">{{ stats.expense_total | money }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Cash In Hand</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.cash_in_hand | money }}</div>
-                <small class="text-muted-custom">Sales + deposits − credit − expenses + settles</small>
-            </div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
+
+<!-- Cash journal -->
+<section class="mb-4" id="cash-journal">
+    <div class="card card-premium">
+        <div class="card-header-premium">
+            <h5 class="mb-0 fw-bold">Cash In / Out Journal</h5>
+            <small class="text-muted-custom">Sales, payments, advances, loans, expenses, cash taken, and previous balance. Customer opening entries are excluded.</small>
+        </div>
+        <div class="card-body card-body-premium pb-2">
+            <div class="cash-journal-strip">
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Previous</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.previous_balance | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Cash In Hand</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.cash_in_hand | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Receiving</span>
+                    <span class="cash-journal-metric-value">{{ (cash_summary.advances + cash_summary.payments_total) | money }}</span>
+                </div>
+                <div class="cash-journal-metric cash-journal-metric-warn">
+                    <span class="cash-journal-metric-label">Loans</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.loans | money }}</span>
+                </div>
+                <div class="cash-journal-metric cash-journal-metric-warn">
+                    <span class="cash-journal-metric-label">Expenses</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.expense_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Settles</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.expense_return_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric cash-journal-metric-warn">
+                    <span class="cash-journal-metric-label">Cash Taken</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.cash_taken_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Remaining</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.remaining_balance | money }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-custom cash-journal-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Party</th>
+                        <th>Description</th>
+                        <th class="text-end">Qty / L</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Other</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if journal_entries %}
+                        {% for row in journal_entries %}
+                        <tr>
+                            <td>{{ row.sale_date }}</td>
+                            <td><span class="cash-journal-type cash-journal-type-{{ row.entry_type }}">{{ row.entry_type }}</span></td>
+                            <td>
+                                {% if row.customer %}
+                                    {{ row.customer.name }}
+                                {% elif row.vendor_name is defined and row.vendor_name %}
+                                    {{ row.vendor_name }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td><div class="cash-journal-desc">{{ row.item_name }}</div></td>
+                            <td class="text-end">
+                                {% if row.liters %}
+                                    {{ "{:,.2f}".format(row.liters) }}{% if row.is_fuel or (row.other_item and row.other_item.category == 'ft_mobile') %} L{% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ row.amount | money }}</td>
+                            <td class="text-end">{{ row.amount_paid | money }}</td>
+                            <td class="text-end {% if row.other_kind == 'over' %}text-info{% elif row.other_amount %}text-warning{% endif %}">
+                                {% if row.other_kind == 'over' %}+{% endif %}{{ row.other_amount | money }}
+                            </td>
+                            <td class="text-center">
+                                <span class="cash-journal-status cash-journal-status-{{ row.payment_status }}">{{ row.payment_status }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="9" class="text-center text-muted-custom py-4">No cash activity in this period.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% with pagination=journal_pagination, page_param='journal_page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'page': entries_pagination.page} %}
+            {% include "partials/pagination.html" %}
+        {% endwith %}
+    </div>
+</section>
 
 <!-- Period ledger -->
 <div class="row g-4">
@@ -110,7 +171,7 @@
         <div class="card card-premium">
             <div class="card-header-premium">
                 <h5 class="mb-0 fw-bold">Period Entries</h5>
-                <small class="text-muted-custom">Other sales, credit / unpaid / partial, and loans recorded in the selected filter dates</small>
+                <small class="text-muted-custom">Sales, advances, and loans recorded in the selected filter dates</small>
             </div>
             <div class="table-responsive">
                 <table class="table table-custom table-hover mb-0">
@@ -161,7 +222,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <span class="badge {% if over_val > 0 %}bg-info{% elif cs.payment_status == 'paid' %}bg-success{% elif cs.payment_status == 'partial' %}bg-info{% else %}bg-warning text-dark{% endif %}">
+                                    <span class="badge {% if over_val > 0 %}bg-info{% elif cs.payment_status == 'paid' %}bg-success{% else %}bg-warning text-dark{% endif %}">
                                         {% if over_val > 0 %}OVERPAY{% else %}{{ cs.payment_status | upper }}{% endif %}
                                     </span>
                                 </td>
@@ -327,14 +388,14 @@
                 <div class="modal-header border-0 pb-0">
                     <div>
                         <h5 class="modal-title fw-bold" id="otherSaleModalLabel">Other Sale</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Fuel credit · shop items · paid / unpaid / partial.</p>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Fuel credit · shop items · paid / unpaid.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-3">
                     <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
-                        <strong>Fuel:</strong> customer required, no walk-in (credit / paid / partial).<br>
-                        <strong>Other items:</strong> Paid, Unpaid, or Partial. If cash paid is more than the sale total, the extra clears customer due first, then the rest is saved as customer advance.
+                        <strong>Fuel:</strong> customer required, no walk-in (credit / paid).<br>
+                        <strong>Other items:</strong> Paid or Unpaid. If cash paid is more than the sale total, the extra clears customer due first, then the rest is saved as customer advance.
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="credit_customer">
@@ -393,7 +454,6 @@
                         <select class="form-select form-control-custom" name="payment_status" id="payment_status">
                             <option value="unpaid" selected>Unpaid (full credit)</option>
                             <option value="paid">Paid (full cash)</option>
-                            <option value="partial">Partial (cash now + rest credit)</option>
                         </select>
                     </div>
                     <div class="mb-3 d-none" id="amount_paid_wrap">
@@ -416,7 +476,7 @@
                             Discount: <strong class="text-danger">−PKR <span id="credit_discount_disp">0.00</span></strong>
                         </div>
                         Total: <strong>PKR <span id="credit_amount">0.00</span></strong>
-                        <span class="ms-2" id="partial_hint"></span>
+                        <span class="ms-2" id="payment_hint"></span>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0 pb-3 gap-2">
@@ -439,14 +499,14 @@
                 <div class="modal-header border-0 pb-0">
                     <div>
                         <h5 class="modal-title fw-bold" id="ftSaleModalLabel">FT Sale</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">FT Mobile Oil by liters — paid, unpaid, or partial.</p>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">FT Mobile Oil by liters — paid or unpaid.</p>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-3">
                     <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
                         <strong>Paid:</strong> select company + liters (walk-in OK).<br>
-                        <strong>Unpaid / Partial:</strong> customer required (same as other sales).
+                        <strong>Unpaid:</strong> customer required (same as other sales).
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_customer">
@@ -502,7 +562,6 @@
                         <select class="form-select form-control-custom" name="payment_status" id="ft_payment_status">
                             <option value="paid" selected>Paid (full cash / walk-in)</option>
                             <option value="unpaid">Unpaid (full credit)</option>
-                            <option value="partial">Partial (cash now + rest credit)</option>
                         </select>
                     </div>
                     <div class="mb-3 d-none" id="ft_amount_paid_wrap">
@@ -522,7 +581,7 @@
                         <div class="d-flex justify-content-between mt-1 d-none" id="ft_subtotal_row"><span class="text-muted-custom">Subtotal</span><span>PKR <span id="ft_subtotal">0.00</span></span></div>
                         <div class="d-flex justify-content-between mt-1 d-none" id="ft_discount_row"><span class="text-muted-custom">Discount</span><strong class="text-danger">−PKR <span id="ft_discount_disp">0.00</span></strong></div>
                         <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Sale total</span><strong class="text-success">PKR <span id="ft_sale_total">0.00</span></strong></div>
-                        <div class="mt-1" id="ft_partial_hint"></div>
+                        <div class="mt-1" id="ft_payment_hint"></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0 pb-3 gap-2">
@@ -586,7 +645,6 @@
                             <select class="form-select form-control-custom" id="edit_payment_status" name="payment_status">
                                 <option value="paid">Paid</option>
                                 <option value="unpaid">Unpaid (credit)</option>
-                                <option value="partial">Partial</option>
                             </select>
                         </div>
                         <div class="mb-3 d-none" id="edit_amount_paid_wrap">
@@ -796,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const paymentStatus = document.getElementById('payment_status');
     const amountPaidWrap = document.getElementById('amount_paid_wrap');
     const amountPaid = document.getElementById('amount_paid');
-    const partialHint = document.getElementById('partial_hint');
+    const paymentHint = document.getElementById('payment_hint');
     const customerHint = document.getElementById('customer_hint');
     const stockHint = document.getElementById('stock_hint');
     const itemSaleForm = document.getElementById('item-sale-form');
@@ -813,22 +871,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (customerHint) {
             if (fuel) customerHint.textContent = '(required — fuel credit, no walk-in)';
             else if (shop && pay === 'paid') customerHint.textContent = '(optional for paid walk-in; required if overpaying)';
-            else if (shop) customerHint.textContent = '(required when unpaid or partial)';
+            else if (shop) customerHint.textContent = '(required when unpaid)';
             else customerHint.textContent = '(select item first)';
         }
         if (creditCustomer) creditCustomer.required = !!customerRequired;
-        // Show cash field for Partial always, and for Paid when a customer can receive overpay
-        const showCashPaid = pay === 'partial' || pay === 'paid';
+        // Show cash field for Paid so overpayment can be recorded.
+        const showCashPaid = pay === 'paid';
         if (amountPaidWrap) {
             amountPaidWrap.classList.toggle('d-none', !showCashPaid);
-            if (amountPaid) amountPaid.required = pay === 'partial';
+            if (amountPaid) amountPaid.required = false;
         }
         const paidHint = document.getElementById('amount_paid_hint');
         if (paidHint) {
             if (shop && pay === 'paid') {
                 paidHint.textContent = 'Enter cash received. If more than total (e.g. sale 12,000 paid 28,000), extra 16,000 clears due then posts as advance.';
             } else {
-                paidHint.textContent = 'Example: total 12,000 − paid 8,000 = credit 4,000. Or paid 28,000 → sale paid + advance 16,000.';
+                paidHint.textContent = 'Leave blank for exact full payment, or enter extra cash to clear due / add advance.';
             }
         }
     };
@@ -885,20 +943,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const creditLeft = Math.max(total - paidDisp, 0);
         const overAmt = Math.max(paidDisp - total, 0);
-        if (partialHint) {
+        if (paymentHint) {
             if (pay === 'unpaid') {
-                partialHint.innerHTML = ` · Credit <strong class="text-warning">PKR ${total.toFixed(2)}</strong>`;
+                paymentHint.innerHTML = ` · Credit <strong class="text-warning">PKR ${total.toFixed(2)}</strong>`;
             } else if (overAmt > 0) {
-                partialHint.innerHTML =
+                paymentHint.innerHTML =
                     ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
                     ` · Credit <strong class="text-warning">PKR 0.00</strong>` +
                     ` · Over <strong class="text-info">PKR ${overAmt.toFixed(2)}</strong>`;
-            } else if (pay === 'partial' || (cashFieldVisible && paidDisp > 0 && paidDisp < total)) {
-                partialHint.innerHTML =
-                    ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
-                    ` · Credit <strong class="text-warning">PKR ${creditLeft.toFixed(2)}</strong>`;
             } else {
-                partialHint.innerHTML =
+                paymentHint.innerHTML =
                     ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
                     ` · Credit <strong class="text-warning">PKR 0.00</strong>`;
             }
@@ -935,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (isShopSelected() && pay !== 'paid' && !hasCustomer) {
                 e.preventDefault();
-                alert('Customer is required when other items are unpaid or partially paid.');
+                alert('Customer is required when other items are unpaid.');
                 return;
             }
             if ((isFuelSelected() || isShopSelected()) && creditDiscount) {
@@ -953,27 +1007,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
             }
-            if (pay === 'partial' && amountPaid) {
-                const total = Number(creditAmount?.textContent || 0);
-                const paid = Number(amountPaid.value || 0);
-                if (!(paid > 0)) {
-                    e.preventDefault();
-                    alert('Cash paid must be greater than 0.');
-                    return;
-                }
-                // Overpayment (paid > total): allowed — remainder goes to customer account
-                if (paid > total && !hasCustomer) {
-                    e.preventDefault();
-                    alert('Customer is required when cash paid exceeds the sale total.');
-                    return;
-                }
-            }
             if (pay === 'paid' && amountPaid && Number(amountPaid.value || 0) > 0) {
                 const total = Number(creditAmount?.textContent || 0);
                 const paid = Number(amountPaid.value || 0);
-                if (paid < total) {
+                if (paid < total - 0.01) {
                     e.preventDefault();
-                    alert('For Paid, cash must be at least the sale total. Use Partial if paying less.');
+                    alert('For Paid, cash must be at least the sale total. Use Unpaid if cash is not received now.');
                     return;
                 }
                 if (paid > total && !hasCustomer) {
@@ -999,7 +1038,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ftSubtotalRow = document.getElementById('ft_subtotal_row');
     const ftDiscountRow = document.getElementById('ft_discount_row');
     const ftDiscountDisp = document.getElementById('ft_discount_disp');
-    const ftHint = document.getElementById('ft_partial_hint');
+    const ftHint = document.getElementById('ft_payment_hint');
     const ftCustomerHint = document.getElementById('ft_customer_hint');
     const ftStockHint = document.getElementById('ft_stock_hint');
     const ftForm = document.getElementById('ft-sale-form');
@@ -1035,20 +1074,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const pay = ftPay?.value || 'paid';
         if (ftPaidWrap) {
-            ftPaidWrap.classList.toggle('d-none', pay !== 'partial');
-            if (ftPaid) ftPaid.required = pay === 'partial';
+            ftPaidWrap.classList.add('d-none');
+            if (ftPaid) ftPaid.required = false;
         }
         if (ftCustomerHint) {
             ftCustomerHint.textContent = pay === 'paid'
                 ? '(optional for paid walk-in)'
-                : '(required when unpaid or partial)';
+                : '(required when unpaid)';
         }
         if (ftCustomer) ftCustomer.required = pay !== 'paid';
-        if (ftHint && pay === 'partial' && ftPaid) {
-            const paid = Number(ftPaid.value || 0);
-            const creditLeft = Math.max(sale - paid, 0);
-            ftHint.innerHTML = `Paid <strong class="text-success">PKR ${paid.toFixed(2)}</strong> · Credit <strong class="text-warning">PKR ${creditLeft.toFixed(2)}</strong>`;
-        } else if (ftHint && pay === 'unpaid') {
+        if (ftHint && pay === 'unpaid') {
             ftHint.innerHTML = `Credit <strong class="text-warning">PKR ${sale.toFixed(2)}</strong>`;
         } else if (ftHint && pay === 'paid') {
             ftHint.innerHTML = `Paid <strong class="text-success">PKR ${sale.toFixed(2)}</strong>`;
@@ -1073,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pay = ftPay?.value || 'paid';
             if (pay !== 'paid' && !hasCustomer) {
                 e.preventDefault();
-                alert('Customer is required when FT sale is unpaid or partially paid.');
+                alert('Customer is required when FT sale is unpaid.');
                 return;
             }
             if (ftDiscount) {
@@ -1090,14 +1125,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
             }
-            if (pay === 'partial' && ftPaid) {
-                const total = Number(ftSaleTotal?.textContent || 0);
-                const paid = Number(ftPaid.value || 0);
-                if (!(paid > 0 && paid < total)) {
-                    e.preventDefault();
-                    alert('Partial: cash paid must be greater than 0 and less than total amount.');
-                }
-            }
         });
     }
 
@@ -1111,12 +1138,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const paidInput = document.getElementById('edit_amount_paid');
         const litersInput = document.getElementById('edit_liters');
         const rateInput = document.getElementById('edit_rate');
-        const syncPartial = () => {
-            const isPartial = paySel && paySel.value === 'partial';
-            if (paidWrap) paidWrap.classList.toggle('d-none', !isPartial);
-            if (paidInput) paidInput.required = isPartial;
+        const syncPaymentAmount = () => {
+            if (paidWrap) paidWrap.classList.add('d-none');
+            if (paidInput) paidInput.required = false;
         };
-        if (paySel) paySel.addEventListener('change', syncPartial);
+        if (paySel) paySel.addEventListener('change', syncPaymentAmount);
 
         editModal.addEventListener('show.bs.modal', (event) => {
             const btn = event.relatedTarget;
@@ -1151,7 +1177,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 paidInput.value = btn.getAttribute('data-amount-paid') || '';
                 document.getElementById('edit_remarks').value = btn.getAttribute('data-remarks') || '';
                 // Fuel ledger-only: keep qty/rate editable but stock not adjusted (no other_item)
-                syncPartial();
+                syncPaymentAmount();
             } else {
                 document.getElementById('edit_simple_amount').disabled = false;
                 document.getElementById('edit_simple_note').disabled = false;

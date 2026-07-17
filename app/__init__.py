@@ -46,6 +46,7 @@ def create_app():
     from app.purchasing import purchasing_bp
     from app.backup import backup_bp
     from app.vendors import vendors_bp
+    from app.account import account_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -53,6 +54,7 @@ def create_app():
     app.register_blueprint(inventory_bp, url_prefix='/inventory')
     app.register_blueprint(purchasing_bp, url_prefix='/purchasing')
     app.register_blueprint(sales_bp, url_prefix='/sales')
+    app.register_blueprint(account_bp, url_prefix='/account')
     app.register_blueprint(customers_bp, url_prefix='/customers')
     app.register_blueprint(vendors_bp, url_prefix='/vendors')
     app.register_blueprint(expenses_bp, url_prefix='/expenses')
@@ -74,8 +76,56 @@ def create_app():
         ensure_customers_schema()
         ensure_vendors_schema()
         ensure_expenses_schema()
+        ensure_till_schema()
         
     return app
+
+
+def ensure_till_schema():
+    """Create / upgrade till carry-forward tables."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+
+    if 'cash_taken' not in tables:
+        return
+
+    with db.engine.begin() as conn:
+        cash_cols = {col['name'] for col in inspector.get_columns('cash_taken')}
+        cash_alters = []
+        if 'taken_date' not in cash_cols:
+            cash_alters.append("ALTER TABLE cash_taken ADD COLUMN taken_date DATE")
+        if 'amount' not in cash_cols:
+            cash_alters.append("ALTER TABLE cash_taken ADD COLUMN amount NUMERIC(12, 2) NOT NULL DEFAULT 0")
+        if 'person_name' not in cash_cols:
+            cash_alters.append("ALTER TABLE cash_taken ADD COLUMN person_name VARCHAR(120) NOT NULL DEFAULT ''")
+        if 'note' not in cash_cols:
+            cash_alters.append("ALTER TABLE cash_taken ADD COLUMN note VARCHAR(255)")
+        if 'recorded_by' not in cash_cols:
+            cash_alters.append("ALTER TABLE cash_taken ADD COLUMN recorded_by INTEGER")
+        if 'created_at' not in cash_cols:
+            cash_alters.append("ALTER TABLE cash_taken ADD COLUMN created_at DATETIME")
+
+        for stmt in cash_alters:
+            conn.execute(text(stmt))
+
+        if 'daily_till_balances' in tables:
+            bal_cols = {col['name'] for col in inspector.get_columns('daily_till_balances')}
+            bal_alters = []
+            if 'balance_date' not in bal_cols:
+                bal_alters.append("ALTER TABLE daily_till_balances ADD COLUMN balance_date DATE")
+            if 'previous_balance' not in bal_cols:
+                bal_alters.append("ALTER TABLE daily_till_balances ADD COLUMN previous_balance NUMERIC(12, 2) NOT NULL DEFAULT 0")
+            if 'remaining_balance' not in bal_cols:
+                bal_alters.append("ALTER TABLE daily_till_balances ADD COLUMN remaining_balance NUMERIC(12, 2) NOT NULL DEFAULT 0")
+            if 'updated_at' not in bal_cols:
+                bal_alters.append("ALTER TABLE daily_till_balances ADD COLUMN updated_at DATETIME")
+            if 'updated_by' not in bal_cols:
+                bal_alters.append("ALTER TABLE daily_till_balances ADD COLUMN updated_by INTEGER")
+
+            for stmt in bal_alters:
+                conn.execute(text(stmt))
 
 
 def ensure_expenses_schema():

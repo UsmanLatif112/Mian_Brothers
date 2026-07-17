@@ -8,6 +8,7 @@ from app.models import (
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
     paginate, parse_form_date, datetime_from_date, infer_sale_overpayments,
+    build_period_cash_entries, build_cash_journal_summary,
 )
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale,
@@ -40,9 +41,7 @@ def _machines_for_fuel(fuel_type_id):
 def _payment_status(amount, amount_paid):
     if amount_paid <= 0:
         return 'unpaid'
-    if amount_paid >= amount:
-        return 'paid'
-    return 'partial'
+    return 'paid' if amount_paid >= amount else 'unpaid'
 
 
 def _apply_sale_overpayment(customer, overpayment, sale_day, item_label, recorded_by):
@@ -84,15 +83,41 @@ def _apply_sale_overpayment(customer, overpayment, sale_day, item_label, recorde
     return cleared, advance_amt
 
 
+def _filter_args():
+    """Preserve period filter after create/edit (same as Account)."""
+    args = {}
+    period = (request.args.get('period') or request.form.get('period') or '').strip()
+    if period:
+        args['period'] = period
+    start_date = (request.args.get('start_date') or request.form.get('start_date') or '').strip()
+    end_date = (request.args.get('end_date') or request.form.get('end_date') or '').strip()
+    if start_date:
+        args['start_date'] = start_date
+    if end_date:
+        args['end_date'] = end_date
+    return args
+
+
+def _sales_redirect():
+    return redirect(url_for('sales.index', **_filter_args()))
+
+
 @sales_bp.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
     today = _today()
-    period, start, end = parse_period(request.args if request.method == 'GET' else {
-        'period': request.form.get('period') or request.args.get('period') or 'today',
-        'start_date': request.form.get('start_date') or request.args.get('start_date'),
-        'end_date': request.form.get('end_date') or request.args.get('end_date'),
-    })
+    if request.method == 'GET':
+        args = request.args.to_dict()
+    else:
+        args = {
+            'period': request.form.get('period') or request.args.get('period') or 'today',
+            'start_date': request.form.get('start_date') or request.args.get('start_date'),
+            'end_date': request.form.get('end_date') or request.args.get('end_date'),
+        }
+    # Keep Sales aligned with Account: default to today so Cash in Hand matches.
+    if not (args.get('period') or '').strip():
+        args['period'] = 'today'
+    period, start, end = parse_period(args)
 
     if request.method == 'POST':
         action = request.form.get('action', 'meter_sale')
@@ -103,22 +128,22 @@ def index():
             sale_day = parse_form_date(request.form.get('entry_date'), today)
             if not fuel_type_id:
                 flash('Please select a fuel type.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             fuel_type = FuelType.query.get(fuel_type_id)
             if not fuel_type:
                 flash('Fuel type not found.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             machines = _machines_for_fuel(fuel_type.id)
             if len(machines) < 1:
                 flash(f'No machines for {fuel_type.name}. Add a machine from the dropdown.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             rate = _fuel_rate(fuel_type.id)
             if rate is None:
                 flash(f'No active price for {fuel_type.name}. Set price first.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             try:
                 machine_sales = []
@@ -212,9 +237,9 @@ def index():
                 db.session.rollback()
                 flash(str(e), 'danger')
 
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
-        # ---------- Item sale (paid / unpaid / partial) ----------
+        # ---------- Item sale (paid / unpaid) ----------
         if action == 'credit_sale':
             customer_id = (request.form.get('customer_id') or '').strip() or None
             item_key = (request.form.get('item_key') or '').strip()
@@ -222,19 +247,21 @@ def index():
             discount_raw = request.form.get('discount')
             remarks = (request.form.get('remarks') or '').strip() or None
             payment_status = request.form.get('payment_status', 'unpaid')
+            if payment_status not in ('paid', 'unpaid'):
+                payment_status = 'unpaid'
             amount_paid_raw = request.form.get('amount_paid')
             sale_day = parse_form_date(request.form.get('entry_date'), today)
 
             if not item_key or not qty_raw:
                 flash('Item and quantity are required.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             is_fuel_sale = item_key.startswith('fuel:')
             is_shop_sale = item_key.startswith('item:')
 
             if is_fuel_sale and not customer_id:
                 flash('Customer is required for petrol/diesel sales (walk-in not allowed).', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             if is_shop_sale and not customer_id:
                 payment_status = 'paid'
@@ -245,12 +272,12 @@ def index():
                     raise ValueError('Quantity must be greater than zero.')
             except ValueError as e:
                 flash(f'Invalid sale input: {e}', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             customer = Customer.query.get(customer_id) if customer_id else None
             if customer_id and not customer:
                 flash('Customer not found.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             fuel_type = None
             other_item = None
@@ -262,64 +289,65 @@ def index():
                 fuel_type = FuelType.query.get(item_key.split(':', 1)[1])
                 if not fuel_type:
                     flash('Fuel type not found.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 rate = _fuel_rate(fuel_type.id)
                 item_label = fuel_type.name
                 if rate is None:
                     flash(f'No active price for {fuel_type.name}.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
             elif is_shop_sale:
                 other_item = OtherItem.query.get(item_key.split(':', 1)[1])
                 if not other_item:
                     flash('Shop item not found.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 if other_item.category == 'ft_mobile':
                     flash('Use the FT Sale card for FT Mobile Oil.', 'warning')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 rate = float(other_item.sale_price or 0)
                 item_label = other_item.display_name()
                 if rate <= 0:
                     flash(f'No sale price for {item_label}. Set price first.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
 
                 qty_units = int(round(qty_val))
                 if qty_units < 1:
                     flash('Shop item quantity must be at least 1.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 available = int(other_item.quantity or 0)
                 if available < qty_units:
                     flash(
                         f'Insufficient stock for {item_label}. Available: {available}, requested: {qty_units}.',
                         'danger'
                     )
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 other_item.quantity = available - qty_units
                 qty_val = float(qty_units)
                 stock_note = f'stock −{qty_units} (left {other_item.quantity})'
             else:
                 flash('Invalid item selection.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
-            gross = qty_val * rate
+            # Round to 2 dp so backend totals match what the sale form displays.
+            gross = round(qty_val * rate, 2)
             # Discount applies to full sale total for all item types (fuel + shop).
             try:
                 discount = float(discount_raw or 0)
             except (TypeError, ValueError):
                 flash('Invalid discount amount.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
             if discount < 0:
                 flash('Discount cannot be negative.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
             if discount > gross:
                 flash(
                     f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
                     'danger'
                 )
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
-            amount = max(gross - discount, 0.0)
+            amount = round(max(gross - discount, 0.0), 2)
 
-            # Resolve cash paid now (supports underpay, full pay, and overpayment)
+            # Resolve cash paid now (paid / unpaid only; paid may include overpayment)
             overpayment = 0.0
             try:
                 if payment_status == 'paid':
@@ -327,24 +355,20 @@ def index():
                         cash_received = float(amount_paid_raw)
                         if cash_received < 0:
                             raise ValueError('Amount paid cannot be negative.')
-                        if cash_received < amount:
+                        # Allow a 1-paisa rounding tolerance (qty × rate float precision).
+                        if cash_received < amount - 0.01:
                             raise ValueError(
                                 'For Paid, cash must be at least the sale total. '
-                                'Use Partial if paying less, or enter more to credit the customer.'
+                                'Use Unpaid if the customer is not paying now.'
                             )
+                        cash_received = max(cash_received, amount)
                     else:
                         cash_received = amount
-                elif payment_status == 'partial':
-                    cash_received = float(amount_paid_raw or 0)
-                    if cash_received <= 0:
-                        raise ValueError('Cash paid must be greater than 0.')
-                    # Allow cash > total (overpayment → customer account).
-                    # Allow cash < total (normal partial / credit).
                 else:
                     cash_received = 0.0
             except (TypeError, ValueError) as e:
                 flash(f'Invalid amount paid: {e}', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             amount_paid = min(cash_received, amount)
             overpayment = max(cash_received - amount, 0.0)
@@ -354,12 +378,12 @@ def index():
             if overpayment > 0:
                 if not customer:
                     flash('Customer is required when cash paid exceeds the sale total.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
 
             if credit_amt > 0:
                 if not customer:
                     flash('Customer is required when any amount is on credit.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 if customer.credit_limit is not None:
                     projected = float(customer.current_balance_due) + credit_amt
                     if projected > float(customer.credit_limit):
@@ -367,7 +391,7 @@ def index():
                             f"Exceeds credit limit of PKR {float(customer.credit_limit):,.2f}.",
                             'danger'
                         )
-                        return redirect(url_for('sales.index'))
+                        return _sales_redirect()
 
             db.session.add(CreditSale(
                 customer_id=customer.id if customer else None,
@@ -417,9 +441,9 @@ def index():
                 f'paid {cash_received:,.2f}, credit {credit_amt:,.2f}{over_note} — {stock_note}.',
                 'success'
             )
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
-        # ---------- FT Mobile Oil sale (liters stock, paid / unpaid / partial) ----------
+        # ---------- FT Mobile Oil sale (liters stock, paid / unpaid) ----------
         if action == 'ft_sale':
             customer_id = (request.form.get('customer_id') or '').strip() or None
             item_id = (request.form.get('ft_item_id') or '').strip()
@@ -427,12 +451,14 @@ def index():
             discount_raw = request.form.get('discount')
             remarks = (request.form.get('remarks') or '').strip() or None
             payment_status = request.form.get('payment_status', 'paid')
+            if payment_status not in ('paid', 'unpaid'):
+                payment_status = 'unpaid'
             amount_paid_raw = request.form.get('amount_paid')
             sale_day = parse_form_date(request.form.get('entry_date'), today)
 
             if not item_id or not qty_raw:
                 flash('FT Mobile Oil item and liters are required.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             if not customer_id:
                 payment_status = 'paid'
@@ -443,24 +469,24 @@ def index():
                     raise ValueError('Liters must be greater than zero.')
             except ValueError as e:
                 flash(f'Invalid sale input: {e}', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             customer = Customer.query.get(customer_id) if customer_id else None
             if customer_id and not customer:
                 flash('Customer not found.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             other_item = OtherItem.query.get(item_id)
             if not other_item or other_item.category != 'ft_mobile':
                 flash('FT Mobile Oil item not found.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             rate = float(other_item.sale_price or 0)
             cost_rate = float(other_item.cost_price or 0)
             item_label = f"FT Mobile Oil — {other_item.display_name()}"
             if rate <= 0:
                 flash(f'No sale price for {item_label}. Set price in inventory first.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             available = float(other_item.liters or 0)
             if available < liters_val:
@@ -469,40 +495,28 @@ def index():
                     f'Available: {available:.2f}L, requested: {liters_val:.2f}L.',
                     'danger',
                 )
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
-            gross = liters_val * rate
+            gross = round(liters_val * rate, 2)
             # Discount applies to the full FT sale total.
             try:
                 discount = float(discount_raw or 0)
             except (TypeError, ValueError):
                 flash('Invalid discount amount.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
             if discount < 0:
                 flash('Discount cannot be negative.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
             if discount > gross:
                 flash(
                     f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
                     'danger'
                 )
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
-            amount = max(gross - discount, 0.0)
+            amount = round(max(gross - discount, 0.0), 2)
 
-            if payment_status == 'paid':
-                amount_paid = amount
-            elif payment_status == 'partial':
-                try:
-                    amount_paid = float(amount_paid_raw or 0)
-                except (TypeError, ValueError):
-                    flash('Invalid amount paid.', 'danger')
-                    return redirect(url_for('sales.index'))
-                if amount_paid <= 0 or amount_paid >= amount:
-                    flash('Partial payment must be greater than 0 and less than total amount.', 'danger')
-                    return redirect(url_for('sales.index'))
-            else:
-                amount_paid = 0.0
+            amount_paid = amount if payment_status == 'paid' else 0.0
 
             credit_amt = max(amount - amount_paid, 0.0)
             payment_status = _payment_status(amount, amount_paid)
@@ -510,7 +524,7 @@ def index():
             if credit_amt > 0:
                 if not customer:
                     flash('Customer is required when any amount is on credit.', 'danger')
-                    return redirect(url_for('sales.index'))
+                    return _sales_redirect()
                 if customer.credit_limit is not None:
                     projected = float(customer.current_balance_due) + credit_amt
                     if projected > float(customer.credit_limit):
@@ -518,7 +532,7 @@ def index():
                             f"Exceeds credit limit of PKR {float(customer.credit_limit):,.2f}.",
                             'danger',
                         )
-                        return redirect(url_for('sales.index'))
+                        return _sales_redirect()
                 customer.current_balance_due = float(customer.current_balance_due) + credit_amt
 
             other_item.liters = available - liters_val
@@ -547,12 +561,12 @@ def index():
                 f'paid {amount_paid:,.2f}, credit {credit_amt:,.2f} — stock left {float(other_item.liters):.2f}L.',
                 'success',
             )
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
         # ---------- Customer advance / loan removed from Sales UI ----------
         if action in ('advance', 'loan'):
             flash('Advance and loan are not available on Sales. Use Customers later.', 'warning')
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
         # ---------- Cash in hand count (journal) ----------
         if action == 'cash_count':
@@ -564,7 +578,7 @@ def index():
                     raise ValueError('Cash cannot be negative.')
             except (TypeError, ValueError) as e:
                 flash(f'Invalid cash amount: {e}', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
 
             row = DailyCashCount.query.filter_by(count_date=today).first()
             if row:
@@ -580,14 +594,14 @@ def index():
                 ))
             db.session.commit()
             flash(f'Cash in hand for today set to PKR {cash_val:,.2f}.', 'success')
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
         # ---------- Edit / delete period entry (CreditSale) ----------
         if action == 'edit_entry':
             entry = CreditSale.query.get(request.form.get('entry_id'))
             if not entry:
                 flash('Entry not found.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
             try:
                 edit_credit_sale(entry, request.form)
                 db.session.commit()
@@ -595,13 +609,13 @@ def index():
             except EntryError as e:
                 db.session.rollback()
                 flash(str(e), 'danger')
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
         if action == 'delete_entry':
             entry = CreditSale.query.get(request.form.get('entry_id'))
             if not entry:
                 flash('Entry not found.', 'danger')
-                return redirect(url_for('sales.index'))
+                return _sales_redirect()
             try:
                 label = f'{entry.entry_type} #{entry.id}'
                 delete_credit_sale(entry)
@@ -610,10 +624,10 @@ def index():
             except EntryError as e:
                 db.session.rollback()
                 flash(str(e), 'danger')
-            return redirect(url_for('sales.index'))
+            return _sales_redirect()
 
         flash('Unknown action.', 'danger')
-        return redirect(url_for('sales.index'))
+        return _sales_redirect()
 
     # GET
     fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
@@ -657,7 +671,14 @@ def index():
     day_cash = DailyCashCount.query.filter_by(count_date=today).first()
 
     entries_page = request.args.get('page', 1)
-    period_entries, entries_pagination = paginate(stats['entries'], entries_page, PER_PAGE)
+    editable_entries = [
+        e for e in stats['entries']
+        if (getattr(e, 'entry_type', None) or 'sale').lower() != 'opening'
+    ]
+    period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
+    journal_page = request.args.get('journal_page', 1)
+    journal_entries, journal_pagination = paginate(build_period_cash_entries(stats), journal_page, PER_PAGE)
+    cash_summary = build_cash_journal_summary(stats)
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
 
     return render_template(
@@ -672,6 +693,9 @@ def index():
         stats=stats,
         period_entries=period_entries,
         entries_pagination=entries_pagination,
+        journal_entries=journal_entries,
+        journal_pagination=journal_pagination,
+        cash_summary=cash_summary,
         sale_overs=sale_overs,
         period=period,
         start_date=start.isoformat(),

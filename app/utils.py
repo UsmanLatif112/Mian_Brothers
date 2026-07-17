@@ -20,6 +20,7 @@ def earliest_activity_date():
     from app.models import (
         MeterReading, CreditSale, Expense, Payment,
         ItemPurchaseLog, StockEntry, DailyCashCount, VendorPayment,
+        CashTaken, DailyTillBalance,
     )
 
     today = datetime.utcnow().date()
@@ -45,6 +46,8 @@ def earliest_activity_date():
     _add(StockEntry.query.with_entities(func.min(StockEntry.entry_date)).scalar())
     _add(VendorPayment.query.with_entities(func.min(VendorPayment.payment_date)).scalar())
     _add(DailyCashCount.query.with_entities(func.min(DailyCashCount.count_date)).scalar())
+    _add(CashTaken.query.with_entities(func.min(CashTaken.taken_date)).scalar())
+    _add(DailyTillBalance.query.with_entities(func.min(DailyTillBalance.balance_date)).scalar())
 
     return min(candidates) if candidates else today
 
@@ -232,11 +235,20 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     other_sale = 0.0
     other_cash = 0.0
     fuel_credit = 0.0
+    fuel_cash_paid = 0.0
     other_credit = 0.0
     ft_sale = 0.0
     ft_cash = 0.0
     ft_credit = 0.0
     ft_liters = 0.0
+    ft_cash_liters = 0.0
+    ft_credit_liters = 0.0
+    petrol_paid = diesel_paid = 0.0
+    petrol_credit = diesel_credit = 0.0
+    petrol_credit_liters = diesel_credit_liters = 0.0
+    # Pump value of unpaid credit liters (at sale rate) — used so discount
+    # reduces credit/total only, and does not inflate cash.
+    petrol_credit_gross = diesel_credit_gross = 0.0
     advances = 0.0
     loans = 0.0
     sale_cash_paid = 0.0
@@ -251,6 +263,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         if status == 'paid' and paid <= 0:
             paid = amt
         credit = max(amt - paid, 0.0)
+        liters = float(getattr(e, 'liters', 0) or 0)
+        sale_rate = float(getattr(e, 'rate', 0) or 0)
+        paid_liters = liters if amt <= 0 or paid >= amt else liters * (paid / amt)
+        credit_liters = 0.0 if amt <= 0 else liters * (credit / amt)
         et = (e.entry_type or 'sale').lower()
 
         if et == 'advance':
@@ -274,13 +290,39 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
                 ft_sale += amt
                 ft_cash += paid
                 ft_credit += credit
-                ft_liters += float(e.liters or 0)
+                ft_liters += liters
+                ft_cash_liters += paid_liters
+                ft_credit_liters += credit_liters
             else:
                 other_sale += amt
                 other_cash += paid
                 other_credit += credit
         elif e.fuel_type_id:
             fuel_credit += credit
+            fuel_cash_paid += paid
+            fuel_name = (e.fuel_type.name if getattr(e, 'fuel_type', None) else '').lower()
+            credit_gross = credit_liters * sale_rate
+            if 'petrol' in fuel_name:
+                petrol_paid += paid
+                petrol_credit += credit
+                petrol_credit_liters += credit_liters
+                petrol_credit_gross += credit_gross
+            elif 'diesel' in fuel_name:
+                diesel_paid += paid
+                diesel_credit += credit
+                diesel_credit_liters += credit_liters
+                diesel_credit_gross += credit_gross
+
+    # Cash = meter pump value of non-credit liters (at pump rate).
+    # Do NOT use (meter − discounted credit) — discount must not move into cash.
+    petrol_cash_liters = max(petrol_liters - petrol_credit_liters, 0.0)
+    diesel_cash_liters = max(diesel_liters - diesel_credit_liters, 0.0)
+    petrol_cash = max(petrol_sale - petrol_credit_gross, 0.0)
+    diesel_cash = max(diesel_sale - diesel_credit_gross, 0.0)
+    petrol_total = petrol_cash + petrol_credit
+    petrol_total_liters = petrol_cash_liters + petrol_credit_liters
+    diesel_total = diesel_cash + diesel_credit
+    diesel_total_liters = diesel_cash_liters + diesel_credit_liters
 
     expenses = Expense.query.filter(
         Expense.expense_date >= start,
@@ -349,13 +391,20 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     # Deposits = customer advances + payments collected
     deposits = advances + payments_total
 
-    # Cash in hand = sales + deposits − credit − expenses (out on expense_date)
-    #              + settled returns (in on settled_date)
-    # Vendor payments are tracked in the journal only — they do not affect till cash.
-    # Opening book credit must never reduce cash-in-hand.
+    from app.account.service import previous_balance_for_date, cash_taken_total, cash_taken_rows
+    previous_balance = previous_balance_for_date(start)
+    total_receiving = deposits
+
+    # Cash in hand = cash sales + previous balance + customer receiving
+    #                − customer cash loans − expenses + settled returns.
+    # Credit sale amounts are shown separately and do not reduce this formula.
     cash_in_hand = (
-        total_sale + deposits - activity_credit - expense_total + expense_return_total
+        petrol_cash + diesel_cash + other_cash + ft_cash
+        + previous_balance + total_receiving
+        - loans - expense_total + expense_return_total
     )
+    cash_taken_amount = cash_taken_total(start, end)
+    remaining_balance = cash_in_hand - cash_taken_amount
 
     cash_counts = DailyCashCount.query.filter(
         DailyCashCount.count_date >= start,
@@ -381,8 +430,20 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'meter_liters': meter_liters,
         'petrol_sale': petrol_sale,
         'petrol_liters': petrol_liters,
+        'petrol_total': petrol_total,
+        'petrol_total_liters': petrol_total_liters,
+        'petrol_cash': petrol_cash,
+        'petrol_cash_liters': petrol_cash_liters,
+        'petrol_credit': petrol_credit,
+        'petrol_credit_liters': petrol_credit_liters,
         'diesel_sale': diesel_sale,
         'diesel_liters': diesel_liters,
+        'diesel_total': diesel_total,
+        'diesel_total_liters': diesel_total_liters,
+        'diesel_cash': diesel_cash,
+        'diesel_cash_liters': diesel_cash_liters,
+        'diesel_credit': diesel_credit,
+        'diesel_credit_liters': diesel_credit_liters,
         'other_sale': other_sale,
         'other_cash': other_cash,
         'other_credit': other_credit,
@@ -390,7 +451,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'ft_cash': ft_cash,
         'ft_credit': ft_credit,
         'ft_liters': ft_liters,
+        'ft_cash_liters': ft_cash_liters,
+        'ft_credit_liters': ft_credit_liters,
         'fuel_credit': fuel_credit,
+        'fuel_cash_paid': fuel_cash_paid,
         'opening_credit': opening_credit,
         'activity_credit': activity_credit,
         'period_credit': period_credit,
@@ -399,6 +463,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'advances': advances,
         'loans': loans,
         'deposits': deposits,
+        'total_receiving': total_receiving,
+        'previous_balance': previous_balance,
+        'cash_taken_total': cash_taken_amount,
+        'remaining_balance': remaining_balance,
         'total_sale': total_sale,
         'expense_total': expense_total,
         'unsettled_expense_total': unsettled_expense_total,
@@ -420,6 +488,9 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'entries': entries,
         'payments': payments,
         'cash_counts': cash_counts,
+        'cash_taken_rows': cash_taken_rows(start, end),
+        'start_date': start,
+        'end_date': end,
     }
 
 
@@ -502,6 +573,7 @@ def build_period_cash_entries(stats):
     activity list for Sales / Dashboard cash journals (same period as compute_period_stats).
     """
     from app.vendors.service import purchase_log_total
+    from app.account.service import cash_taken_journal_rows, previous_balance_journal_row
 
     entries = stats.get('entries') or []
     payments = stats.get('payments') or []
@@ -518,10 +590,18 @@ def build_period_cash_entries(stats):
             absorbed_advance_ids.add(e.id)
 
     rows = []
+    prev_row = previous_balance_journal_row(stats)
+    if prev_row:
+        rows.append(prev_row)
+
     for e in entries:
         et = (getattr(e, 'entry_type', None) or 'sale').lower()
         remarks = (getattr(e, 'remarks', None) or '').strip()
         item_name = e.item_name if hasattr(e, 'item_name') else ''
+
+        # Customer opening account rows are not cash activity.
+        if et == 'opening':
+            continue
 
         # Skip advance rows already shown as sale overpayment
         if et == 'advance' and e.id in absorbed_advance_ids:
@@ -756,6 +836,8 @@ def build_period_cash_entries(stats):
             other_item=None,
         ))
 
+    rows.extend(cash_taken_journal_rows(stats))
+
     def _sort_key(row):
         d = getattr(row, 'sale_date', None)
         return (d or datetime.min.date(), getattr(row, 'id', 0) or 0)
@@ -766,12 +848,9 @@ def build_period_cash_entries(stats):
 
 def build_cash_journal_summary(stats):
     """
-    Top counters for the cash journal: cash in hand, expenses, settles,
-    paid sale cash, partial dues, advances, and customer payments.
+    Top counters for the cash journal.
     """
     paid_sale_cash = 0.0
-    partial_paid = 0.0
-    partial_due = 0.0
     unpaid_due = 0.0
 
     for e in stats.get('entries') or []:
@@ -786,9 +865,6 @@ def build_cash_journal_summary(stats):
         credit = max(amt - paid, 0.0)
         if status == 'paid':
             paid_sale_cash += paid
-        elif status == 'partial':
-            partial_paid += paid
-            partial_due += credit
         else:
             unpaid_due += credit
 
@@ -799,10 +875,11 @@ def build_cash_journal_summary(stats):
         'purchase_total': float(stats.get('purchase_total') or 0),
         'vendor_payments_total': float(stats.get('vendor_payments_total') or 0),
         'paid_sale_cash': paid_sale_cash,
-        'partial_paid': partial_paid,
-        'partial_due': partial_due,
         'unpaid_due': unpaid_due,
         'advances': float(stats.get('advances') or 0),
         'payments_total': float(stats.get('payments_total') or 0),
         'loans': float(stats.get('loans') or 0),
+        'previous_balance': float(stats.get('previous_balance') or 0),
+        'cash_taken_total': float(stats.get('cash_taken_total') or 0),
+        'remaining_balance': float(stats.get('remaining_balance') or 0),
     }

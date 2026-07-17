@@ -17,9 +17,7 @@ def _recalc_balance(customer):
 def _payment_status(amount, amount_paid):
     if amount_paid <= 0:
         return 'unpaid'
-    if amount_paid >= amount:
-        return 'paid'
-    return 'partial'
+    return 'paid' if amount_paid >= amount else 'unpaid'
 
 
 def _is_ft_item(item):
@@ -162,13 +160,6 @@ def edit_credit_sale(cs, form):
     payment_status = (form.get('payment_status') or cs.payment_status or 'paid').strip().lower()
     if payment_status == 'paid':
         amount_paid = amount
-    elif payment_status == 'partial':
-        try:
-            amount_paid = float(form.get('amount_paid') or 0)
-        except (TypeError, ValueError) as e:
-            raise EntryError(f'Invalid amount paid: {e}') from e
-        if amount_paid <= 0 or amount_paid >= amount:
-            raise EntryError('Partial payment must be greater than 0 and less than total amount.')
     else:
         amount_paid = 0.0
         payment_status = 'unpaid'

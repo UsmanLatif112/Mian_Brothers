@@ -28,70 +28,46 @@
 </div>
 {% endif %}
 
-<!-- Page header -->
-<header class="page-header">
-    <div class="page-header-row">
-        <div class="page-header-text">
-            <p class="page-eyebrow">Overview</p>
-            <h1 class="page-title">Dashboard</h1>
-        </div>
-        <div class="page-header-toolbar mt-0">
-            {% include "partials/period_filter.html" %}
-        </div>
+<header class="dash-hero">
+    <div class="dash-hero-copy">
+        <p class="page-eyebrow mb-1">Operations overview</p>
+        <h1 class="page-title mb-1">Dashboard</h1>
+        <p class="page-subtitle mb-0">Sales, inventory, and credit health for the selected period.</p>
     </div>
-    <div class="page-header-meta">
-        <p class="page-subtitle">Sales, stock, and cash performance for the selected period.</p>
+    <div class="dash-hero-tools">
+        {% include "partials/period_filter.html" %}
     </div>
 </header>
 
-<!-- KPI grid -->
-<section class="kpi-grid" aria-label="Period statistics">
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=petrol" class="kpi-card kpi-petrol">
-        <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-fuel-pump-fill"></i></span>
-            <span class="kpi-label">Petrol Sale</span>
-        </div>
-        <div class="kpi-value">{{ stats.petrol_sale | money }}</div>
-        <div class="kpi-meta">{{ "{:,.2f}".format(stats.petrol_liters) }} L</div>
-    </a>
-
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=diesel" class="kpi-card kpi-diesel">
-        <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-fuel-pump"></i></span>
-            <span class="kpi-label">Diesel Sale</span>
-        </div>
-        <div class="kpi-value text-success">{{ stats.diesel_sale | money }}</div>
-        <div class="kpi-meta">{{ "{:,.2f}".format(stats.diesel_liters) }} L</div>
-    </a>
-
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=other" class="kpi-card kpi-other">
-        <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-box-seam"></i></span>
-            <span class="kpi-label">Other Item Sale</span>
-        </div>
-        <div class="kpi-value">{{ stats.other_sale | money }}</div>
-        <div class="kpi-meta">Cash {{ stats.other_cash | money }}</div>
-    </a>
-
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=ft" class="kpi-card kpi-ft">
-        <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-droplet-half"></i></span>
-            <span class="kpi-label">FT Sale</span>
-        </div>
-        <div class="kpi-value">{{ stats.get('ft_sale', 0) | money }}</div>
-        <div class="kpi-meta">{{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L · Cash {{ stats.get('ft_cash', 0) | money }}</div>
-    </a>
-
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=sale" class="kpi-card kpi-total">
+<section class="kpi-grid kpi-grid-main" aria-label="Period statistics">
+    <div class="kpi-card kpi-total">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></span>
             <span class="kpi-label">Total Sale</span>
         </div>
         <div class="kpi-value">{{ stats.total_sale | money }}</div>
         <div class="kpi-meta">Fuel + Other + FT</div>
-    </a>
+    </div>
 
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=credit" class="kpi-card kpi-credit">
+    <div class="kpi-card kpi-petrol">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-fuel-pump-fill"></i></span>
+            <span class="kpi-label">Petrol Sale</span>
+        </div>
+        <div class="kpi-value">{{ stats.petrol_sale | money }}</div>
+        <div class="kpi-meta">{{ "{:,.2f}".format(stats.petrol_liters) }} L</div>
+    </div>
+
+    <div class="kpi-card kpi-diesel">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-fuel-pump"></i></span>
+            <span class="kpi-label">Diesel Sale</span>
+        </div>
+        <div class="kpi-value text-success">{{ stats.diesel_sale | money }}</div>
+        <div class="kpi-meta">{{ "{:,.2f}".format(stats.diesel_liters) }} L</div>
+    </div>
+
+    <div class="kpi-card kpi-credit">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-credit-card-2-front"></i></span>
             <span class="kpi-label">Credit</span>
@@ -101,37 +77,28 @@
             {% if period == 'all' %}
             All-time due {{ stats.outstanding_credit | money }}
             {% else %}
-            Due {{ stats.outstanding_credit | money }}
+            Outstanding {{ stats.outstanding_credit | money }}
             {% endif %}
         </div>
-    </a>
+    </div>
 
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=expense" class="kpi-card kpi-expense">
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-cart-plus"></i></span>
+            <span class="kpi-label">Purchasing</span>
+        </div>
+        <div class="kpi-value">{{ stats.purchase_total | money }}</div>
+        <div class="kpi-meta">Inventory purchases</div>
+    </div>
+
+    <div class="kpi-card kpi-expense">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-receipt"></i></span>
             <span class="kpi-label">Expense</span>
         </div>
         <div class="kpi-value text-danger">{{ stats.expense_total | money }}</div>
         <div class="kpi-meta">Period expenses</div>
-    </a>
-
-    <div class="kpi-card kpi-purchase">
-        <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-cart-plus"></i></span>
-            <span class="kpi-label">Total Purchasing</span>
-        </div>
-        <div class="kpi-value">{{ stats.purchase_total | money }}</div>
-        <div class="kpi-meta">Inventory purchases</div>
     </div>
-
-    <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}&detail=cash" class="kpi-card kpi-cash">
-        <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-wallet2"></i></span>
-            <span class="kpi-label">Cash In Hand</span>
-        </div>
-        <div class="kpi-value">{{ stats.cash_in_hand | money }}</div>
-            <div class="kpi-meta">Sales + deposits − credit − expenses + settles</div>
-    </a>
 
     <div class="kpi-card kpi-profit">
         <div class="kpi-card-top">
@@ -139,11 +106,10 @@
             <span class="kpi-label">Net Profit</span>
         </div>
         <div class="kpi-value {% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_profit | money }}</div>
-        <div class="kpi-meta">Gross {{ total_gross | money }} · Expenses {{ total_expenses_profit | money }}</div>
+        <div class="kpi-meta">Gross {{ total_gross | money }}</div>
     </div>
 </section>
 
-<!-- Live stock -->
 {% set petrol_liters = stock_summary.get('Petrol', 0) or 0 %}
 {% set diesel_liters = stock_summary.get('Diesel', 0) or 0 %}
 {% set petrol_bar = [petrol_liters / 50000 * 100, 100]|min %}
@@ -152,7 +118,7 @@
     <div class="stock-card stock-petrol">
         <div class="stock-card-body">
             <div>
-                <span class="stock-label">Petrol Stock</span>
+                <span class="stock-label">Petrol Inventory</span>
                 <div class="stock-value">{{ "{:,.0f}".format(petrol_liters) }} <span class="stock-unit">L</span></div>
             </div>
             <span class="stock-icon"><i class="bi bi-fuel-pump-fill"></i></span>
@@ -162,7 +128,7 @@
     <div class="stock-card stock-diesel">
         <div class="stock-card-body">
             <div>
-                <span class="stock-label">Diesel Stock</span>
+                <span class="stock-label">Diesel Inventory</span>
                 <div class="stock-value text-success">{{ "{:,.0f}".format(diesel_liters) }} <span class="stock-unit">L</span></div>
             </div>
             <span class="stock-icon"><i class="bi bi-fuel-pump"></i></span>
@@ -171,121 +137,52 @@
     </div>
 </section>
 
-{% if detail %}
-<section class="detail-panel mb-4">
+<section class="dashboard-section mt-3">
     <div class="card card-premium">
-        <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <h2 class="panel-title mb-0">Details: {% if detail == 'ft' %}FT Sale{% else %}{{ detail | capitalize }}{% endif %}</h2>
-            <a href="?period={{ period }}&start_date={{ start_date }}&end_date={{ end_date }}" class="btn btn-sm btn-outline-secondary border-0">
-                <i class="bi bi-x-lg me-1"></i> Close
-            </a>
+        <div class="card-header-premium">
+            <h2 class="panel-title mb-1">Other Items</h2>
+            <p class="panel-subtitle mb-0">Shop stock on hand</p>
         </div>
         <div class="table-responsive">
-            {% if detail == 'expense' %}
-            <table class="table table-custom mb-0">
-                <thead><tr><th>Date</th><th>Name</th><th>Description</th><th>Amount</th></tr></thead>
-                <tbody>
-                    {% for e in stats.expenses %}
-                    <tr><td>{{ e.expense_date }}</td><td>{{ e.name }}</td><td>{{ e.description or '—' }}</td><td>{{ e.amount | money }}</td></tr>
-                    {% else %}
-                    <tr><td colspan="4" class="text-center text-muted-custom py-4">No expenses.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% elif detail == 'cash' %}
-            <div class="card-body card-body-premium">
-                <p class="mb-2">Cash in hand: <strong>{{ stats.cash_in_hand | money }}</strong></p>
-                {% if stats.counted_cash %}
-                <p class="mb-2">Till counted: <strong>{{ stats.counted_cash | money }}</strong> (diff {{ stats.cash_variance | money }})</p>
-                {% endif %}
-                <hr class="detail-divider">
-                <p class="small text-muted-custom mb-0">
-                    Total sale {{ stats.total_sale | money }}
-                    + deposits {{ stats.deposits | money }}
-                    − credit {{ (stats.activity_credit if stats.activity_credit is defined else stats.period_credit) | money }}
-                    − expenses {{ stats.expense_total | money }}
-                    {% if stats.expense_return_total %}
-                    + settles {{ stats.expense_return_total | money }}
-                    {% endif %}
-                </p>
-            </div>
-            {% elif detail == 'sale' %}
-            <div class="card-body card-body-premium">
-                <p class="mb-2">Fuel (meter): <strong>{{ stats.meter_total | money }}</strong> ({{ "{:,.2f}".format(stats.meter_liters) }} L)</p>
-                <p class="mb-2">Other items: <strong>{{ stats.other_sale | money }}</strong></p>
-                <p class="mb-2">FT Mobile Oil: <strong>{{ stats.get('ft_sale', 0) | money }}</strong> ({{ "{:,.2f}".format(stats.get('ft_liters', 0)) }} L)</p>
-                <p class="mb-0">Total sale: <strong>{{ stats.total_sale | money }}</strong></p>
-            </div>
-            {% else %}
             <table class="table table-custom mb-0">
                 <thead>
-                    <tr><th>#</th><th>Date</th><th>Type</th><th>Customer</th><th>Item</th><th>Amount</th><th>Paid</th><th>Credit</th><th>Status</th></tr>
+                    <tr>
+                        <th>Item</th>
+                        <th>Type</th>
+                        <th class="text-end">Stock</th>
+                        <th class="text-end">Price</th>
+                    </tr>
                 </thead>
                 <tbody>
-                    {% set ns = namespace(rows=0) %}
-                    {% for cs in stats.entries %}
-                        {% if detail == 'petrol' and cs.fuel_type and 'petrol' in cs.fuel_type.name.lower() %}
-                        {% set ns.rows = ns.rows + 1 %}
-                        <tr>
-                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                        </tr>
-                        {% elif detail == 'diesel' and cs.fuel_type and 'diesel' in cs.fuel_type.name.lower() %}
-                        {% set ns.rows = ns.rows + 1 %}
-                        <tr>
-                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                        </tr>
-                        {% elif detail == 'other' and cs.other_item_id and (not cs.other_item or cs.other_item.category != 'ft_mobile') %}
-                        {% set ns.rows = ns.rows + 1 %}
-                        <tr>
-                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                        </tr>
-                        {% elif detail == 'ft' and cs.other_item and cs.other_item.category == 'ft_mobile' %}
-                        {% set ns.rows = ns.rows + 1 %}
-                        <tr>
-                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                        </tr>
-                        {% elif detail == 'credit' and (cs.credit_amount > 0 or (cs.entry_type or '') == 'loan') %}
-                        {% set ns.rows = ns.rows + 1 %}
-                        <tr>
-                            <td>#{{ cs.id }}</td><td>{{ cs.sale_date }}</td><td>{{ cs.entry_type }}</td>
-                            <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td><td>{{ cs.item_name }}</td>
-                            <td>{{ cs.amount | money }}</td><td>{{ (cs.amount_paid or 0) | money }}</td>
-                            <td>{{ cs.credit_amount | money }}</td><td>{{ cs.payment_status }}</td>
-                        </tr>
-                        {% endif %}
+                    {% for item in other_items %}
+                    <tr>
+                        <td class="fw-semibold">{{ item.display_name() }}</td>
+                        <td><span class="badge badge-muted">{{ item.category }}</span></td>
+                        <td class="text-end fw-semibold">
+                            {% if item.category == 'ft_mobile' %}
+                                {{ "{:,.2f}".format(item.liters or 0) }} L
+                            {% else %}
+                                {{ item.quantity }} pcs
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ item.sale_price | money }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-center text-muted-custom py-4">No items in inventory.</td></tr>
                     {% endfor %}
-                    {% if ns.rows == 0 %}
-                    <tr><td colspan="9" class="text-center text-muted-custom py-4">No rows for this filter.</td></tr>
-                    {% endif %}
                 </tbody>
             </table>
-            {% endif %}
         </div>
     </div>
 </section>
-{% endif %}
 
-<!-- Chart + other stock -->
-<div class="dashboard-panels">
+<section class="dashboard-section mt-4">
     <div class="card card-premium dashboard-chart-card">
         <div class="card-header-premium">
-            <h2 class="panel-title mb-0">Revenue &amp; Margin</h2>
-            <p class="panel-subtitle mb-0">
-                Net profit (sale − COGS − expenses)
-                <strong class="{% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}" id="chart-period-profit">{{ total_profit | money }}</strong>
-            </p>
+            <div>
+                <h2 class="panel-title mb-1">Revenue &amp; Margin</h2>
+                <p class="panel-subtitle mb-0">Sales vs net profit across the period</p>
+            </div>
         </div>
         <div class="card-body card-body-premium">
             <div class="chart-wrap">
@@ -293,35 +190,16 @@
             </div>
         </div>
     </div>
-    <div class="card card-premium dashboard-side-card">
-        <div class="card-header-premium">
-            <h2 class="panel-title mb-0">Other Items Stock</h2>
-            <p class="panel-subtitle mb-0">Current quantities</p>
-        </div>
-        <div class="side-table-scroll">
-            <table class="table table-custom mb-0">
-                <thead><tr><th>Item</th><th class="text-end">Qty</th></tr></thead>
-                <tbody>
-                    {% for item in other_items %}
-                    <tr><td>{{ item.display_name() }}</td><td class="text-end fw-semibold">{{ item.quantity }}</td></tr>
-                    {% else %}
-                    <tr><td colspan="2" class="text-center text-muted-custom py-4">No items.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+</section>
 
-<!-- Top credit customers -->
-<section class="mt-4">
+<section class="dashboard-section mt-4">
     <div class="card card-premium">
         <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
                 <h2 class="panel-title mb-1">Top Credit Customers</h2>
-                <p class="panel-subtitle mb-0">Due over PKR 200,000 and uncleared for more than 1 month</p>
+                <p class="panel-subtitle mb-0">Balances over PKR 200,000 overdue more than 30 days</p>
             </div>
-            <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0">All dues</a>
+            <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0">View all dues</a>
         </div>
         <div class="table-responsive">
             <table class="table table-custom table-hover mb-0">
@@ -368,140 +246,6 @@
     </div>
 </section>
 
-<!-- Cash journal: all sales / expense / customer cash activity -->
-<section class="mt-4" id="cash-journal">
-    <div class="card card-premium">
-        <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-2">
-            <div>
-                <h2 class="panel-title mb-1">Cash In / Out Journal</h2>
-                <p class="panel-subtitle mb-0">Period activity from sales, purchases, vendor payments, expenses, settles, advances, and customer payments</p>
-            </div>
-            <a href="{{ url_for('sales.index', period=period, start_date=start_date, end_date=end_date) }}" class="btn btn-sm btn-outline-secondary border-0">Sales</a>
-        </div>
-
-        <div class="card-body card-body-premium pb-3">
-            <div class="cash-journal-strip" role="group" aria-label="Cash journal summary">
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Cash in hand</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.cash_in_hand | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Paid sales</span>
-                    <span class="cash-journal-metric-value text-success">{{ cash_summary.paid_sale_cash | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Partial paid</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.partial_paid | money }}</span>
-                </div>
-                <div class="cash-journal-metric cash-journal-metric-warn">
-                    <span class="cash-journal-metric-label">Partial due</span>
-                    <span class="cash-journal-metric-value text-warning">{{ cash_summary.partial_due | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Advances</span>
-                    <span class="cash-journal-metric-value text-success">{{ cash_summary.advances | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Payments</span>
-                    <span class="cash-journal-metric-value text-success">{{ cash_summary.payments_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric cash-journal-metric-warn">
-                    <span class="cash-journal-metric-label">Expenses</span>
-                    <span class="cash-journal-metric-value text-danger">{{ cash_summary.expense_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Settles</span>
-                    <span class="cash-journal-metric-value text-success">{{ cash_summary.expense_return_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Purchases</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.purchase_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric cash-journal-metric-warn">
-                    <span class="cash-journal-metric-label">Vendor pay</span>
-                    <span class="cash-journal-metric-value text-danger">{{ cash_summary.vendor_payments_total | money }}</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-custom cash-journal-table mb-0">
-                <thead>
-                    <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">Type</th>
-                        <th scope="col">Party</th>
-                        <th scope="col">Description</th>
-                        <th scope="col" class="text-end">Qty / L</th>
-                        <th scope="col" class="text-end">Amount</th>
-                        <th scope="col" class="text-end">Paid</th>
-                        <th scope="col" class="text-end">Other</th>
-                        <th scope="col" class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if cash_entries %}
-                        {% for cs in cash_entries %}
-                        {% set paid_val = (cs.amount_paid or 0)|float %}
-                        {% set over_val = (cs.overpayment or 0)|float %}
-                        {% set due_val = (cs.credit_amount or 0)|float %}
-                        {% set other_val = (cs.other_amount if cs.other_amount is defined else (over_val if over_val > 0 else due_val))|float %}
-                        {% set other_kind = cs.other_kind if cs.other_kind is defined else ('over' if over_val > 0 else ('due' if due_val > 0 else 'none')) %}
-                        {% set qty_val = (cs.liters or 0)|float %}
-                        <tr>
-                            <td class="text-nowrap">{{ cs.sale_date }}</td>
-                            <td>
-                                <span class="cash-journal-type cash-journal-type-{{ cs.entry_type }}">{{ cs.entry_type }}</span>
-                            </td>
-                            <td>
-                                {% if cs.entry_type in ('expense', 'settle') %}
-                                    <span class="text-muted-custom">—</span>
-                                {% elif cs.entry_type in ('purchase', 'vendor_pay') %}
-                                    {{ cs.vendor_name or (cs.vendor.name if cs.vendor else '—') }}
-                                {% else %}
-                                    {{ cs.customer.name if cs.customer else 'Walk-in' }}
-                                {% endif %}
-                            </td>
-                            <td class="cash-journal-desc">{{ cs.item_name }}</td>
-                            <td class="text-end text-nowrap">
-                                {% if cs.entry_type == 'purchase' and qty_val > 0 %}
-                                    {{ "%.2f"|format(qty_val) if cs.purchase_category in ('fuel', 'ft_mobile') else "%.0f"|format(qty_val) }}{% if cs.purchase_category in ('fuel', 'ft_mobile') %} L{% else %} pcs{% endif %}
-                                {% elif cs.entry_type == 'sale' and qty_val > 0 %}
-                                    {{ "%.2f"|format(qty_val) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}
-                                {% else %}
-                                    <span class="text-muted-custom">—</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end text-nowrap fw-semibold">{{ cs.amount | money }}</td>
-                            <td class="text-end text-nowrap {% if paid_val > 0 %}text-success{% else %}text-muted-custom{% endif %}">
-                                {{ paid_val | money }}
-                            </td>
-                            <td class="text-end text-nowrap {% if other_kind == 'over' %}text-info fw-semibold{% elif other_kind == 'due' and other_val > 0 %}text-warning fw-semibold{% else %}text-muted-custom{% endif %}">
-                                {% if other_kind == 'over' and other_val > 0 %}
-                                    +{{ other_val | money }}
-                                {% else %}
-                                    {{ other_val | money }}
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <span class="cash-journal-status cash-journal-status-{{ cs.payment_status }}">{{ cs.payment_status }}</span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="9" class="text-center text-muted-custom py-5">No cash activity in this period.</td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-        {% with pagination=cash_pagination, page_param='cash_page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date} %}
-            {% include "partials/pagination.html" %}
-        {% endwith %}
-    </div>
-</section>
-
 </div>
 {% endblock %}
 
@@ -509,7 +253,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Always use server-resolved period (ignore stale URL start/end from other filters)
     const params = new URLSearchParams({
         period: '{{ period }}',
         start_date: '{{ start_date }}',
@@ -532,10 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const ctx = document.getElementById('trendChart');
             if (!ctx) return;
             const grainLabel = data.grain === 'week' ? 'Week' : (data.grain === 'month' ? 'Month' : 'Day');
-            const periodProfitEl = document.getElementById('chart-period-profit');
-            if (periodProfitEl && data.total_profit != null) {
-                periodProfitEl.textContent = money(data.total_profit);
-            }
             new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -594,7 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             cornerRadius: 12,
                             boxPadding: 4,
                             callbacks: {
-                                // Only this point's date + figures (no period totals)
                                 title: (items) => {
                                     if (!items || !items.length) return '';
                                     const i = items[0].dataIndex;

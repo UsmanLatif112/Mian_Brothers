@@ -239,6 +239,41 @@ class DailyCashCount(db.Model):
         return f"<DailyCashCount {self.count_date}: {self.cash_in_hand}>"
 
 
+class CashTaken(db.Model):
+    """Cash withdrawn from the till and carried in the cash journal."""
+    __tablename__ = 'cash_taken'
+
+    id = db.Column(db.Integer, primary_key=True)
+    taken_date = db.Column(db.Date, nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    person_name = db.Column(db.String(120), nullable=False)
+    note = db.Column(db.String(255), nullable=True)
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    recorder = db.relationship('User', foreign_keys=[recorded_by])
+
+    def __repr__(self):
+        return f"<CashTaken {self.taken_date}: {self.amount} by {self.person_name}>"
+
+
+class DailyTillBalance(db.Model):
+    """Daily opening/remaining till balance used for next-day carry-forward."""
+    __tablename__ = 'daily_till_balances'
+
+    id = db.Column(db.Integer, primary_key=True)
+    balance_date = db.Column(db.Date, nullable=False, unique=True, index=True)
+    previous_balance = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    remaining_balance = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    updater = db.relationship('User', foreign_keys=[updated_by])
+
+    def __repr__(self):
+        return f"<DailyTillBalance {self.balance_date}: prev={self.previous_balance} remaining={self.remaining_balance}>"
+
+
 class DailyFuelStock(db.Model):
     __tablename__ = 'daily_fuel_stocks'
 
