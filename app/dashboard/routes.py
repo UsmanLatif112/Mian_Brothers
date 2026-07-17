@@ -6,7 +6,10 @@ from app.models import (
     OtherItem, MeterReading, CreditSale, Expense, Payment, DailyCashCount,
     ItemPurchaseLog,
 )
-from app.utils import parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for
+from app.utils import (
+    parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
+    build_period_cash_entries, build_cash_journal_summary, paginate,
+)
 from datetime import datetime, timedelta
 from sqlalchemy import func
 from types import SimpleNamespace
@@ -338,6 +341,11 @@ def index():
 
     detail = request.args.get('detail', '')
 
+    cash_summary = build_cash_journal_summary(stats)
+    cash_entries_all = build_period_cash_entries(stats)
+    cash_page = request.args.get('cash_page', 1)
+    cash_entries, cash_pagination = paginate(cash_entries_all, cash_page, 20)
+
     return render_template(
         'dashboard/index.html',
         stats=stats,
@@ -357,6 +365,9 @@ def index():
         end_date=end.isoformat(),
         period_choices=PERIOD_CHOICES,
         detail=detail,
+        cash_summary=cash_summary,
+        cash_entries=cash_entries,
+        cash_pagination=cash_pagination,
     )
 
 

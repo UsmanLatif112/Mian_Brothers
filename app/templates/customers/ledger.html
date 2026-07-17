@@ -90,6 +90,7 @@
                             <th class="text-end">Debit (+)</th>
                             <th class="text-end">Credit (-)</th>
                             <th class="text-end">Running Bal</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -125,11 +126,47 @@
                                 <td class="text-end fw-bold">
                                     {{ entry.running_balance | money }}
                                 </td>
+                                <td>
+                                    {% if entry.can_edit %}
+                                    <div class="btn-group gap-1">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-secondary border-0 edit-ledger-btn"
+                                            title="Edit"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editLedgerModal"
+                                            data-source-type="{{ entry.source_type }}"
+                                            data-source-id="{{ entry.source_id }}"
+                                            data-entry-kind="{{ entry.entry_kind }}"
+                                            data-sale-date="{{ entry.sale_date }}"
+                                            data-amount="{{ '%.2f'|format(entry.amount) }}"
+                                            data-amount-paid="{{ '%.2f'|format(entry.amount_paid) }}"
+                                            data-liters="{{ '%.2f'|format(entry.liters) }}"
+                                            data-rate="{{ '%.2f'|format(entry.rate) }}"
+                                            data-discount="{{ '%.2f'|format(entry.discount) }}"
+                                            data-payment-status="{{ entry.payment_status }}"
+                                            data-remarks="{{ entry.remarks }}"
+                                            data-method="{{ entry.method }}">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Delete this ledger entry? Customer balance will be recalculated.');">
+                                            <input type="hidden" name="action" value="delete_entry">
+                                            <input type="hidden" name="source_type" value="{{ entry.source_type }}">
+                                            <input type="hidden" name="source_id" value="{{ entry.source_id }}">
+                                            <button class="btn btn-sm btn-outline-danger border-0" type="submit" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% else %}
+                                    <span class="small text-muted-custom" title="Legacy rows cannot be edited here">—</span>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="6" class="empty-state text-center py-5">
+                                <td colspan="7" class="empty-state text-center py-5">
                                     <div class="empty-state-icon"><i class="bi bi-journal-check"></i></div>
                                     <p class="text-muted-custom">No transaction records registered for this account.</p>
                                 </td>
@@ -211,66 +248,231 @@
     </div>
 </div>
 
+{# Edit ledger entry #}
+<div class="modal fade" id="editLedgerModal" tabindex="-1" aria-labelledby="editLedgerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form action="{{ url_for('customers.ledger', customer_id=customer.id) }}" method="POST" id="editLedgerForm">
+                <input type="hidden" name="action" value="edit_entry">
+                <input type="hidden" name="source_type" id="edit_source_type" value="">
+                <input type="hidden" name="source_id" id="edit_source_id" value="">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="editLedgerModalLabel">Edit Ledger Entry</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;" id="edit_ledger_subtitle">Correct this transaction.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="edit_ledger_date">Date</label>
+                        <input type="date" class="form-control form-control-custom" id="edit_ledger_date" name="entry_date" required>
+                    </div>
+
+                    <div id="edit_ledger_simple">
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_ledger_amount">Amount (PKR)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_ledger_amount" name="amount">
+                        </div>
+                        <div class="mb-3 d-none" id="edit_ledger_method_wrap">
+                            <label class="form-label form-label-custom" for="edit_ledger_method">Payment Method</label>
+                            <select class="form-select form-control-custom" id="edit_ledger_method" name="method">
+                                <option value="Cash">Cash Payment</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cheque">Bank Cheque</option>
+                                <option value="Mobile Wallet">UPI / Mobile Pay</option>
+                            </select>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label form-label-custom" for="edit_ledger_note">Note</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_ledger_note" name="note" placeholder="Optional">
+                        </div>
+                    </div>
+
+                    <div id="edit_ledger_sale" class="d-none">
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label form-label-custom" for="edit_ledger_liters">Qty / L</label>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_ledger_liters" name="liters">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label form-label-custom" for="edit_ledger_rate">Rate</label>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_ledger_rate" name="rate">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_ledger_discount">Discount (PKR)</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_ledger_discount" name="discount" value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_ledger_pay_status">Payment status</label>
+                            <select class="form-select form-control-custom" id="edit_ledger_pay_status" name="payment_status">
+                                <option value="paid">Paid</option>
+                                <option value="unpaid">Unpaid</option>
+                                <option value="partial">Partial</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="edit_ledger_paid_wrap">
+                            <label class="form-label form-label-custom" for="edit_ledger_amount_paid">Cash paid now (PKR)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_ledger_amount_paid" name="amount_paid">
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label form-label-custom" for="edit_ledger_remarks">Remarks</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_ledger_remarks" name="remarks" placeholder="Optional">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="bi bi-check2 me-1"></i> Save changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const modalEl = document.getElementById('ledgerModal');
-    if (!modalEl) return;
+    if (modalEl) {
+        const typeSel = document.getElementById('ledger_type');
+        const actionEl = document.getElementById('ledger_action');
+        const entryKindEl = document.getElementById('ledger_entry_kind');
+        const amountInput = document.getElementById('ledger_amount_input');
+        const amountPaidEl = document.getElementById('ledger_amount_paid');
+        const amountEl = document.getElementById('ledger_amount');
+        const methodWrap = modalEl.querySelector('.ledger-method-wrap');
+        const submitBtn = document.getElementById('ledger_submit_btn');
 
-    const typeSel = document.getElementById('ledger_type');
-    const actionEl = document.getElementById('ledger_action');
-    const entryKindEl = document.getElementById('ledger_entry_kind');
-    const amountInput = document.getElementById('ledger_amount_input');
-    const amountPaidEl = document.getElementById('ledger_amount_paid');
-    const amountEl = document.getElementById('ledger_amount');
-    const methodWrap = modalEl.querySelector('.ledger-method-wrap');
-    const submitBtn = document.getElementById('ledger_submit_btn');
+        const applyType = (type) => {
+            if (type === 'payment') {
+                actionEl.value = 'payment';
+                entryKindEl.value = '';
+                if (methodWrap) methodWrap.style.display = '';
+                if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-wallet2 me-1"></i> Settle Balance';
+            } else if (type === 'advance') {
+                actionEl.value = 'advance_loan';
+                entryKindEl.value = 'advance';
+                if (methodWrap) methodWrap.style.display = 'none';
+                if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Advance';
+            } else {
+                actionEl.value = 'advance_loan';
+                entryKindEl.value = 'loan';
+                if (methodWrap) methodWrap.style.display = 'none';
+                if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Loan';
+            }
 
-    const applyType = (type) => {
-        if (type === 'payment') {
-            actionEl.value = 'payment';
-            entryKindEl.value = '';
-            if (methodWrap) methodWrap.style.display = '';
-            if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-wallet2 me-1"></i> Settle Balance';
-        } else if (type === 'advance') {
-            actionEl.value = 'advance_loan';
-            entryKindEl.value = 'advance';
-            if (methodWrap) methodWrap.style.display = 'none';
-            if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Advance';
-        } else {
-            actionEl.value = 'advance_loan';
-            entryKindEl.value = 'loan';
-            if (methodWrap) methodWrap.style.display = 'none';
-            if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Loan';
+            const val = amountInput ? amountInput.value : '';
+            if (actionEl.value === 'payment') {
+                amountPaidEl.value = val;
+                amountEl.value = '';
+            } else {
+                amountEl.value = val;
+                amountPaidEl.value = '';
+            }
+        };
+
+        if (typeSel) {
+            typeSel.addEventListener('change', () => applyType(typeSel.value));
+        }
+        if (amountInput) {
+            amountInput.addEventListener('input', () => applyType(typeSel ? typeSel.value : 'payment'));
         }
 
-        const val = amountInput ? amountInput.value : '';
-        if (actionEl.value === 'payment') {
-            amountPaidEl.value = val;
-            amountEl.value = '';
-        } else {
-            amountEl.value = val;
-            amountPaidEl.value = '';
-        }
-    };
-
-    if (typeSel) {
-        typeSel.addEventListener('change', () => applyType(typeSel.value));
-    }
-    if (amountInput) {
-        amountInput.addEventListener('input', () => applyType(typeSel ? typeSel.value : 'payment'));
-    }
-
-    // Set modal mode when header buttons are clicked
-    document.querySelectorAll('[data-ledger-mode]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const mode = btn.getAttribute('data-ledger-mode') || 'payment';
-            if (typeSel) typeSel.value = mode;
-            applyType(mode);
+        document.querySelectorAll('[data-ledger-mode]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const mode = btn.getAttribute('data-ledger-mode') || 'payment';
+                if (typeSel) typeSel.value = mode;
+                applyType(mode);
+            });
         });
-    });
 
-    // Initialize
-    applyType(typeSel ? typeSel.value : 'payment');
+        applyType(typeSel ? typeSel.value : 'payment');
+    }
+
+    const editModal = document.getElementById('editLedgerModal');
+    if (editModal) {
+        const simpleBox = document.getElementById('edit_ledger_simple');
+        const saleBox = document.getElementById('edit_ledger_sale');
+        const methodWrap = document.getElementById('edit_ledger_method_wrap');
+        const paySel = document.getElementById('edit_ledger_pay_status');
+        const paidWrap = document.getElementById('edit_ledger_paid_wrap');
+        const paidInput = document.getElementById('edit_ledger_amount_paid');
+        const amountInput = document.getElementById('edit_ledger_amount');
+        const noteInput = document.getElementById('edit_ledger_note');
+        const methodSel = document.getElementById('edit_ledger_method');
+
+        const syncPartial = () => {
+            const isPartial = paySel && paySel.value === 'partial';
+            if (paidWrap) paidWrap.classList.toggle('d-none', !isPartial);
+            if (paidInput) paidInput.required = !!isPartial;
+        };
+        if (paySel) paySel.addEventListener('change', syncPartial);
+
+        editModal.addEventListener('show.bs.modal', (event) => {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            const sourceType = btn.getAttribute('data-source-type') || '';
+            const kind = (btn.getAttribute('data-entry-kind') || '').toLowerCase();
+            document.getElementById('edit_source_type').value = sourceType;
+            document.getElementById('edit_source_id').value = btn.getAttribute('data-source-id') || '';
+            document.getElementById('edit_ledger_date').value = btn.getAttribute('data-sale-date') || '';
+            document.getElementById('edit_ledger_subtitle').textContent = (kind || sourceType).toUpperCase();
+
+            const isSale = sourceType === 'credit_sale' && kind === 'sale';
+            const isPayment = sourceType === 'payment';
+
+            simpleBox.classList.toggle('d-none', isSale);
+            saleBox.classList.toggle('d-none', !isSale);
+            methodWrap.classList.toggle('d-none', !isPayment);
+
+            // Toggle disabled so unused fields are not posted
+            [
+                amountInput, noteInput, methodSel,
+                document.getElementById('edit_ledger_liters'),
+                document.getElementById('edit_ledger_rate'),
+                document.getElementById('edit_ledger_discount'),
+                paySel, paidInput,
+                document.getElementById('edit_ledger_remarks'),
+            ].forEach((el) => { if (el) el.disabled = true; });
+
+            if (isSale) {
+                document.getElementById('edit_ledger_liters').disabled = false;
+                document.getElementById('edit_ledger_rate').disabled = false;
+                document.getElementById('edit_ledger_discount').disabled = false;
+                paySel.disabled = false;
+                paidInput.disabled = false;
+                document.getElementById('edit_ledger_remarks').disabled = false;
+                // Keep customer_id as current customer for credit check
+                let custField = document.getElementById('edit_ledger_customer_id');
+                if (!custField) {
+                    custField = document.createElement('input');
+                    custField.type = 'hidden';
+                    custField.name = 'customer_id';
+                    custField.id = 'edit_ledger_customer_id';
+                    document.getElementById('editLedgerForm').appendChild(custField);
+                }
+                custField.value = '{{ customer.id }}';
+
+                document.getElementById('edit_ledger_liters').value = btn.getAttribute('data-liters') || '0';
+                document.getElementById('edit_ledger_rate').value = btn.getAttribute('data-rate') || '0';
+                document.getElementById('edit_ledger_discount').value = btn.getAttribute('data-discount') || '0';
+                paySel.value = btn.getAttribute('data-payment-status') || 'paid';
+                paidInput.value = btn.getAttribute('data-amount-paid') || '';
+                document.getElementById('edit_ledger_remarks').value = btn.getAttribute('data-remarks') || '';
+                syncPartial();
+            } else {
+                amountInput.disabled = false;
+                noteInput.disabled = false;
+                if (isPayment) methodSel.disabled = false;
+                amountInput.value = btn.getAttribute('data-amount') || '';
+                noteInput.value = btn.getAttribute('data-remarks') || '';
+                methodSel.value = btn.getAttribute('data-method') || 'Cash';
+            }
+        });
+    }
 })();
 </script>
 {% endblock %}

@@ -3,6 +3,10 @@ from flask_login import login_required, current_user
 from app.customers import customers_bp
 from app.models import db, Customer, Sale, Payment, CreditSale
 from app.utils import paginate, parse_form_date, datetime_from_date
+from app.services.entries import (
+    EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
+)
+from app.customers.service import recalculate_customer_balance
 from datetime import datetime
 
 PER_PAGE = 15
@@ -141,6 +145,55 @@ def ledger(customer_id):
     if request.method == 'POST':
         action = (request.form.get('action') or 'payment').strip().lower()
 
+        # ---------- Edit / delete ledger rows ----------
+        if action == 'edit_entry':
+            source_type = (request.form.get('source_type') or '').strip().lower()
+            source_id = request.form.get('source_id')
+            try:
+                if source_type == 'payment':
+                    payment = Payment.query.filter_by(id=source_id, customer_id=customer.id).first()
+                    if not payment:
+                        raise EntryError('Payment not found.')
+                    edit_payment(payment, request.form)
+                elif source_type == 'credit_sale':
+                    cs = CreditSale.query.filter_by(id=source_id, customer_id=customer.id).first()
+                    if not cs:
+                        raise EntryError('Entry not found.')
+                    edit_credit_sale(cs, request.form)
+                else:
+                    raise EntryError('Unknown entry type.')
+                db.session.commit()
+                flash('Ledger entry updated. Balance recalculated.', 'success')
+            except EntryError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+            return redirect(url_for('customers.ledger', customer_id=customer.id))
+
+        if action == 'delete_entry':
+            source_type = (request.form.get('source_type') or '').strip().lower()
+            source_id = request.form.get('source_id')
+            try:
+                if source_type == 'payment':
+                    payment = Payment.query.filter_by(id=source_id, customer_id=customer.id).first()
+                    if not payment:
+                        raise EntryError('Payment not found.')
+                    delete_payment(payment)
+                elif source_type == 'credit_sale':
+                    cs = CreditSale.query.filter_by(id=source_id, customer_id=customer.id).first()
+                    if not cs:
+                        raise EntryError('Entry not found.')
+                    delete_credit_sale(cs)
+                elif source_type == 'legacy_sale':
+                    raise EntryError('Legacy fuel sales cannot be deleted here.')
+                else:
+                    raise EntryError('Unknown entry type.')
+                db.session.commit()
+                flash('Ledger entry deleted. Balance recalculated.', 'success')
+            except EntryError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+            return redirect(url_for('customers.ledger', customer_id=customer.id))
+
         # ---------- Advance / Loan ----------
         if action == 'advance_loan':
             kind = (request.form.get('entry_kind') or '').strip().lower()
@@ -161,7 +214,6 @@ def ledger(customer_id):
                 return redirect(url_for('customers.ledger', customer_id=customer.id))
 
             if kind == 'advance':
-                customer.current_balance_due = float(customer.current_balance_due) - amt_val
                 db.session.add(CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
@@ -174,6 +226,8 @@ def ledger(customer_id):
                     remarks=note,
                     recorded_by=current_user.id,
                 ))
+                db.session.flush()
+                recalculate_customer_balance(customer)
                 db.session.commit()
                 flash(
                     f"Advance of PKR {amt_val:,.2f} saved for {customer.name}. "
@@ -182,7 +236,6 @@ def ledger(customer_id):
                     'success'
                 )
             else:
-                customer.current_balance_due = float(customer.current_balance_due) + amt_val
                 db.session.add(CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
@@ -195,6 +248,8 @@ def ledger(customer_id):
                     remarks=note,
                     recorded_by=current_user.id,
                 ))
+                db.session.flush()
+                recalculate_customer_balance(customer)
                 db.session.commit()
                 flash(
                     f"Loan of PKR {amt_val:,.2f} saved for {customer.name}. "
@@ -204,6 +259,10 @@ def ledger(customer_id):
             return redirect(url_for('customers.ledger', customer_id=customer.id))
 
         # ---------- Payment / credit clear ----------
+        if action != 'payment':
+            flash('Unknown action.', 'danger')
+            return redirect(url_for('customers.ledger', customer_id=customer.id))
+
         amount = request.form.get('amount_paid')
         method = request.form.get('method', 'Cash')
         note = request.form.get('note')
@@ -229,8 +288,8 @@ def ledger(customer_id):
             note=note
         )
         db.session.add(payment)
-        
-        customer.current_balance_due = float(customer.current_balance_due) - amt_val
+        db.session.flush()
+        recalculate_customer_balance(customer)
         db.session.commit()
         
         bal = float(customer.current_balance_due)
@@ -252,35 +311,54 @@ def ledger(customer_id):
     for p in purchases:
         unit = 'L' if p.is_fuel else 'pcs'
         et = (p.entry_type or 'sale').lower()
+        sale_date_str = p.sale_date.isoformat() if p.sale_date else ''
+        base = {
+            'source_type': 'credit_sale',
+            'source_id': p.id,
+            'entry_kind': et,
+            'can_edit': True,
+            'sale_date': sale_date_str,
+            'amount': float(p.amount or 0),
+            'amount_paid': float(p.amount_paid or 0),
+            'liters': float(p.liters or 0),
+            'rate': float(p.rate or 0),
+            'discount': float(getattr(p, 'discount', 0) or 0),
+            'payment_status': p.payment_status or 'unpaid',
+            'remarks': p.remarks or '',
+            'method': '',
+        }
         if et == 'advance':
             ledger_entries.append({
+                **base,
                 'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
                 'type': 'payment',
                 'desc': f"Advance / prepaid {f'({p.remarks})' if p.remarks else ''}",
                 'debit': 0.0,
                 'credit': float(p.amount or 0),
                 'ref_id': f"Advance #{p.id}",
-                'pay_type': 'advance'
+                'pay_type': 'advance',
             })
         elif et == 'loan':
             ledger_entries.append({
+                **base,
                 'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
                 'type': 'purchase',
                 'desc': f"Loan / borrow {f'({p.remarks})' if p.remarks else ''}",
                 'debit': float(p.amount or 0),
                 'credit': 0.0,
                 'ref_id': f"Loan #{p.id}",
-                'pay_type': 'loan'
+                'pay_type': 'loan',
             })
         elif et == 'opening':
             ledger_entries.append({
+                **base,
                 'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
                 'type': 'purchase',
                 'desc': f"Previous / opening credit {f'({p.remarks})' if p.remarks else ''}",
                 'debit': float(p.amount or 0),
                 'credit': 0.0,
                 'ref_id': f"Opening #{p.id}",
-                'pay_type': 'opening'
+                'pay_type': 'opening',
             })
         else:
             paid = float(p.amount_paid or 0)
@@ -292,17 +370,16 @@ def ledger(customer_id):
             if paid > 0 and credit > 0:
                 desc += f" (paid {paid:,.2f}, credit {credit:,.2f})"
             ledger_entries.append({
+                **base,
                 'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
                 'type': 'purchase',
                 'desc': desc,
                 'debit': credit,
                 'credit': 0.0,
                 'ref_id': f"Sale #{p.id}",
-                'pay_type': p.payment_status
+                'pay_type': p.payment_status,
             })
-            # Avoid double-counting advances that also created Payment rows
-            # (advances already added Payment — skip duplicate credit from Payment for same note?)
-            # Payments are listed separately below.
+
     for p in legacy_sales:
         ledger_entries.append({
             'date': p.sale_date,
@@ -310,11 +387,26 @@ def ledger(customer_id):
             'desc': f"{p.liters:.2f}L of {p.fuel_type.name} @ PKR {float(p.price_per_liter):,.2f}/L (legacy)",
             'debit': float(p.total_amount) if p.payment_type == 'credit' else 0.0,
             'credit': 0.0,
-            'ref_id': f"Sale #{p.id}",
-            'pay_type': p.payment_type
+            'ref_id': f"Legacy Sale #{p.id}",
+            'pay_type': p.payment_type,
+            'source_type': 'legacy_sale',
+            'source_id': p.id,
+            'entry_kind': 'legacy',
+            'can_edit': False,
+            'sale_date': '',
+            'amount': float(p.total_amount or 0),
+            'amount_paid': 0,
+            'liters': float(p.liters or 0),
+            'rate': float(p.price_per_liter or 0),
+            'discount': 0,
+            'payment_status': p.payment_type or '',
+            'remarks': '',
+            'method': '',
         })
         
     for pay in payments:
+        pay_date = pay.payment_date
+        sale_date_str = pay_date.date().isoformat() if hasattr(pay_date, 'date') else str(pay_date)[:10]
         ledger_entries.append({
             'date': pay.payment_date,
             'type': 'payment',
@@ -322,7 +414,20 @@ def ledger(customer_id):
             'debit': 0.0,
             'credit': float(pay.amount_paid),
             'ref_id': f"Payment #{pay.id}",
-            'pay_type': ''
+            'pay_type': 'payment',
+            'source_type': 'payment',
+            'source_id': pay.id,
+            'entry_kind': 'payment',
+            'can_edit': True,
+            'sale_date': sale_date_str,
+            'amount': float(pay.amount_paid or 0),
+            'amount_paid': float(pay.amount_paid or 0),
+            'liters': 0,
+            'rate': 0,
+            'discount': 0,
+            'payment_status': 'paid',
+            'remarks': pay.note or '',
+            'method': pay.method or 'Cash',
         })
         
     # Sort by date ascending to calculate running balance correctly

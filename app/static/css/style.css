@@ -1897,6 +1897,179 @@ a.kpi-card:focus-visible {
 }
 
 /* Print */
+/* Cash In / Out Journal — aligned summary strip + ledger table */
+.cash-journal-strip {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 0.65rem;
+    align-items: stretch;
+}
+
+.cash-journal-metric {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 5.25rem;
+    height: 100%;
+    padding: 0.85rem 0.9rem 0.85rem 1rem;
+    background: var(--card-bg);
+    border: var(--card-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.cash-journal-metric::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-blue);
+}
+
+.cash-journal-metric-warn::before {
+    background: var(--accent-amber);
+}
+
+.cash-journal-metric-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    margin-bottom: 0.45rem;
+}
+
+.cash-journal-metric-value {
+    display: block;
+    font-size: clamp(0.92rem, 1.35vw, 1.15rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cash-journal-table thead th {
+    font-size: 0.65rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+
+.cash-journal-table tbody td {
+    vertical-align: middle;
+    font-size: 0.78rem;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+}
+
+.cash-journal-desc {
+    max-width: 14rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cash-journal-type,
+.cash-journal-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.6rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.cash-journal-type {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--accent-blue);
+}
+
+.cash-journal-type-payment,
+.cash-journal-type-advance,
+.cash-journal-type-overpay,
+.cash-journal-type-settle {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-emerald);
+}
+
+.cash-journal-type-expense,
+.cash-journal-type-loan,
+.cash-journal-type-vendor_pay {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+}
+
+.cash-journal-type-purchase {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--accent-blue);
+}
+
+.cash-journal-status-paid,
+.cash-journal-status-settled,
+.cash-journal-status-overpay {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-emerald);
+}
+
+.cash-journal-status-partial {
+    background: rgba(6, 182, 212, 0.14);
+    color: #0e7490;
+}
+
+.cash-journal-status-unpaid,
+.cash-journal-status-open,
+.cash-journal-status-payable {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+}
+
+[data-theme="dark"] .cash-journal-type-expense,
+[data-theme="dark"] .cash-journal-type-loan,
+[data-theme="dark"] .cash-journal-type-vendor_pay,
+[data-theme="dark"] .cash-journal-status-unpaid,
+[data-theme="dark"] .cash-journal-status-open,
+[data-theme="dark"] .cash-journal-status-payable {
+    color: #fbbf24;
+}
+
+[data-theme="dark"] .cash-journal-status-partial {
+    color: #22d3ee;
+}
+
+@media (max-width: 1399.98px) {
+    .cash-journal-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .cash-journal-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cash-journal-metric {
+        min-height: 4.75rem;
+    }
+}
+
 @media print {
     body {
         padding-top: 0;

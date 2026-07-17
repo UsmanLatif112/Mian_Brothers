@@ -73,8 +73,43 @@ def create_app():
         ensure_journal_schema()
         ensure_customers_schema()
         ensure_vendors_schema()
+        ensure_expenses_schema()
         
     return app
+
+
+def ensure_expenses_schema():
+    """Add settle/return-to-till columns on expenses for SQLite and MySQL."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    if 'expenses' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('expenses')}
+    alters = []
+    url = str(db.engine.url)
+    is_sqlite = url.startswith('sqlite')
+
+    if 'is_settled' not in existing:
+        if is_sqlite:
+            alters.append("ALTER TABLE expenses ADD COLUMN is_settled BOOLEAN NOT NULL DEFAULT 0")
+        else:
+            alters.append("ALTER TABLE expenses ADD COLUMN is_settled TINYINT(1) NOT NULL DEFAULT 0")
+    if 'settled_date' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settled_date DATE NULL")
+    if 'settled_by' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settled_by INTEGER NULL")
+    if 'settle_note' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settle_note VARCHAR(255) NULL")
+
+    if not alters:
+        return
+
+    with db.engine.begin() as conn:
+        for stmt in alters:
+            conn.execute(text(stmt))
+    print("Upgraded expenses schema for settle / return-to-till.")
 
 
 def ensure_customers_schema():
@@ -202,6 +237,8 @@ def ensure_journal_schema():
             alters.append("ALTER TABLE credit_sales ADD COLUMN entry_type VARCHAR(20) NOT NULL DEFAULT 'sale'")
     if 'discount' not in existing:
         alters.append("ALTER TABLE credit_sales ADD COLUMN discount NUMERIC(12, 2) NOT NULL DEFAULT 0")
+    if 'overpayment' not in existing:
+        alters.append("ALTER TABLE credit_sales ADD COLUMN overpayment NUMERIC(12, 2) NOT NULL DEFAULT 0")
 
     if not alters:
         return
@@ -209,7 +246,7 @@ def ensure_journal_schema():
     with db.engine.begin() as conn:
         for stmt in alters:
             conn.execute(text(stmt))
-    print("Upgraded credit_sales for amount_paid / entry_type / discount (journal).")
+    print("Upgraded credit_sales for amount_paid / entry_type / discount / overpayment (journal).")
 
 
 def ensure_inventory_schema():

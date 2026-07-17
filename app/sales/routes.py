@@ -5,7 +5,14 @@ from app.models import (
     db, FuelType, FuelPrice, Inventory, MeterReading, Customer,
     Machine, CreditSale, OtherItem, Expense, Payment, DailyCashCount
 )
-from app.utils import parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for, paginate, parse_form_date
+from app.utils import (
+    parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
+    paginate, parse_form_date, datetime_from_date, infer_sale_overpayments,
+)
+from app.services.entries import (
+    EntryError, edit_credit_sale, delete_credit_sale,
+)
+from app.customers.service import recalculate_customer_balance
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -36,6 +43,45 @@ def _payment_status(amount, amount_paid):
     if amount_paid >= amount:
         return 'paid'
     return 'partial'
+
+
+def _apply_sale_overpayment(customer, overpayment, sale_day, item_label, recorded_by):
+    """
+    Cash above sale total: clear existing balance due first (Payment entry),
+    then post remainder as customer advance.
+    Returns (cleared_due, advance_amount).
+    """
+    if overpayment <= 0 or not customer:
+        return 0.0, 0.0
+
+    due_now = max(float(customer.current_balance_due or 0), 0.0)
+    cleared = min(overpayment, due_now)
+    advance_amt = max(overpayment - cleared, 0.0)
+
+    if cleared > 0:
+        db.session.add(Payment(
+            customer_id=customer.id,
+            amount_paid=cleared,
+            payment_date=datetime_from_date(sale_day),
+            method='Cash',
+            note=f'Overpayment from sale ({item_label}) — cleared due',
+        ))
+
+    if advance_amt > 0:
+        db.session.add(CreditSale(
+            customer_id=customer.id,
+            sale_date=sale_day,
+            liters=0,
+            rate=0,
+            amount=advance_amt,
+            amount_paid=advance_amt,
+            entry_type='advance',
+            payment_status='paid',
+            remarks=f'Overpayment from sale ({item_label})',
+            recorded_by=recorded_by,
+        ))
+
+    return cleared, advance_amt
 
 
 @sales_bp.route('/', methods=['GET', 'POST'])
@@ -255,42 +301,60 @@ def index():
                 return redirect(url_for('sales.index'))
 
             gross = qty_val * rate
-            discount = 0.0
-            if is_shop_sale:
-                try:
-                    discount = float(discount_raw or 0)
-                except (TypeError, ValueError):
-                    flash('Invalid discount amount.', 'danger')
-                    return redirect(url_for('sales.index'))
-                if discount < 0:
-                    flash('Discount cannot be negative.', 'danger')
-                    return redirect(url_for('sales.index'))
-                if discount > gross:
-                    flash(
-                        f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
-                        'danger'
-                    )
-                    return redirect(url_for('sales.index'))
+            # Discount applies to full sale total for all item types (fuel + shop).
+            try:
+                discount = float(discount_raw or 0)
+            except (TypeError, ValueError):
+                flash('Invalid discount amount.', 'danger')
+                return redirect(url_for('sales.index'))
+            if discount < 0:
+                flash('Discount cannot be negative.', 'danger')
+                return redirect(url_for('sales.index'))
+            if discount > gross:
+                flash(
+                    f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
+                    'danger'
+                )
+                return redirect(url_for('sales.index'))
 
             amount = max(gross - discount, 0.0)
 
-            # Resolve cash paid now (supports half paid / half credit)
-            if payment_status == 'paid':
-                amount_paid = amount
-            elif payment_status == 'partial':
-                try:
-                    amount_paid = float(amount_paid_raw or 0)
-                except (TypeError, ValueError):
-                    flash('Invalid amount paid.', 'danger')
-                    return redirect(url_for('sales.index'))
-                if amount_paid <= 0 or amount_paid >= amount:
-                    flash('Partial payment must be greater than 0 and less than total amount.', 'danger')
-                    return redirect(url_for('sales.index'))
-            else:
-                amount_paid = 0.0
+            # Resolve cash paid now (supports underpay, full pay, and overpayment)
+            overpayment = 0.0
+            try:
+                if payment_status == 'paid':
+                    if amount_paid_raw not in (None, ''):
+                        cash_received = float(amount_paid_raw)
+                        if cash_received < 0:
+                            raise ValueError('Amount paid cannot be negative.')
+                        if cash_received < amount:
+                            raise ValueError(
+                                'For Paid, cash must be at least the sale total. '
+                                'Use Partial if paying less, or enter more to credit the customer.'
+                            )
+                    else:
+                        cash_received = amount
+                elif payment_status == 'partial':
+                    cash_received = float(amount_paid_raw or 0)
+                    if cash_received <= 0:
+                        raise ValueError('Cash paid must be greater than 0.')
+                    # Allow cash > total (overpayment → customer account).
+                    # Allow cash < total (normal partial / credit).
+                else:
+                    cash_received = 0.0
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid amount paid: {e}', 'danger')
+                return redirect(url_for('sales.index'))
 
+            amount_paid = min(cash_received, amount)
+            overpayment = max(cash_received - amount, 0.0)
             credit_amt = max(amount - amount_paid, 0.0)
             payment_status = _payment_status(amount, amount_paid)
+
+            if overpayment > 0:
+                if not customer:
+                    flash('Customer is required when cash paid exceeds the sale total.', 'danger')
+                    return redirect(url_for('sales.index'))
 
             if credit_amt > 0:
                 if not customer:
@@ -304,7 +368,6 @@ def index():
                             'danger'
                         )
                         return redirect(url_for('sales.index'))
-                customer.current_balance_due = float(customer.current_balance_due) + credit_amt
 
             db.session.add(CreditSale(
                 customer_id=customer.id if customer else None,
@@ -316,18 +379,42 @@ def index():
                 amount=amount,
                 discount=discount,
                 amount_paid=amount_paid,
+                overpayment=overpayment,
                 entry_type='sale',
                 payment_status=payment_status,
                 remarks=remarks,
                 recorded_by=current_user.id
             ))
+            db.session.flush()
+
+            cleared_due = 0.0
+            advance_amt = 0.0
+            if overpayment > 0 and customer:
+                # Recalc after sale so we know current due before applying overpay
+                recalculate_customer_balance(customer)
+                cleared_due, advance_amt = _apply_sale_overpayment(
+                    customer, overpayment, sale_day, item_label, current_user.id
+                )
+                db.session.flush()
+
+            if customer:
+                recalculate_customer_balance(customer)
+
             db.session.commit()
 
             who = customer.name if customer else 'Walk-in'
             disc_note = f', discount {discount:,.2f}' if discount > 0 else ''
+            over_note = ''
+            if overpayment > 0:
+                parts = []
+                if cleared_due > 0:
+                    parts.append(f'cleared due {cleared_due:,.2f}')
+                if advance_amt > 0:
+                    parts.append(f'advance +{advance_amt:,.2f}')
+                over_note = f' — overpay {overpayment:,.2f}' + (f' ({", ".join(parts)})' if parts else '')
             flash(
                 f'Sale recorded for {who}: {item_label} — total {amount:,.2f}{disc_note} — '
-                f'paid {amount_paid:,.2f}, credit {credit_amt:,.2f} — {stock_note}.',
+                f'paid {cash_received:,.2f}, credit {credit_amt:,.2f}{over_note} — {stock_note}.',
                 'success'
             )
             return redirect(url_for('sales.index'))
@@ -337,6 +424,7 @@ def index():
             customer_id = (request.form.get('customer_id') or '').strip() or None
             item_id = (request.form.get('ft_item_id') or '').strip()
             qty_raw = request.form.get('liters')
+            discount_raw = request.form.get('discount')
             remarks = (request.form.get('remarks') or '').strip() or None
             payment_status = request.form.get('payment_status', 'paid')
             amount_paid_raw = request.form.get('amount_paid')
@@ -383,7 +471,24 @@ def index():
                 )
                 return redirect(url_for('sales.index'))
 
-            amount = liters_val * rate
+            gross = liters_val * rate
+            # Discount applies to the full FT sale total.
+            try:
+                discount = float(discount_raw or 0)
+            except (TypeError, ValueError):
+                flash('Invalid discount amount.', 'danger')
+                return redirect(url_for('sales.index'))
+            if discount < 0:
+                flash('Discount cannot be negative.', 'danger')
+                return redirect(url_for('sales.index'))
+            if discount > gross:
+                flash(
+                    f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
+                    'danger'
+                )
+                return redirect(url_for('sales.index'))
+
+            amount = max(gross - discount, 0.0)
 
             if payment_status == 'paid':
                 amount_paid = amount
@@ -426,6 +531,7 @@ def index():
                 liters=liters_val,
                 rate=rate,
                 amount=amount,
+                discount=discount,
                 amount_paid=amount_paid,
                 entry_type='sale',
                 payment_status=payment_status,
@@ -435,9 +541,10 @@ def index():
             db.session.commit()
 
             who = customer.name if customer else 'Walk-in'
+            disc_note = f', discount {discount:,.2f}' if discount > 0 else ''
             flash(
-                f'FT sale for {who}: {item_label} {liters_val:.2f}L — paid {amount_paid:,.2f}, '
-                f'credit {credit_amt:,.2f} — stock left {float(other_item.liters):.2f}L.',
+                f'FT sale for {who}: {item_label} {liters_val:.2f}L — total {amount:,.2f}{disc_note} — '
+                f'paid {amount_paid:,.2f}, credit {credit_amt:,.2f} — stock left {float(other_item.liters):.2f}L.',
                 'success',
             )
             return redirect(url_for('sales.index'))
@@ -473,6 +580,36 @@ def index():
                 ))
             db.session.commit()
             flash(f'Cash in hand for today set to PKR {cash_val:,.2f}.', 'success')
+            return redirect(url_for('sales.index'))
+
+        # ---------- Edit / delete period entry (CreditSale) ----------
+        if action == 'edit_entry':
+            entry = CreditSale.query.get(request.form.get('entry_id'))
+            if not entry:
+                flash('Entry not found.', 'danger')
+                return redirect(url_for('sales.index'))
+            try:
+                edit_credit_sale(entry, request.form)
+                db.session.commit()
+                flash(f'Entry #{entry.id} updated.', 'success')
+            except EntryError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+            return redirect(url_for('sales.index'))
+
+        if action == 'delete_entry':
+            entry = CreditSale.query.get(request.form.get('entry_id'))
+            if not entry:
+                flash('Entry not found.', 'danger')
+                return redirect(url_for('sales.index'))
+            try:
+                label = f'{entry.entry_type} #{entry.id}'
+                delete_credit_sale(entry)
+                db.session.commit()
+                flash(f'Deleted {label}. Balance and stock recalculated.', 'success')
+            except EntryError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
             return redirect(url_for('sales.index'))
 
         flash('Unknown action.', 'danger')
@@ -521,6 +658,7 @@ def index():
 
     entries_page = request.args.get('page', 1)
     period_entries, entries_pagination = paginate(stats['entries'], entries_page, PER_PAGE)
+    sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
 
     return render_template(
         'sales/index.html',
@@ -534,6 +672,7 @@ def index():
         stats=stats,
         period_entries=period_entries,
         entries_pagination=entries_pagination,
+        sale_overs=sale_overs,
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),

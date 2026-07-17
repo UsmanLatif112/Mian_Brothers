@@ -153,7 +153,8 @@ class CreditSale(db.Model):
     rate = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     discount = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # PKR off list total (other items)
-    amount_paid = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash received now
+    amount_paid = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash applied to this sale
+    overpayment = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash above sale total → customer account
     entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan | opening
     payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid / partial
     remarks = db.Column(db.String(255), nullable=True)
@@ -189,6 +190,11 @@ class CreditSale(db.Model):
         """Portion still owed on this entry."""
         return max(float(self.amount or 0) - float(self.amount_paid or 0), 0.0)
 
+    @property
+    def cash_received(self):
+        """Total cash taken for this sale (sale paid + overpayment)."""
+        return float(self.amount_paid or 0) + float(self.overpayment or 0)
+
     def __repr__(self):
         return f"<CreditSale {self.id} type={self.entry_type} amount={self.amount}>"
 
@@ -203,8 +209,14 @@ class Expense(db.Model):
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Settled = cash returned to till; no longer reduces cash in hand.
+    is_settled = db.Column(db.Boolean, nullable=False, default=False)
+    settled_date = db.Column(db.Date, nullable=True)
+    settled_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    settle_note = db.Column(db.String(255), nullable=True)
 
     recorder = db.relationship('User', foreign_keys=[recorded_by])
+    settler = db.relationship('User', foreign_keys=[settled_by])
 
     def __repr__(self):
         return f"<Expense {self.name}: {self.amount}>"

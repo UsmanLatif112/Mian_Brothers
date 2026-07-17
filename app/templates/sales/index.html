@@ -98,7 +98,7 @@
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">Cash In Hand</span>
                 <div class="metric-value fw-bold mb-0">{{ stats.cash_in_hand | money }}</div>
-                <small class="text-muted-custom">Sales + deposits − credit − expenses</small>
+                <small class="text-muted-custom">Sales + deposits − credit − expenses + settles</small>
             </div>
         </div>
     </div>
@@ -124,17 +124,19 @@
                             <th>Qty</th>
                             <th>Amount</th>
                             <th>Paid</th>
-                            <th>Credit</th>
+                            <th>Other</th>
                             <th>Status</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if period_entries %}
                             {% for cs in period_entries %}
+                            {% set over_val = (sale_overs.get(cs.id, (cs.overpayment or 0)|float) if sale_overs is defined else (cs.overpayment or 0)|float) %}
                             <tr>
                                 <td class="fw-semibold">#{{ cs.id }}</td>
                                 <td>{{ cs.sale_date }}</td>
-                                <td><span class="badge bg-secondary text-uppercase">{{ cs.entry_type }}</span></td>
+                                <td><span class="badge bg-secondary text-uppercase">{% if over_val > 0 %}overpay{% else %}{{ cs.entry_type }}{% endif %}</span></td>
                                 <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
                                 <td>{{ cs.item_name }}</td>
                                 <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}{% else %}—{% endif %}</td>
@@ -144,17 +146,62 @@
                                     <div class="small text-danger">−{{ cs.discount | money }} disc</div>
                                     {% endif %}
                                 </td>
-                                <td>{{ (cs.amount_paid or 0) | money }}</td>
-                                <td class="text-warning">{{ cs.credit_amount | money }}</td>
                                 <td>
-                                    <span class="badge {% if cs.payment_status == 'paid' %}bg-success{% elif cs.payment_status == 'partial' %}bg-info{% else %}bg-warning text-dark{% endif %}">
-                                        {{ cs.payment_status | upper }}
+                                    {% if cs.entry_type == 'sale' %}
+                                        {{ ((cs.amount_paid or 0)|float + over_val) | money }}
+                                    {% else %}
+                                        {{ (cs.amount_paid or 0) | money }}
+                                    {% endif %}
+                                </td>
+                                <td class="{% if over_val > 0 %}text-info{% else %}text-warning{% endif %}">
+                                    {% if over_val > 0 %}
+                                        +{{ over_val | money }}
+                                    {% else %}
+                                        {{ cs.credit_amount | money }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge {% if over_val > 0 %}bg-info{% elif cs.payment_status == 'paid' %}bg-success{% elif cs.payment_status == 'partial' %}bg-info{% else %}bg-warning text-dark{% endif %}">
+                                        {% if over_val > 0 %}OVERPAY{% else %}{{ cs.payment_status | upper }}{% endif %}
                                     </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group gap-1">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-secondary border-0 edit-period-entry-btn"
+                                            title="Edit"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editPeriodEntryModal"
+                                            data-id="{{ cs.id }}"
+                                            data-entry-type="{{ cs.entry_type }}"
+                                            data-sale-date="{{ cs.sale_date }}"
+                                            data-customer-id="{{ cs.customer_id or '' }}"
+                                            data-item-name="{{ cs.item_name }}"
+                                            data-liters="{{ '%.2f'|format(cs.liters|float) }}"
+                                            data-rate="{{ '%.2f'|format(cs.rate|float) }}"
+                                            data-discount="{{ '%.2f'|format((cs.discount or 0)|float) }}"
+                                            data-amount="{{ '%.2f'|format(cs.amount|float) }}"
+                                            data-amount-paid="{{ '%.2f'|format((cs.amount_paid or 0)|float) }}"
+                                            data-payment-status="{{ cs.payment_status }}"
+                                            data-remarks="{{ cs.remarks or '' }}"
+                                            data-has-stock="{{ '1' if cs.other_item_id else '0' }}"
+                                            data-is-fuel="{{ '1' if cs.is_fuel else '0' }}">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Delete this entry? Stock and customer balance will be recalculated.');">
+                                            <input type="hidden" name="action" value="delete_entry">
+                                            <input type="hidden" name="entry_id" value="{{ cs.id }}">
+                                            <button class="btn btn-sm btn-outline-danger border-0" type="submit" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
                         {% else %}
-                            <tr><td colspan="10" class="text-center text-muted-custom py-4">No entries in this period.</td></tr>
+                            <tr><td colspan="11" class="text-center text-muted-custom py-4">No entries in this period.</td></tr>
                         {% endif %}
                     </tbody>
                 </table>
@@ -287,7 +334,7 @@
                 <div class="modal-body pt-3">
                     <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
                         <strong>Fuel:</strong> customer required, no walk-in (credit / paid / partial).<br>
-                        <strong>Other items:</strong> Paid, Unpaid, or Partial — e.g. total 200k, cash 150k, credit 50k.
+                        <strong>Other items:</strong> Paid, Unpaid, or Partial. If cash paid is more than the sale total, the extra clears customer due first, then the rest is saved as customer advance.
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="credit_customer">
@@ -339,7 +386,7 @@
                             <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
                             <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="credit_discount" value="0" placeholder="0.00">
                         </div>
-                        <small class="text-muted-custom">Optional — subtracted from qty × sale price for other items.</small>
+                        <small class="text-muted-custom">Optional — subtracted from the full sale total (qty × rate), not per item.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="payment_status">Payment</label>
@@ -352,7 +399,7 @@
                     <div class="mb-3 d-none" id="amount_paid_wrap">
                         <label class="form-label form-label-custom" for="amount_paid">Cash paid now (PKR)</label>
                         <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="amount_paid" id="amount_paid" placeholder="e.g. 150000">
-                        <small class="text-muted-custom">Example: total 200,000 − paid 150,000 = credit 50,000.</small>
+                        <small class="text-muted-custom" id="amount_paid_hint">Example: total 12,000 − paid 8,000 = credit 4,000. Or paid 28,000 → sale paid + advance 16,000.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom">Remarks</label>
@@ -443,6 +490,14 @@
                         <small class="text-muted-custom" id="ft_stock_hint"></small>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_discount">Discount (PKR)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="ft_discount" value="0" placeholder="0.00">
+                        </div>
+                        <small class="text-muted-custom">Optional — subtracted from the full sale total (liters × rate), not per item.</small>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_payment_status">Payment</label>
                         <select class="form-select form-control-custom" name="payment_status" id="ft_payment_status">
                             <option value="paid" selected>Paid (full cash / walk-in)</option>
@@ -464,6 +519,8 @@
                     </div>
                     <div class="p-3 rounded mb-1" style="background: rgba(94,94,94,0.06); font-size: 0.9rem;">
                         <div class="d-flex justify-content-between"><span class="text-muted-custom">Cost</span><strong>PKR <span id="ft_cost_total">0.00</span></strong></div>
+                        <div class="d-flex justify-content-between mt-1 d-none" id="ft_subtotal_row"><span class="text-muted-custom">Subtotal</span><span>PKR <span id="ft_subtotal">0.00</span></span></div>
+                        <div class="d-flex justify-content-between mt-1 d-none" id="ft_discount_row"><span class="text-muted-custom">Discount</span><strong class="text-danger">−PKR <span id="ft_discount_disp">0.00</span></strong></div>
                         <div class="d-flex justify-content-between mt-1"><span class="text-muted-custom">Sale total</span><strong class="text-success">PKR <span id="ft_sale_total">0.00</span></strong></div>
                         <div class="mt-1" id="ft_partial_hint"></div>
                     </div>
@@ -472,6 +529,91 @@
                     <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary-custom px-4" {% if not ft_items %}disabled{% endif %}>
                         <i class="bi bi-droplet me-1"></i> Record FT Sale
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Edit Period Entry #}
+<div class="modal fade" id="editPeriodEntryModal" tabindex="-1" aria-labelledby="editPeriodEntryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="editPeriodEntryForm">
+                <input type="hidden" name="action" value="edit_entry">
+                <input type="hidden" name="entry_id" id="edit_entry_id" value="">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="editPeriodEntryModalLabel">Edit Entry</h5>
+                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;" id="edit_entry_subtitle">Correct this period entry.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="edit_entry_date">Date</label>
+                        <input type="date" class="form-control form-control-custom" id="edit_entry_date" name="entry_date" required>
+                    </div>
+
+                    <div id="edit_sale_fields">
+                        <div class="mb-2 small text-muted-custom" id="edit_item_label">Item</div>
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_customer_id">Customer</label>
+                            <select class="form-select form-control-custom" id="edit_customer_id" name="customer_id">
+                                <option value="">Walk-in</option>
+                                {% for c in customers %}
+                                <option value="{{ c.id }}">{{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label form-label-custom" for="edit_liters">Qty / L</label>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_liters" name="liters">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label form-label-custom" for="edit_rate">Rate</label>
+                                <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_rate" name="rate">
+                            </div>
+                        </div>
+                        <div class="mb-3" id="edit_discount_wrap">
+                            <label class="form-label form-label-custom" for="edit_discount">Discount (PKR)</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_discount" name="discount" value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_payment_status">Payment status</label>
+                            <select class="form-select form-control-custom" id="edit_payment_status" name="payment_status">
+                                <option value="paid">Paid</option>
+                                <option value="unpaid">Unpaid (credit)</option>
+                                <option value="partial">Partial</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="edit_amount_paid_wrap">
+                            <label class="form-label form-label-custom" for="edit_amount_paid">Cash paid now (PKR)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_amount_paid" name="amount_paid">
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label form-label-custom" for="edit_remarks">Remarks</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_remarks" name="remarks" placeholder="Optional">
+                        </div>
+                    </div>
+
+                    <div id="edit_simple_fields" class="d-none">
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_simple_amount">Amount (PKR)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_simple_amount" name="amount">
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label form-label-custom" for="edit_simple_note">Note</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_simple_note" name="note" placeholder="Optional">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="bi bi-check2 me-1"></i> Save changes
                     </button>
                 </div>
             </form>
@@ -670,14 +812,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const customerRequired = fuel || (shop && pay !== 'paid') || (!fuel && !shop);
         if (customerHint) {
             if (fuel) customerHint.textContent = '(required — fuel credit, no walk-in)';
-            else if (shop && pay === 'paid') customerHint.textContent = '(optional for paid walk-in)';
+            else if (shop && pay === 'paid') customerHint.textContent = '(optional for paid walk-in; required if overpaying)';
             else if (shop) customerHint.textContent = '(required when unpaid or partial)';
             else customerHint.textContent = '(select item first)';
         }
         if (creditCustomer) creditCustomer.required = !!customerRequired;
+        // Show cash field for Partial always, and for Paid when a customer can receive overpay
+        const showCashPaid = pay === 'partial' || pay === 'paid';
         if (amountPaidWrap) {
-            amountPaidWrap.classList.toggle('d-none', pay !== 'partial');
+            amountPaidWrap.classList.toggle('d-none', !showCashPaid);
             if (amountPaid) amountPaid.required = pay === 'partial';
+        }
+        const paidHint = document.getElementById('amount_paid_hint');
+        if (paidHint) {
+            if (shop && pay === 'paid') {
+                paidHint.textContent = 'Enter cash received. If more than total (e.g. sale 12,000 paid 28,000), extra 16,000 clears due then posts as advance.';
+            } else {
+                paidHint.textContent = 'Example: total 12,000 − paid 8,000 = credit 4,000. Or paid 28,000 → sale paid + advance 16,000.';
+            }
         }
     };
 
@@ -695,9 +847,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const qty = Number(creditLiters?.value || 0);
         const gross = rate * qty;
         const shop = isShopSelected();
-        if (discountWrap) discountWrap.classList.toggle('d-none', !shop);
-        if (!shop && creditDiscount) creditDiscount.value = '0';
-        let discount = shop ? Number(creditDiscount?.value || 0) : 0;
+        const itemSelected = isFuelSelected() || shop;
+        // Discount available for all item types (fuel + shop) on the full total.
+        if (discountWrap) discountWrap.classList.toggle('d-none', !itemSelected);
+        let discount = itemSelected ? Number(creditDiscount?.value || 0) : 0;
         if (!Number.isFinite(discount) || discount < 0) discount = 0;
         if (discount > gross) discount = gross;
         const total = Math.max(gross - discount, 0);
@@ -710,22 +863,46 @@ document.addEventListener('DOMContentLoaded', () => {
             if (stock !== undefined && unit === 'qty') stockHint.textContent = `In stock: ${stock}`;
             else stockHint.textContent = unit === 'L' ? 'Fuel stock updates from meters only — this is ledger/credit.' : '';
         }
-        if (creditSubtotalRow) creditSubtotalRow.classList.toggle('d-none', !(shop && discount > 0));
+        if (creditSubtotalRow) creditSubtotalRow.classList.toggle('d-none', !(discount > 0));
         if (creditSubtotal) creditSubtotal.textContent = gross.toFixed(2);
         if (creditDiscountDisp) creditDiscountDisp.textContent = discount.toFixed(2);
         if (creditAmount) creditAmount.textContent = total.toFixed(2);
-        if (partialHint && paymentStatus?.value === 'partial' && amountPaid) {
-            const paid = Number(amountPaid.value || 0);
-            const creditLeft = Math.max(total - paid, 0);
-            partialHint.innerHTML = ` · Paid <strong class="text-success">PKR ${paid.toFixed(2)}</strong> · Credit <strong class="text-warning">PKR ${creditLeft.toFixed(2)}</strong>`;
-        } else if (partialHint && paymentStatus?.value === 'unpaid') {
-            partialHint.innerHTML = ` · Credit <strong class="text-warning">PKR ${total.toFixed(2)}</strong>`;
-        } else if (partialHint && paymentStatus?.value === 'paid') {
-            partialHint.innerHTML = ` · Paid <strong class="text-success">PKR ${total.toFixed(2)}</strong>`;
-        } else if (partialHint) {
-            partialHint.textContent = '';
-        }
+
+        // Update cash-field visibility before reading it for the summary.
         syncCustomerRequirement();
+
+        // Summary: Paid / Credit / Over
+        const pay = paymentStatus?.value || 'unpaid';
+        const cashFieldVisible = amountPaidWrap && !amountPaidWrap.classList.contains('d-none');
+        let paidDisp = 0;
+        if (pay === 'unpaid') {
+            paidDisp = 0;
+        } else if (cashFieldVisible && amountPaid && String(amountPaid.value).trim() !== '') {
+            paidDisp = Number(amountPaid.value || 0);
+            if (!Number.isFinite(paidDisp) || paidDisp < 0) paidDisp = 0;
+        } else if (pay === 'paid') {
+            paidDisp = total;
+        }
+        const creditLeft = Math.max(total - paidDisp, 0);
+        const overAmt = Math.max(paidDisp - total, 0);
+        if (partialHint) {
+            if (pay === 'unpaid') {
+                partialHint.innerHTML = ` · Credit <strong class="text-warning">PKR ${total.toFixed(2)}</strong>`;
+            } else if (overAmt > 0) {
+                partialHint.innerHTML =
+                    ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
+                    ` · Credit <strong class="text-warning">PKR 0.00</strong>` +
+                    ` · Over <strong class="text-info">PKR ${overAmt.toFixed(2)}</strong>`;
+            } else if (pay === 'partial' || (cashFieldVisible && paidDisp > 0 && paidDisp < total)) {
+                partialHint.innerHTML =
+                    ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
+                    ` · Credit <strong class="text-warning">PKR ${creditLeft.toFixed(2)}</strong>`;
+            } else {
+                partialHint.innerHTML =
+                    ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
+                    ` · Credit <strong class="text-warning">PKR 0.00</strong>`;
+            }
+        }
     };
 
     if (creditItem) {
@@ -761,7 +938,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Customer is required when other items are unpaid or partially paid.');
                 return;
             }
-            if (isShopSelected() && creditDiscount) {
+            if ((isFuelSelected() || isShopSelected()) && creditDiscount) {
                 const disc = Number(creditDiscount.value || 0);
                 const net = Number(creditAmount?.textContent || 0);
                 const gross = Number(creditSubtotal?.textContent || 0) || (net + Math.max(disc, 0));
@@ -772,16 +949,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (disc > gross + 0.0001) {
                     e.preventDefault();
-                    alert('Discount cannot exceed the sale subtotal.');
+                    alert('Discount cannot exceed the sale total.');
                     return;
                 }
             }
             if (pay === 'partial' && amountPaid) {
                 const total = Number(creditAmount?.textContent || 0);
                 const paid = Number(amountPaid.value || 0);
-                if (!(paid > 0 && paid < total)) {
+                if (!(paid > 0)) {
                     e.preventDefault();
-                    alert('Partial: cash paid must be greater than 0 and less than total amount.');
+                    alert('Cash paid must be greater than 0.');
+                    return;
+                }
+                // Overpayment (paid > total): allowed — remainder goes to customer account
+                if (paid > total && !hasCustomer) {
+                    e.preventDefault();
+                    alert('Customer is required when cash paid exceeds the sale total.');
+                    return;
+                }
+            }
+            if (pay === 'paid' && amountPaid && Number(amountPaid.value || 0) > 0) {
+                const total = Number(creditAmount?.textContent || 0);
+                const paid = Number(amountPaid.value || 0);
+                if (paid < total) {
+                    e.preventDefault();
+                    alert('For Paid, cash must be at least the sale total. Use Partial if paying less.');
+                    return;
+                }
+                if (paid > total && !hasCustomer) {
+                    e.preventDefault();
+                    alert('Customer is required when cash paid exceeds the sale total.');
+                    return;
                 }
             }
         });
@@ -796,6 +994,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const ftPaid = document.getElementById('ft_amount_paid');
     const ftSaleTotal = document.getElementById('ft_sale_total');
     const ftCostTotal = document.getElementById('ft_cost_total');
+    const ftDiscount = document.getElementById('ft_discount');
+    const ftSubtotal = document.getElementById('ft_subtotal');
+    const ftSubtotalRow = document.getElementById('ft_subtotal_row');
+    const ftDiscountRow = document.getElementById('ft_discount_row');
+    const ftDiscountDisp = document.getElementById('ft_discount_disp');
     const ftHint = document.getElementById('ft_partial_hint');
     const ftCustomerHint = document.getElementById('ft_customer_hint');
     const ftStockHint = document.getElementById('ft_stock_hint');
@@ -815,8 +1018,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         const liters = Number(ftLiters?.value || 0);
-        const sale = rate * liters;
+        const gross = rate * liters;
         const costTotal = cost * liters;
+        let discount = Number(ftDiscount?.value || 0);
+        if (!Number.isFinite(discount) || discount < 0) discount = 0;
+        if (discount > gross) discount = gross;
+        const sale = Math.max(gross - discount, 0);
+        if (ftSubtotalRow) ftSubtotalRow.classList.toggle('d-none', !(discount > 0));
+        if (ftDiscountRow) ftDiscountRow.classList.toggle('d-none', !(discount > 0));
+        if (ftSubtotal) ftSubtotal.textContent = gross.toFixed(2);
+        if (ftDiscountDisp) ftDiscountDisp.textContent = discount.toFixed(2);
         if (ftSaleTotal) ftSaleTotal.textContent = sale.toFixed(2);
         if (ftCostTotal) ftCostTotal.textContent = costTotal.toFixed(2);
         if (ftStockHint) {
@@ -851,6 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ftItem.tomselect) ftItem.tomselect.on('change', syncFtSale);
     }
     if (ftLiters) ftLiters.addEventListener('input', syncFtSale);
+    if (ftDiscount) ftDiscount.addEventListener('input', syncFtSale);
     if (ftPay) ftPay.addEventListener('change', syncFtSale);
     if (ftPaid) ftPaid.addEventListener('input', syncFtSale);
     syncFtSale();
@@ -864,6 +1076,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Customer is required when FT sale is unpaid or partially paid.');
                 return;
             }
+            if (ftDiscount) {
+                const disc = Number(ftDiscount.value || 0);
+                const gross = Number(ftSubtotal?.textContent || 0) || Number(ftSaleTotal?.textContent || 0);
+                if (!(disc >= 0)) {
+                    e.preventDefault();
+                    alert('Discount cannot be negative.');
+                    return;
+                }
+                if (disc > gross + 0.0001) {
+                    e.preventDefault();
+                    alert('Discount cannot exceed the sale total.');
+                    return;
+                }
+            }
             if (pay === 'partial' && ftPaid) {
                 const total = Number(ftSaleTotal?.textContent || 0);
                 const paid = Number(ftPaid.value || 0);
@@ -871,6 +1097,74 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.preventDefault();
                     alert('Partial: cash paid must be greater than 0 and less than total amount.');
                 }
+            }
+        });
+    }
+
+    // Edit period entry modal
+    const editModal = document.getElementById('editPeriodEntryModal');
+    if (editModal) {
+        const saleFields = document.getElementById('edit_sale_fields');
+        const simpleFields = document.getElementById('edit_simple_fields');
+        const paySel = document.getElementById('edit_payment_status');
+        const paidWrap = document.getElementById('edit_amount_paid_wrap');
+        const paidInput = document.getElementById('edit_amount_paid');
+        const litersInput = document.getElementById('edit_liters');
+        const rateInput = document.getElementById('edit_rate');
+        const syncPartial = () => {
+            const isPartial = paySel && paySel.value === 'partial';
+            if (paidWrap) paidWrap.classList.toggle('d-none', !isPartial);
+            if (paidInput) paidInput.required = isPartial;
+        };
+        if (paySel) paySel.addEventListener('change', syncPartial);
+
+        editModal.addEventListener('show.bs.modal', (event) => {
+            const btn = event.relatedTarget;
+            if (!btn) return;
+            const et = (btn.getAttribute('data-entry-type') || 'sale').toLowerCase();
+            document.getElementById('edit_entry_id').value = btn.getAttribute('data-id') || '';
+            document.getElementById('edit_entry_date').value = btn.getAttribute('data-sale-date') || '';
+            document.getElementById('edit_entry_subtitle').textContent = et.toUpperCase() + ' · ' + (btn.getAttribute('data-item-name') || '');
+
+            const isSale = et === 'sale';
+            if (saleFields) saleFields.classList.toggle('d-none', !isSale);
+            if (simpleFields) simpleFields.classList.toggle('d-none', isSale);
+
+            // Disable unused fields so they are not submitted with wrong names conflicting
+            if (isSale) {
+                document.getElementById('edit_simple_amount').disabled = true;
+                document.getElementById('edit_simple_note').disabled = true;
+                litersInput.disabled = false;
+                rateInput.disabled = false;
+                document.getElementById('edit_discount').disabled = false;
+                document.getElementById('edit_payment_status').disabled = false;
+                document.getElementById('edit_customer_id').disabled = false;
+                document.getElementById('edit_remarks').disabled = false;
+                paidInput.disabled = false;
+
+                document.getElementById('edit_item_label').textContent = 'Item: ' + (btn.getAttribute('data-item-name') || '—');
+                document.getElementById('edit_customer_id').value = btn.getAttribute('data-customer-id') || '';
+                litersInput.value = btn.getAttribute('data-liters') || '0';
+                rateInput.value = btn.getAttribute('data-rate') || '0';
+                document.getElementById('edit_discount').value = btn.getAttribute('data-discount') || '0';
+                paySel.value = btn.getAttribute('data-payment-status') || 'paid';
+                paidInput.value = btn.getAttribute('data-amount-paid') || '';
+                document.getElementById('edit_remarks').value = btn.getAttribute('data-remarks') || '';
+                // Fuel ledger-only: keep qty/rate editable but stock not adjusted (no other_item)
+                syncPartial();
+            } else {
+                document.getElementById('edit_simple_amount').disabled = false;
+                document.getElementById('edit_simple_note').disabled = false;
+                litersInput.disabled = true;
+                rateInput.disabled = true;
+                document.getElementById('edit_discount').disabled = true;
+                document.getElementById('edit_payment_status').disabled = true;
+                document.getElementById('edit_amount_paid').disabled = true;
+                document.getElementById('edit_customer_id').disabled = true;
+                document.getElementById('edit_remarks').disabled = true;
+
+                document.getElementById('edit_simple_amount').value = btn.getAttribute('data-amount') || '';
+                document.getElementById('edit_simple_note').value = btn.getAttribute('data-remarks') || '';
             }
         });
     }

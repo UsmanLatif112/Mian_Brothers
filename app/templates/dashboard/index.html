@@ -130,7 +130,7 @@
             <span class="kpi-label">Cash In Hand</span>
         </div>
         <div class="kpi-value">{{ stats.cash_in_hand | money }}</div>
-        <div class="kpi-meta">Sales + deposits − credit − expenses</div>
+            <div class="kpi-meta">Sales + deposits − credit − expenses + settles</div>
     </a>
 
     <div class="kpi-card kpi-profit">
@@ -204,6 +204,9 @@
                     + deposits {{ stats.deposits | money }}
                     − credit {{ (stats.activity_credit if stats.activity_credit is defined else stats.period_credit) | money }}
                     − expenses {{ stats.expense_total | money }}
+                    {% if stats.expense_return_total %}
+                    + settles {{ stats.expense_return_total | money }}
+                    {% endif %}
                 </p>
             </div>
             {% elif detail == 'sale' %}
@@ -362,6 +365,140 @@
                 </tbody>
             </table>
         </div>
+    </div>
+</section>
+
+<!-- Cash journal: all sales / expense / customer cash activity -->
+<section class="mt-4" id="cash-journal">
+    <div class="card card-premium">
+        <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h2 class="panel-title mb-1">Cash In / Out Journal</h2>
+                <p class="panel-subtitle mb-0">Period activity from sales, purchases, vendor payments, expenses, settles, advances, and customer payments</p>
+            </div>
+            <a href="{{ url_for('sales.index', period=period, start_date=start_date, end_date=end_date) }}" class="btn btn-sm btn-outline-secondary border-0">Sales</a>
+        </div>
+
+        <div class="card-body card-body-premium pb-3">
+            <div class="cash-journal-strip" role="group" aria-label="Cash journal summary">
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Cash in hand</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.cash_in_hand | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Paid sales</span>
+                    <span class="cash-journal-metric-value text-success">{{ cash_summary.paid_sale_cash | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Partial paid</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.partial_paid | money }}</span>
+                </div>
+                <div class="cash-journal-metric cash-journal-metric-warn">
+                    <span class="cash-journal-metric-label">Partial due</span>
+                    <span class="cash-journal-metric-value text-warning">{{ cash_summary.partial_due | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Advances</span>
+                    <span class="cash-journal-metric-value text-success">{{ cash_summary.advances | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Payments</span>
+                    <span class="cash-journal-metric-value text-success">{{ cash_summary.payments_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric cash-journal-metric-warn">
+                    <span class="cash-journal-metric-label">Expenses</span>
+                    <span class="cash-journal-metric-value text-danger">{{ cash_summary.expense_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Settles</span>
+                    <span class="cash-journal-metric-value text-success">{{ cash_summary.expense_return_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric">
+                    <span class="cash-journal-metric-label">Purchases</span>
+                    <span class="cash-journal-metric-value">{{ cash_summary.purchase_total | money }}</span>
+                </div>
+                <div class="cash-journal-metric cash-journal-metric-warn">
+                    <span class="cash-journal-metric-label">Vendor pay</span>
+                    <span class="cash-journal-metric-value text-danger">{{ cash_summary.vendor_payments_total | money }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-custom cash-journal-table mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Party</th>
+                        <th scope="col">Description</th>
+                        <th scope="col" class="text-end">Qty / L</th>
+                        <th scope="col" class="text-end">Amount</th>
+                        <th scope="col" class="text-end">Paid</th>
+                        <th scope="col" class="text-end">Other</th>
+                        <th scope="col" class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if cash_entries %}
+                        {% for cs in cash_entries %}
+                        {% set paid_val = (cs.amount_paid or 0)|float %}
+                        {% set over_val = (cs.overpayment or 0)|float %}
+                        {% set due_val = (cs.credit_amount or 0)|float %}
+                        {% set other_val = (cs.other_amount if cs.other_amount is defined else (over_val if over_val > 0 else due_val))|float %}
+                        {% set other_kind = cs.other_kind if cs.other_kind is defined else ('over' if over_val > 0 else ('due' if due_val > 0 else 'none')) %}
+                        {% set qty_val = (cs.liters or 0)|float %}
+                        <tr>
+                            <td class="text-nowrap">{{ cs.sale_date }}</td>
+                            <td>
+                                <span class="cash-journal-type cash-journal-type-{{ cs.entry_type }}">{{ cs.entry_type }}</span>
+                            </td>
+                            <td>
+                                {% if cs.entry_type in ('expense', 'settle') %}
+                                    <span class="text-muted-custom">—</span>
+                                {% elif cs.entry_type in ('purchase', 'vendor_pay') %}
+                                    {{ cs.vendor_name or (cs.vendor.name if cs.vendor else '—') }}
+                                {% else %}
+                                    {{ cs.customer.name if cs.customer else 'Walk-in' }}
+                                {% endif %}
+                            </td>
+                            <td class="cash-journal-desc">{{ cs.item_name }}</td>
+                            <td class="text-end text-nowrap">
+                                {% if cs.entry_type == 'purchase' and qty_val > 0 %}
+                                    {{ "%.2f"|format(qty_val) if cs.purchase_category in ('fuel', 'ft_mobile') else "%.0f"|format(qty_val) }}{% if cs.purchase_category in ('fuel', 'ft_mobile') %} L{% else %} pcs{% endif %}
+                                {% elif cs.entry_type == 'sale' and qty_val > 0 %}
+                                    {{ "%.2f"|format(qty_val) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}
+                                {% else %}
+                                    <span class="text-muted-custom">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap fw-semibold">{{ cs.amount | money }}</td>
+                            <td class="text-end text-nowrap {% if paid_val > 0 %}text-success{% else %}text-muted-custom{% endif %}">
+                                {{ paid_val | money }}
+                            </td>
+                            <td class="text-end text-nowrap {% if other_kind == 'over' %}text-info fw-semibold{% elif other_kind == 'due' and other_val > 0 %}text-warning fw-semibold{% else %}text-muted-custom{% endif %}">
+                                {% if other_kind == 'over' and other_val > 0 %}
+                                    +{{ other_val | money }}
+                                {% else %}
+                                    {{ other_val | money }}
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="cash-journal-status cash-journal-status-{{ cs.payment_status }}">{{ cs.payment_status }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted-custom py-5">No cash activity in this period.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% with pagination=cash_pagination, page_param='cash_page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date} %}
+            {% include "partials/pagination.html" %}
+        {% endwith %}
     </div>
 </section>
 

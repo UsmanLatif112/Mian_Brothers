@@ -3,7 +3,9 @@ from flask_login import login_required, current_user
 from app.expenses import expenses_bp
 from app.models import db, Expense
 from app.utils import parse_period, PERIOD_CHOICES, paginate
+from app.services.entries import EntryError, edit_expense, delete_expense
 from datetime import datetime
+from sqlalchemy import func
 
 PER_PAGE = 15
 
@@ -47,15 +49,84 @@ def index():
                 amount=amount,
                 expense_date=expense_date,
                 recorded_by=current_user.id,
+                is_settled=False,
             ))
             db.session.commit()
             flash(f'Expense "{name}" recorded ({amount:,.2f} PKR).', 'success')
             return redirect(url_for('expenses.index', **_filter_args()))
 
+        if action == 'settle':
+            expense = Expense.query.get(request.form.get('expense_id'))
+            if not expense:
+                flash('Expense not found.', 'danger')
+                return redirect(url_for('expenses.index', **_filter_args()))
+
+            if expense.is_settled:
+                flash('Expense is already settled.', 'warning')
+                return redirect(url_for('expenses.index', **_filter_args()))
+
+            date_raw = (request.form.get('settled_date') or '').strip()
+            settle_note = (request.form.get('settle_note') or '').strip() or None
+            try:
+                settled_date = (
+                    datetime.strptime(date_raw, '%Y-%m-%d').date()
+                    if date_raw else datetime.utcnow().date()
+                )
+            except ValueError:
+                flash('Invalid settle date.', 'danger')
+                return redirect(url_for('expenses.index', **_filter_args()))
+
+            expense.is_settled = True
+            expense.settled_date = settled_date
+            expense.settled_by = current_user.id
+            expense.settle_note = settle_note
+            db.session.commit()
+            flash(
+                f'Settled "{expense.name}" — {float(expense.amount):,.2f} PKR returned to cash '
+                f'({settled_date.isoformat()}).',
+                'success',
+            )
+            return redirect(url_for('expenses.index', **_filter_args()))
+
+        if action == 'unsettle':
+            expense = Expense.query.get(request.form.get('expense_id'))
+            if not expense:
+                flash('Expense not found.', 'danger')
+                return redirect(url_for('expenses.index', **_filter_args()))
+
+            if not expense.is_settled:
+                flash('Expense is not settled.', 'warning')
+                return redirect(url_for('expenses.index', **_filter_args()))
+
+            expense.is_settled = False
+            expense.settled_date = None
+            expense.settled_by = None
+            expense.settle_note = None
+            db.session.commit()
+            flash(
+                f'Unsettled "{expense.name}" — amount again deducted from cash in hand.',
+                'success',
+            )
+            return redirect(url_for('expenses.index', **_filter_args()))
+
+        if action == 'edit':
+            expense = Expense.query.get(request.form.get('expense_id'))
+            if not expense:
+                flash('Expense not found.', 'danger')
+                return redirect(url_for('expenses.index', **_filter_args()))
+            try:
+                edit_expense(expense, request.form, current_user_id=current_user.id)
+                db.session.commit()
+                flash(f'Expense "{expense.name}" updated.', 'success')
+            except EntryError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+            return redirect(url_for('expenses.index', **_filter_args()))
+
         if action == 'delete':
             expense = Expense.query.get(request.form.get('expense_id'))
             if expense:
-                db.session.delete(expense)
+                delete_expense(expense)
                 db.session.commit()
                 flash('Expense deleted.', 'success')
             return redirect(url_for('expenses.index', **_filter_args()))
@@ -64,16 +135,25 @@ def index():
         return redirect(url_for('expenses.index'))
 
     period, start, end = parse_period(request.args)
-    from sqlalchemy import func
 
-    # Sum must use a separate query — Query.with_entities() mutates in place
-    # and would break the list/pagination query if chained on the same object.
     total = float(
         db.session.query(func.coalesce(func.sum(Expense.amount), 0))
         .filter(Expense.expense_date >= start, Expense.expense_date <= end)
         .scalar()
         or 0
     )
+    unsettled_total = float(
+        db.session.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(
+            Expense.expense_date >= start,
+            Expense.expense_date <= end,
+            Expense.is_settled.is_(False),
+        )
+        .scalar()
+        or 0
+    )
+    settled_total = total - unsettled_total
+
     expenses_q = (
         Expense.query
         .filter(Expense.expense_date >= start, Expense.expense_date <= end)
@@ -86,6 +166,8 @@ def index():
         expenses=expenses,
         expenses_pagination=expenses_pagination,
         total=total,
+        unsettled_total=unsettled_total,
+        settled_total=settled_total,
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
