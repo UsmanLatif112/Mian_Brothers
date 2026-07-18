@@ -26,7 +26,7 @@ def _find_or_create_shop_item(category, name, company, item_type):
     return query.first()
 
 
-def _apply_product_sale_price(category, sale_val, company=None, item_type=None, name=None, cost_val=None):
+def _apply_product_sale_price(category, sale_val, company=None, item_type=None, name=None, cost_val=None, effective_date=None):
     query = OtherItem.query.filter_by(category=category)
     if company:
         query = query.filter_by(company=company)
@@ -49,6 +49,7 @@ def _apply_product_sale_price(category, sale_val, company=None, item_type=None, 
             other_item_id=item.id,
             sale_price=sale_val,
             cost_price=cost_val if cost_val is not None else item.cost_price,
+            effective_date=effective_date or datetime.utcnow().date(),
             updated_by=current_user.id,
         ))
         updated += 1
@@ -207,6 +208,7 @@ def index():
                 company=company,
                 name=item_name,
                 cost_val=cost_val,
+                effective_date=entry_day,
             )
             shop_item.sale_price = sale_val
             shop_item.quantity = 0
@@ -304,6 +306,7 @@ def index():
             item_type=item_type,
             name=item_name if category == 'other' else None,
             cost_val=cost_val,
+            effective_date=entry_day,
         )
         shop_item.sale_price = sale_val
 
@@ -423,6 +426,7 @@ def edit_item(item_id):
             other_item_id=item.id,
             sale_price=sale_val,
             cost_price=cost_val,
+            effective_date=datetime.utcnow().date(),
             updated_by=current_user.id,
         ))
 

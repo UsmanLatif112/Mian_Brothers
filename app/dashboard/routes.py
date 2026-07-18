@@ -8,6 +8,7 @@ from app.models import (
 )
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
+    build_fuel_rate_lookup,
 )
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -48,11 +49,8 @@ def _build_meter_trend(start, end):
         start, end = end, start
     span = (end - start).days + 1
 
-    # Latest selling rates (per fuel type)
-    rates = {}
-    for fp in FuelPrice.query.order_by(FuelPrice.created_at.desc()).all():
-        if fp.fuel_type_id not in rates:
-            rates[fp.fuel_type_id] = float(fp.price_per_liter or 0)
+    # Selling rates as-of each reading date (not latest only)
+    rate_as_of = build_fuel_rate_lookup(FuelPrice)
 
     # Fuel cost timeline: (date, cost) ascending per fuel_type_id
     # Prefer purchase logs; fall back to legacy stock_entries per fuel type.
@@ -124,7 +122,7 @@ def _build_meter_trend(start, end):
         if d is None:
             continue
         liters = float(reading.liters_sold or 0)
-        rate = rates.get(reading.fuel_type_id, 0.0)
+        rate = rate_as_of(reading.fuel_type_id, d)
         cost = fuel_cost_as_of(reading.fuel_type_id, d)
         sale_val = liters * rate
         cogs_val = liters * cost
@@ -475,7 +473,7 @@ def reports():
         ).order_by(MeterReading.reading_date.asc()).all()
         for r in records:
             liters = float(r.liters_sold or 0)
-            rate = fuel_rate_for(r.fuel_type_id, FuelPrice)
+            rate = fuel_rate_for(r.fuel_type_id, FuelPrice, as_of_date=r.reading_date)
             cost = get_cost_for_sale(r.fuel_type_id, datetime.combine(r.reading_date, datetime.min.time()))
             preview_data.append([
                 r.reading_date.strftime('%Y-%m-%d'),

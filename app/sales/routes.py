@@ -24,8 +24,8 @@ def _today():
     return datetime.utcnow().date()
 
 
-def _fuel_rate(fuel_type_id):
-    rate = fuel_rate_for(fuel_type_id, FuelPrice)
+def _fuel_rate(fuel_type_id, as_of_date=None):
+    rate = fuel_rate_for(fuel_type_id, FuelPrice, as_of_date=as_of_date)
     return rate if rate > 0 else None
 
 
@@ -140,7 +140,7 @@ def index():
                 flash(f'No machines for {fuel_type.name}. Add a machine from the dropdown.', 'danger')
                 return _sales_redirect()
 
-            rate = _fuel_rate(fuel_type.id)
+            rate = _fuel_rate(fuel_type.id, as_of_date=sale_day)
             if rate is None:
                 flash(f'No active price for {fuel_type.name}. Set price first.', 'danger')
                 return _sales_redirect()
@@ -290,7 +290,7 @@ def index():
                 if not fuel_type:
                     flash('Fuel type not found.', 'danger')
                     return _sales_redirect()
-                rate = _fuel_rate(fuel_type.id)
+                rate = _fuel_rate(fuel_type.id, as_of_date=sale_day)
                 item_label = fuel_type.name
                 if rate is None:
                     flash(f'No active price for {fuel_type.name}.', 'danger')

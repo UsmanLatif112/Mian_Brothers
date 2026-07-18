@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.pricing import pricing_bp
 from app.models import db, FuelType, FuelPrice, OtherItem, ItemPriceLog
 from app.decorators import role_required
-from app.utils import parse_form_date
+from app.utils import parse_form_date, fuel_rate_for
 from datetime import datetime
 
 
@@ -72,6 +72,7 @@ def index():
                     other_item_id=item.id,
                     sale_price=price_val,
                     cost_price=item.cost_price,
+                    effective_date=effective,
                     updated_by=current_user.id
                 ))
                 updated += 1
@@ -94,12 +95,14 @@ def index():
 
     current_fuel_prices = {}
     for ft in fuel_types:
-        latest = FuelPrice.query.filter_by(fuel_type_id=ft.id).order_by(FuelPrice.created_at.desc()).first()
-        current_fuel_prices[ft.id] = float(latest.price_per_liter) if latest else 0.0
+        current_fuel_prices[ft.id] = fuel_rate_for(ft.id, FuelPrice) or 0.0
 
     # Unified price history (fuel + shop items)
     price_history = []
-    for record in FuelPrice.query.order_by(FuelPrice.created_at.desc()).limit(100).all():
+    for record in FuelPrice.query.order_by(
+        FuelPrice.effective_date.desc(),
+        FuelPrice.created_at.desc(),
+    ).limit(100).all():
         price_history.append({
             'category': 'fuel',
             'item_name': record.fuel_type.name,
@@ -111,17 +114,26 @@ def index():
         })
 
     for record in ItemPriceLog.query.order_by(ItemPriceLog.created_at.desc()).limit(100).all():
+        eff = record.effective_date
+        if eff is None and record.created_at:
+            eff = record.created_at.date() if hasattr(record.created_at, 'date') else record.created_at
         price_history.append({
             'category': record.item.category if record.item else 'other',
-            'item_name': record.item.name if record.item else 'Unknown',
+            'item_name': record.item.display_name() if record.item else 'Unknown',
             'price': float(record.sale_price),
-            'unit': 'unit',
+            'unit': 'L' if (record.item and record.item.category == 'ft_mobile') else 'unit',
             'updated_by': record.updater.name if record.updater else '-',
             'logged_at': record.created_at,
-            'effective_date': record.created_at.date() if record.created_at else None,
+            'effective_date': eff,
         })
 
-    price_history.sort(key=lambda r: r['logged_at'] or datetime.min, reverse=True)
+    price_history.sort(
+        key=lambda r: (
+            r['effective_date'] or datetime.min.date(),
+            r['logged_at'] or datetime.min,
+        ),
+        reverse=True,
+    )
 
     return render_template(
         'pricing/index.html',

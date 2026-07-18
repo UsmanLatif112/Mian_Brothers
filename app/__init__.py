@@ -65,8 +65,8 @@ def create_app():
     def root():
         return redirect(url_for('dashboard.index'))
         
-    # On each restart: ensure tables/schema exist. No default data is inserted —
-    # fuel types, prices, inventory, machines, users, etc. are added manually.
+    # On each restart: ensure tables/schema exist, then seed Jul-2026 fuel
+    # price history + missing Other/FT ItemPriceLog rows (idempotent).
     with app.app_context():
         db.create_all()
         ensure_inventory_schema()
@@ -77,8 +77,134 @@ def create_app():
         ensure_vendors_schema()
         ensure_expenses_schema()
         ensure_till_schema()
+        ensure_item_price_log_schema()
+        ensure_price_history_seed()
         
     return app
+
+
+def ensure_item_price_log_schema():
+    """Add effective_date to item_price_logs (SQLite + MySQL)."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    if 'item_price_logs' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('item_price_logs')}
+    if 'effective_date' in existing:
+        return
+
+    with db.engine.begin() as conn:
+        conn.execute(text("ALTER TABLE item_price_logs ADD COLUMN effective_date DATE NULL"))
+
+    # Backfill from created_at where possible
+    with db.engine.begin() as conn:
+        url = str(db.engine.url)
+        if url.startswith('sqlite'):
+            conn.execute(text(
+                "UPDATE item_price_logs SET effective_date = date(created_at) "
+                "WHERE effective_date IS NULL AND created_at IS NOT NULL"
+            ))
+        else:
+            conn.execute(text(
+                "UPDATE item_price_logs SET effective_date = DATE(created_at) "
+                "WHERE effective_date IS NULL AND created_at IS NOT NULL"
+            ))
+
+
+def ensure_price_history_seed():
+    """
+    Idempotent fuel price history for Jul 2026 revision + initial Other/FT logs.
+
+    Petrol/Diesel:
+      2026-07-12 → 312.51 / 325.80
+      2026-07-18 → 317.90 / 356.90
+
+    Rows with effective_date after 2026-07-18 are left untouched.
+    """
+    from datetime import date, datetime
+    from app.models import FuelType, FuelPrice, OtherItem, ItemPriceLog, User
+
+    seed_day = date(2026, 7, 12)
+    revise_day = date(2026, 7, 18)
+
+    user = User.query.filter_by(role='admin').order_by(User.id.asc()).first()
+    if user is None:
+        user = User.query.order_by(User.id.asc()).first()
+    if user is None:
+        return
+    user_id = user.id
+
+    fuel_seeds = {
+        'petrol': [
+            (seed_day, 312.51),
+            (revise_day, 317.90),
+        ],
+        'diesel': [
+            (seed_day, 325.80),
+            (revise_day, 356.90),
+        ],
+    }
+
+    for name_key, revisions in fuel_seeds.items():
+        fuel = (
+            FuelType.query
+            .filter(FuelType.name.ilike(f'%{name_key}%'))
+            .order_by(FuelType.id.asc())
+            .first()
+        )
+        if not fuel:
+            continue
+
+        wanted = {eff: price for eff, price in revisions}
+        # Keep only the seeded dates through revise_day; preserve later user revisions
+        seen_dates = set()
+        for row in FuelPrice.query.filter(
+            FuelPrice.fuel_type_id == fuel.id,
+            FuelPrice.effective_date <= revise_day,
+        ).all():
+            expected = wanted.get(row.effective_date)
+            if expected is None:
+                db.session.delete(row)
+                continue
+            seen_dates.add(row.effective_date)
+            if abs(float(row.price_per_liter or 0) - float(expected)) >= 0.001:
+                row.price_per_liter = expected
+
+        for eff, price in revisions:
+            if eff in seen_dates:
+                continue
+            db.session.add(FuelPrice(
+                fuel_type_id=fuel.id,
+                price_per_liter=price,
+                effective_date=eff,
+                updated_by=user_id,
+                created_at=datetime.combine(eff, datetime.min.time()),
+            ))
+
+    # Initial Other/FT price logs if an item has none yet
+    for item in OtherItem.query.all():
+        logs = ItemPriceLog.query.filter_by(other_item_id=item.id).all()
+        if logs:
+            for log in logs:
+                if log.effective_date is None:
+                    log.effective_date = (
+                        log.created_at.date()
+                        if log.created_at and hasattr(log.created_at, 'date')
+                        else seed_day
+                    )
+            continue
+        db.session.add(ItemPriceLog(
+            other_item_id=item.id,
+            sale_price=float(item.sale_price or 0),
+            cost_price=float(item.cost_price or 0) if item.cost_price is not None else None,
+            effective_date=seed_day,
+            updated_by=user_id,
+            created_at=datetime.combine(seed_day, datetime.min.time()),
+        ))
+
+    db.session.commit()
 
 
 def ensure_till_schema():

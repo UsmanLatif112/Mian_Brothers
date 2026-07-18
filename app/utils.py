@@ -118,13 +118,100 @@ def parse_period(args):
     return period, start, end
 
 
-def fuel_rate_for(fuel_type_id, FuelPrice):
-    latest = (
-        FuelPrice.query.filter_by(fuel_type_id=fuel_type_id)
-        .order_by(FuelPrice.created_at.desc())
-        .first()
-    )
-    return float(latest.price_per_liter) if latest else 0.0
+def _as_plain_date(val):
+    """Normalize datetime/date/str to date or None."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, str):
+        try:
+            return datetime.strptime(val[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    return val
+
+
+def build_fuel_rate_lookup(FuelPrice):
+    """
+    Load all FuelPrice rows once and return rate(fuel_type_id, as_of_date=None).
+
+    as_of_date: latest price with effective_date <= as_of_date.
+    None: current pump price (latest by effective_date, then created_at).
+    """
+    from collections import defaultdict
+
+    by_fuel = defaultdict(list)
+    for fp in FuelPrice.query.order_by(
+        FuelPrice.effective_date.asc(),
+        FuelPrice.created_at.asc(),
+        FuelPrice.id.asc(),
+    ).all():
+        ed = _as_plain_date(fp.effective_date) or _as_plain_date(fp.created_at)
+        if ed is None:
+            continue
+        by_fuel[fp.fuel_type_id].append((ed, float(fp.price_per_liter or 0)))
+
+    def rate(fuel_type_id, as_of_date=None):
+        entries = by_fuel.get(fuel_type_id) or []
+        if not entries:
+            return 0.0
+        if as_of_date is None:
+            return entries[-1][1]
+        as_of = _as_plain_date(as_of_date)
+        if as_of is None:
+            return entries[-1][1]
+        best = None
+        for ed, price in entries:
+            if ed <= as_of:
+                best = price
+            else:
+                break
+        # Before first log: use earliest known price
+        return best if best is not None else entries[0][1]
+
+    return rate
+
+
+def fuel_rate_for(fuel_type_id, FuelPrice, as_of_date=None):
+    """
+    Selling rate for a fuel type.
+
+    as_of_date: price effective on that date (effective_date <= as_of_date).
+    None: current / latest pump price.
+    """
+    q = FuelPrice.query.filter_by(fuel_type_id=fuel_type_id)
+    as_of = _as_plain_date(as_of_date)
+    if as_of is not None:
+        row = (
+            q.filter(FuelPrice.effective_date <= as_of)
+            .order_by(
+                FuelPrice.effective_date.desc(),
+                FuelPrice.created_at.desc(),
+                FuelPrice.id.desc(),
+            )
+            .first()
+        )
+        if row is None:
+            # Before first effective log — use earliest price
+            row = (
+                q.order_by(
+                    FuelPrice.effective_date.asc(),
+                    FuelPrice.created_at.asc(),
+                    FuelPrice.id.asc(),
+                )
+                .first()
+            )
+    else:
+        row = (
+            q.order_by(
+                FuelPrice.effective_date.desc(),
+                FuelPrice.created_at.desc(),
+                FuelPrice.id.desc(),
+            )
+            .first()
+        )
+    return float(row.price_per_liter) if row else 0.0
 
 
 def paginate(query_or_list, page, per_page=15):
@@ -189,22 +276,21 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     Customer = models.Customer
 
     fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+    rate_as_of = build_fuel_rate_lookup(FuelPrice)
 
-    # Latest rates once (avoid per-fuel FuelPrice queries)
-    rate_by_fuel = {}
-    for fp in FuelPrice.query.order_by(FuelPrice.created_at.desc()).all():
-        if fp.fuel_type_id not in rate_by_fuel:
-            rate_by_fuel[fp.fuel_type_id] = float(fp.price_per_liter or 0)
-
-    # All meter readings in range — single query
+    # All meter readings in range — value each row at its reading-date rate
     meter_rows = MeterReading.query.filter(
         MeterReading.reading_date >= start,
         MeterReading.reading_date <= end,
         MeterReading.closing_reading.isnot(None),
     ).all()
     liters_by_fuel = {}
+    amount_by_fuel = {}
     for r in meter_rows:
-        liters_by_fuel[r.fuel_type_id] = liters_by_fuel.get(r.fuel_type_id, 0.0) + float(r.liters_sold or 0)
+        liters = float(r.liters_sold or 0)
+        rate = rate_as_of(r.fuel_type_id, r.reading_date)
+        liters_by_fuel[r.fuel_type_id] = liters_by_fuel.get(r.fuel_type_id, 0.0) + liters
+        amount_by_fuel[r.fuel_type_id] = amount_by_fuel.get(r.fuel_type_id, 0.0) + (liters * rate)
 
     by_fuel = {}
     meter_total = 0.0
@@ -214,8 +300,9 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
 
     for ft in fuel_types:
         liters = liters_by_fuel.get(ft.id, 0.0)
-        rate = rate_by_fuel.get(ft.id, 0.0)
-        amount = liters * rate
+        amount = amount_by_fuel.get(ft.id, 0.0)
+        # Display rate: weighted average when period spans multiple prices
+        rate = (amount / liters) if liters > 0 else rate_as_of(ft.id, end)
         by_fuel[ft.id] = {'fuel': ft, 'liters': liters, 'rate': rate, 'amount': amount}
         meter_total += amount
         meter_liters += liters
@@ -413,6 +500,12 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         + previous_balance + total_receiving
         - loans
     )
+    # Period cash only: no expenses, no previous balance (keeps sales, receiving, loans).
+    cash_in_hand_wo_expense_prev = (
+        petrol_cash + diesel_cash + other_cash + ft_cash
+        + total_receiving
+        - loans
+    )
     cash_taken_amount = cash_taken_total(start, end)
     remaining_balance = cash_in_hand - cash_taken_amount
 
@@ -499,6 +592,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'expected_cash': cash_in_hand,
         'cash_in_hand': cash_in_hand,
         'cash_in_hand_wo_expense': cash_in_hand_wo_expense,
+        'cash_in_hand_wo_expense_prev': cash_in_hand_wo_expense_prev,
         'counted_cash': counted_cash if counted_cash is not None else 0.0,
         'cash_variance': cash_variance,
         'outstanding_credit': outstanding,

@@ -441,6 +441,7 @@ class ItemPriceLog(db.Model):
     other_item_id = db.Column(db.Integer, db.ForeignKey('other_items.id'), nullable=False)
     sale_price = db.Column(db.Numeric(10, 2), nullable=False)
     cost_price = db.Column(db.Numeric(10, 2), nullable=True)
+    effective_date = db.Column(db.Date, nullable=True)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
