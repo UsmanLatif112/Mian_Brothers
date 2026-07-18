@@ -122,7 +122,8 @@ def _build_meter_trend(start, end):
         if d is None:
             continue
         liters = float(reading.liters_sold or 0)
-        rate = rate_as_of(reading.fuel_type_id, d)
+        stored = getattr(reading, 'sale_rate', None)
+        rate = float(stored) if stored is not None else rate_as_of(reading.fuel_type_id, d)
         cost = fuel_cost_as_of(reading.fuel_type_id, d)
         sale_val = liters * rate
         cogs_val = liters * cost
@@ -305,6 +306,7 @@ def index():
     meter_trend = _build_meter_trend(start, end)
     total_profit = meter_trend['total_profit']
     total_gross = meter_trend['total_gross']
+    total_cogs = meter_trend['total_cogs']
     total_expenses_profit = meter_trend['total_expenses']
 
     DRY_THRESHOLD = 100.0
@@ -341,6 +343,7 @@ def index():
         stats=stats,
         total_profit=total_profit,
         total_gross=total_gross,
+        total_cogs=total_cogs,
         total_expenses_profit=total_expenses_profit,
         stock_summary=stock_summary,
         dry_message=dry_message,
@@ -473,7 +476,10 @@ def reports():
         ).order_by(MeterReading.reading_date.asc()).all()
         for r in records:
             liters = float(r.liters_sold or 0)
-            rate = fuel_rate_for(r.fuel_type_id, FuelPrice, as_of_date=r.reading_date)
+            stored = getattr(r, 'sale_rate', None)
+            rate = float(stored) if stored is not None else fuel_rate_for(
+                r.fuel_type_id, FuelPrice, as_of_date=r.reading_date
+            )
             cost = get_cost_for_sale(r.fuel_type_id, datetime.combine(r.reading_date, datetime.min.time()))
             preview_data.append([
                 r.reading_date.strftime('%Y-%m-%d'),

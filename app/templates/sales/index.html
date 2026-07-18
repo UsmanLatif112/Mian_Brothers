@@ -328,6 +328,16 @@
                         <div class="row g-3 mb-2">
                             {% for machine in machines_by_fuel[ft.id] %}
                             {% set reading = today_readings.get(machine.id) %}
+                            {% if reading and reading.closing_reading is not none %}
+                                {% set open_val = reading.closing_reading %}
+                                {% set close_val = none %}
+                            {% elif reading %}
+                                {% set open_val = reading.opening_reading %}
+                                {% set close_val = reading.closing_reading %}
+                            {% else %}
+                                {% set open_val = none %}
+                                {% set close_val = none %}
+                            {% endif %}
                             <div class="col-12">
                                 <div class="p-3 rounded mb-2" style="background: rgba(94,94,94,0.05); border: 1px solid var(--border-color);">
                                     <div class="fw-semibold mb-3">{{ machine.name }}</div>
@@ -339,7 +349,7 @@
                                                        class="form-control form-control-custom meter-open"
                                                        name="opening_{{ machine.id }}"
                                                        data-machine="{{ machine.id }}"
-                                                       value="{{ '%.2f'|format(reading.opening_reading) if reading else '' }}"
+                                                       value="{{ '%.2f'|format(open_val) if open_val is not none else '' }}"
                                                        disabled>
                                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
                                             </div>
@@ -351,7 +361,7 @@
                                                        class="form-control form-control-custom meter-close"
                                                        name="closing_{{ machine.id }}"
                                                        data-machine="{{ machine.id }}"
-                                                       value="{{ '%.2f'|format(reading.closing_reading) if reading and reading.closing_reading is not none else '' }}"
+                                                       value="{{ '%.2f'|format(close_val) if close_val is not none else '' }}"
                                                        disabled>
                                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
                                             </div>
@@ -359,6 +369,9 @@
                                     </div>
                                     <small class="text-muted-custom d-block mt-2">
                                         Sold: <strong class="sold-line" data-machine="{{ machine.id }}">0.00</strong> L
+                                        {% if reading and reading.closing_reading is not none %}
+                                        <span class="ms-1">· Next segment after price change (opening = last close)</span>
+                                        {% endif %}
                                     </small>
                                 </div>
                             </div>

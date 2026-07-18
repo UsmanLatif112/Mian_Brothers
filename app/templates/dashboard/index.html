@@ -46,7 +46,7 @@
             <span class="kpi-label">Total Sale</span>
         </div>
         <div class="kpi-value">{{ stats.total_sale | money }}</div>
-        <div class="kpi-meta">Fuel + Other + FT</div>
+        <div class="kpi-meta">Petrol + Diesel + Other + FT</div>
     </div>
 
     <div class="kpi-card kpi-petrol">
@@ -67,28 +67,40 @@
         <div class="kpi-meta">{{ "{:,.2f}".format(stats.diesel_liters) }} L</div>
     </div>
 
+    <div class="kpi-card kpi-other">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-box-seam"></i></span>
+            <span class="kpi-label">Other Sale</span>
+        </div>
+        <div class="kpi-value">{{ (stats.other_sale + stats.ft_sale) | money }}</div>
+        <div class="kpi-meta">Other items + FT</div>
+    </div>
+
     <div class="kpi-card kpi-credit">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-credit-card-2-front"></i></span>
-            <span class="kpi-label">Credit</span>
+            <span class="kpi-label">Credit Sale</span>
         </div>
-        <div class="kpi-value text-warning">{{ stats.period_credit | money }}</div>
-        <div class="kpi-meta">
-            {% if period == 'all' %}
-            All-time due {{ stats.outstanding_credit | money }}
-            {% else %}
-            Outstanding {{ stats.outstanding_credit | money }}
-            {% endif %}
-        </div>
+        <div class="kpi-value text-warning">{{ stats.activity_credit | money }}</div>
+        <div class="kpi-meta">Petrol + Diesel + Other + FT + Loans</div>
     </div>
 
     <div class="kpi-card kpi-purchase">
         <div class="kpi-card-top">
-            <span class="kpi-icon"><i class="bi bi-cart-plus"></i></span>
-            <span class="kpi-label">Purchasing</span>
+            <span class="kpi-icon"><i class="bi bi-cash-stack"></i></span>
+            <span class="kpi-label">Total Cost</span>
         </div>
-        <div class="kpi-value">{{ stats.purchase_total | money }}</div>
-        <div class="kpi-meta">Inventory purchases</div>
+        <div class="kpi-value">{{ total_cogs | money }}</div>
+        <div class="kpi-meta">Cost of goods sold</div>
+    </div>
+
+    <div class="kpi-card kpi-ft">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-pie-chart"></i></span>
+            <span class="kpi-label">Gross Profit</span>
+        </div>
+        <div class="kpi-value {% if total_gross >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_gross | money }}</div>
+        <div class="kpi-meta">Sale − Cost</div>
     </div>
 
     <div class="kpi-card kpi-expense">
@@ -106,7 +118,7 @@
             <span class="kpi-label">Net Profit</span>
         </div>
         <div class="kpi-value {% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_profit | money }}</div>
-        <div class="kpi-meta">Gross {{ total_gross | money }}</div>
+        <div class="kpi-meta">Gross − Expense</div>
     </div>
 </section>
 

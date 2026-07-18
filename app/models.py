@@ -121,6 +121,7 @@ class MeterReading(db.Model):
     opening_reading = db.Column(db.Numeric(12, 2), nullable=False)
     closing_reading = db.Column(db.Numeric(12, 2), nullable=True)
     liters_sold = db.Column(db.Numeric(12, 2), nullable=True, default=0.00)
+    sale_rate = db.Column(db.Numeric(10, 2), nullable=True)  # snapshot at save (mid-day price splits)
     reading_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     closed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)

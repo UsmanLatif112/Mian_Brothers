@@ -125,6 +125,37 @@
 })();
 </script>
 
+<!-- Vendor purchasing summary -->
+<div class="row g-3 mb-4 row-cols-1 row-cols-md-3 dashboard-stats">
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Purchasing</span>
+                <div class="metric-value fw-bold mb-0">{{ purchase_total | money }}</div>
+                <small class="text-muted-custom">Selected period · all batches</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Paid to Vendors</span>
+                <div class="metric-value fw-bold mb-0">{{ paid_total | money }}</div>
+                <small class="text-muted-custom">All payments recorded</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card credit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Total Payable</span>
+                <div class="metric-value fw-bold mb-0">{{ payable_total | money }}</div>
+                <small class="text-muted-custom">Still due to vendors</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Purchase totals -->
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-3 dashboard-stats">
     <div class="col">

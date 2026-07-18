@@ -79,8 +79,27 @@ def create_app():
         ensure_till_schema()
         ensure_item_price_log_schema()
         ensure_price_history_seed()
+        ensure_meter_sale_rate_schema()
         
     return app
+
+
+def ensure_meter_sale_rate_schema():
+    """Add sale_rate on meter_readings for mid-day price segment snapshots."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    if 'meter_readings' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('meter_readings')}
+    if 'sale_rate' in existing:
+        return
+
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE meter_readings ADD COLUMN sale_rate NUMERIC(10, 2) NULL"
+        ))
 
 
 def ensure_item_price_log_schema():

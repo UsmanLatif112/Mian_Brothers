@@ -5,6 +5,10 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.production
+.env.*
+!.env.example
+
 
 # Local SQLite (legacy)
 instance/*.db
