@@ -31,21 +31,34 @@
 
 <!-- Period stats -->
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-4 dashboard-stats">
+    {% set petrol_credit_meta %}
+        {{ "{:,.2f}".format(stats.petrol_credit_liters) }} L
+        ({{ stats.petrol_credit_gross | money }} − {{ stats.petrol_credit_discount | money }})
+    {% endset %}
+    {% set diesel_credit_meta %}
+        {{ "{:,.2f}".format(stats.diesel_credit_liters) }} L
+        ({{ stats.diesel_credit_gross | money }} − {{ stats.diesel_credit_discount | money }})
+    {% endset %}
     {% set metric_cards = [
         ('Petrol Total', stats.petrol_total, "{:,.2f} L".format(stats.petrol_total_liters), 'stock'),
         ('Petrol Cash', stats.petrol_cash, "{:,.2f} L".format(stats.petrol_cash_liters), 'profit'),
-        ('Petrol Credit', stats.petrol_credit, "{:,.2f} L".format(stats.petrol_credit_liters), 'credit'),
+        ('Petrol Credit', stats.petrol_credit, petrol_credit_meta|trim, 'credit'),
         ('Diesel Total', stats.diesel_total, "{:,.2f} L".format(stats.diesel_total_liters), 'stock'),
         ('Diesel Cash', stats.diesel_cash, "{:,.2f} L".format(stats.diesel_cash_liters), 'profit'),
-        ('Diesel Credit', stats.diesel_credit, "{:,.2f} L".format(stats.diesel_credit_liters), 'credit'),
+        ('Total Cash Sale', stats.total_cash_sale, "{:,.2f} L · Petrol + Diesel".format(stats.total_cash_liters), 'profit'),
+        ('Diesel Credit', stats.diesel_credit, diesel_credit_meta|trim, 'credit'),
         ('Other Cash', stats.other_cash, 'Paid other items', 'profit'),
         ('Other Credit', stats.other_credit, 'Unpaid other items', 'credit'),
         ('Other Total', stats.other_sale, 'Cash + credit', ''),
+        ('FT Cash', stats.ft_cash, "{:,.2f} L".format(stats.ft_cash_liters), 'profit'),
+        ('FT Credit', stats.ft_credit, "{:,.2f} L".format(stats.ft_credit_liters), 'credit'),
+        ('FT Total', stats.ft_sale, "{:,.2f} L · Cash + credit".format(stats.ft_liters), 'stock'),
         ('Total Credit Sale', stats.activity_credit, 'Fuel + other + FT + loans', 'credit'),
         ('Expense', stats.expense_total, 'Cash out', 'credit'),
         ('Total Receiving', stats.total_receiving, 'Payments + advances', 'profit'),
         ('Previous Balance', stats.previous_balance, 'From prior remaining', ''),
         ('Cash In Hand', stats.cash_in_hand, 'Before cash taken', 'stock'),
+        ('Cash In Hand (No Expense)', stats.cash_in_hand_wo_expense, 'Before expenses & cash taken', 'stock'),
         ('Cash Taken', stats.cash_taken_total, 'Recorded on Account', 'credit'),
         ('Remaining', stats.remaining_balance, 'Next previous balance', 'profit')
     ] %}

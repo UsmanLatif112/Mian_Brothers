@@ -319,6 +319,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     diesel_cash_liters = max(diesel_liters - diesel_credit_liters, 0.0)
     petrol_cash = max(petrol_sale - petrol_credit_gross, 0.0)
     diesel_cash = max(diesel_sale - diesel_credit_gross, 0.0)
+    total_cash_sale = petrol_cash + diesel_cash
+    total_cash_liters = petrol_cash_liters + diesel_cash_liters
+    petrol_credit_discount = max(petrol_credit_gross - petrol_credit, 0.0)
+    diesel_credit_discount = max(diesel_credit_gross - diesel_credit, 0.0)
     petrol_total = petrol_cash + petrol_credit
     petrol_total_liters = petrol_cash_liters + petrol_credit_liters
     diesel_total = diesel_cash + diesel_credit
@@ -403,6 +407,12 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         + previous_balance + total_receiving
         - loans - expense_total + expense_return_total
     )
+    # Same as cash in hand, but expenses (and expense settles) excluded.
+    cash_in_hand_wo_expense = (
+        petrol_cash + diesel_cash + other_cash + ft_cash
+        + previous_balance + total_receiving
+        - loans
+    )
     cash_taken_amount = cash_taken_total(start, end)
     remaining_balance = cash_in_hand - cash_taken_amount
 
@@ -436,14 +446,20 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'petrol_cash_liters': petrol_cash_liters,
         'petrol_credit': petrol_credit,
         'petrol_credit_liters': petrol_credit_liters,
+        'petrol_credit_gross': petrol_credit_gross,
+        'petrol_credit_discount': petrol_credit_discount,
         'diesel_sale': diesel_sale,
         'diesel_liters': diesel_liters,
         'diesel_total': diesel_total,
         'diesel_total_liters': diesel_total_liters,
         'diesel_cash': diesel_cash,
         'diesel_cash_liters': diesel_cash_liters,
+        'total_cash_sale': total_cash_sale,
+        'total_cash_liters': total_cash_liters,
         'diesel_credit': diesel_credit,
         'diesel_credit_liters': diesel_credit_liters,
+        'diesel_credit_gross': diesel_credit_gross,
+        'diesel_credit_discount': diesel_credit_discount,
         'other_sale': other_sale,
         'other_cash': other_cash,
         'other_credit': other_credit,
@@ -482,6 +498,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'vendor_payments_total': vendor_payments_total,
         'expected_cash': cash_in_hand,
         'cash_in_hand': cash_in_hand,
+        'cash_in_hand_wo_expense': cash_in_hand_wo_expense,
         'counted_cash': counted_cash if counted_cash is not None else 0.0,
         'cash_variance': cash_variance,
         'outstanding_credit': outstanding,
