@@ -849,6 +849,44 @@ input.is-submitting {
     flex: 0 0 auto;
 }
 
+/* Label text hidden on small screens — keeps icon-only header/action buttons */
+.btn-label {
+    display: inline;
+}
+
+.seg-label-short {
+    display: none;
+}
+
+.seg-label-full {
+    display: inline;
+}
+
+/* Compact icon button (mobile + reusable) */
+.btn-icon-only {
+    width: 38px;
+    height: 38px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
+
+.btn-icon-only i {
+    margin: 0 !important;
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.table-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+}
+
 .page-header-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -1554,6 +1592,325 @@ a.kpi-card:focus-visible {
     }
 }
 
+@media (max-width: 767.98px) {
+    /* Icon-only header / toolbar action buttons */
+    .page-header-actions .btn,
+    .page-header-row > .btn,
+    .page-header-row > .d-flex > .btn,
+    .filter-bar .btn-primary-custom,
+    .card-header-premium .btn.btn-outline-secondary,
+    .btn-mobile-icon {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        padding: 0 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        flex: 0 0 auto;
+    }
+
+    .page-header-actions .btn i,
+    .page-header-row > .btn i,
+    .page-header-row > .d-flex > .btn i,
+    .filter-bar .btn-primary-custom i,
+    .card-header-premium .btn.btn-outline-secondary i,
+    .btn-mobile-icon i {
+        margin: 0 !important;
+        font-size: 1.05rem;
+        line-height: 1;
+    }
+
+    .page-header-actions .btn-label,
+    .page-header-row > .btn .btn-label,
+    .page-header-row > .d-flex > .btn .btn-label,
+    .page-header-row .page-header-actions .btn .btn-label,
+    .filter-bar .btn-label,
+    .filter-actions .btn-label,
+    .table-actions .btn-label,
+    td .btn-group .btn-label,
+    .card-header-premium .btn-label,
+    .btn-mobile-icon .btn-label {
+        display: none !important;
+    }
+
+    .seg-label-full {
+        display: none !important;
+    }
+
+    .seg-label-short {
+        display: inline !important;
+    }
+
+    /* Keep title + icons on one professional row */
+    .page-header-row {
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Period/category filters in the header need room to wrap */
+    .page-header-row:has(.period-filter) {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .page-header-actions {
+        width: auto;
+        flex-shrink: 0;
+        justify-content: flex-end;
+        gap: 0.4rem;
+    }
+
+    .page-header-toolbar {
+        justify-content: stretch;
+        margin-top: 0.65rem;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.4rem;
+    }
+
+    .page-header-toolbar .period-filter-compact,
+    .page-header-toolbar .period-range-badge {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .account-period-tools {
+        align-items: stretch;
+    }
+
+    .account-period-tools .period-filter-compact {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .dash-hero {
+        padding: 1rem 1.05rem;
+        gap: 0.85rem;
+    }
+
+    .dash-hero-tools {
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .dash-hero-tools .period-filter-compact {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .period-filter-compact {
+        max-width: 100%;
+        justify-content: flex-start;
+        gap: 0.35rem;
+    }
+
+    .period-filter-compact .period-select {
+        width: auto;
+        flex: 1 1 auto;
+        max-width: 100%;
+        min-width: 6.5rem;
+        min-height: 36px;
+        font-size: 0.78rem;
+        padding-right: 1.5rem;
+    }
+
+    .period-filter-compact .period-date {
+        width: 8.25rem;
+        min-width: 8.25rem;
+        min-height: 36px;
+    }
+
+    .period-filter-compact .period-filter-submit {
+        width: 36px;
+        height: 36px;
+    }
+
+    .period-custom-dates {
+        width: 100%;
+        align-items: center;
+    }
+
+    /* Filter bar: search + apply on one row, segments below */
+    .filter-bar {
+        padding: 0.85rem 0.9rem;
+    }
+
+    .filter-bar .card-body {
+        padding: 0 !important;
+    }
+
+    .filter-form {
+        gap: 0.6rem;
+    }
+
+    .filter-search-row {
+        align-items: stretch;
+    }
+
+    .filter-search-input .form-control-custom {
+        min-height: 38px;
+        font-size: 0.85rem;
+    }
+
+    .filter-actions .btn-primary-custom,
+    .filter-bar .btn-primary-custom {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        padding: 0 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        flex: 0 0 38px;
+    }
+
+    .filter-actions .btn-primary-custom i,
+    .filter-bar .btn-primary-custom i {
+        margin: 0 !important;
+        font-size: 1.05rem;
+        line-height: 1;
+    }
+
+    .filter-clear-btn {
+        width: 38px;
+        height: 38px;
+    }
+
+    .filter-segments {
+        width: 100%;
+    }
+
+    .filter-segments.segmented-control .btn,
+    .filter-bar .segmented-control .btn {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0.45rem 0.35rem;
+        font-size: 0.75rem;
+        text-align: center;
+    }
+
+    .directory-card {
+        padding: 0.85rem 0.9rem;
+    }
+
+    /* Ledger pages: back + title + icon actions */
+    .page-header-row:has(.btn-back) {
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .page-header-row:has(.btn-back) .page-header-text {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .page-header-row:has(.btn-back) .page-header-text > .d-flex {
+        min-width: 0;
+        align-items: flex-start;
+    }
+
+    .page-header-row:has(.btn-back) .page-title {
+        font-size: 1.15rem;
+        line-height: 1.25;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-word;
+    }
+
+    .page-header-row:has(.btn-back) .page-header-actions {
+        flex-shrink: 0;
+        align-self: flex-start;
+        margin-top: 0.15rem;
+    }
+
+    .stat-row.cols-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+    }
+
+    .stat-row.cols-4 .stat-card {
+        padding: 0.75rem 0.85rem;
+    }
+
+    .stat-row.cols-4 .stat-card-value {
+        font-size: 0.95rem;
+    }
+
+    .ledger-table th,
+    .ledger-table td {
+        font-size: 0.75rem;
+        padding: 0.55rem 0.5rem;
+        white-space: nowrap;
+    }
+
+    .ledger-table .ledger-desc-cell {
+        white-space: normal;
+        min-width: 8rem;
+        max-width: 10rem;
+    }
+
+    .ledger-table .ledger-desc-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        white-space: normal;
+    }
+
+    .card-header-premium .min-w-0 {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    /* Table + graph panels align cleanly */
+    .dashboard-section .card-header-premium,
+    .dashboard-chart-card .card-header-premium {
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .chart-wrap {
+        height: 220px;
+        margin: 0 -0.15rem;
+    }
+
+    .table-actions .btn,
+    .table-actions .btn-sm,
+    td .btn-group .btn,
+    td .btn-group .btn-sm {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        padding: 0 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+    }
+
+    .table-actions .btn i,
+    td .btn-group .btn i {
+        margin: 0 !important;
+        font-size: 0.95rem;
+    }
+
+    .reports-layout .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+    }
+}
+
 @media (max-width: 575.98px) {
     .kpi-value {
         font-size: 0.95rem;
@@ -1563,58 +1920,55 @@ a.kpi-card:focus-visible {
         font-size: 0.7rem;
     }
 
-    .page-header-row {
-        align-items: center;
-    }
-
-    .page-header-toolbar {
-        justify-content: stretch;
-    }
-
-    .period-filter-compact {
-        max-width: 100%;
-        justify-content: flex-start;
-    }
-
-    .period-filter-compact .period-select {
-        width: auto;
-        max-width: 100%;
-        min-width: 7.5rem;
-        min-height: 32px;
-        font-size: 0.75rem;
-        padding-right: 1.5rem;
-    }
-
-    .period-filter-compact .period-date {
-        width: 8.75rem;
-        min-width: 8.75rem;
-    }
-
-    .page-header-actions {
-        width: 100%;
-        justify-content: flex-start;
+    .page-title {
+        font-size: 1.25rem;
     }
 
     .page-subtitle {
-        font-size: 0.82rem;
+        font-size: 0.8rem;
     }
 
     .period-range-badge {
         font-size: 0.7rem;
+        white-space: normal;
+    }
+
+    .period-filter-compact .period-date {
+        width: calc(50% - 1.1rem);
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .period-date-field {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .period-date-field .period-date {
+        width: 100%;
+        min-width: 0;
     }
 
     .table-custom th,
     .table-custom td {
-        padding: 0.7rem 0.75rem;
-        font-size: 0.8rem;
+        padding: 0.65rem 0.7rem;
+        font-size: 0.78rem;
     }
 
     .card-header-premium {
-        padding: 1rem 1.1rem;
+        padding: 0.95rem 1rem;
     }
 
     .card-body-premium {
-        padding: 1.1rem;
+        padding: 1rem;
+    }
+
+    .dashboard-chart-card .card-body-premium {
+        padding: 0.85rem 0.9rem 1rem;
+    }
+
+    .cash-journal-metric-value {
+        font-size: 0.95rem;
     }
 }
 
@@ -1741,6 +2095,193 @@ a.kpi-card:focus-visible {
 
 .filter-bar .form-control-custom {
     min-height: 40px;
+}
+
+.filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.filter-search-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+}
+
+.filter-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+}
+
+.filter-actions .btn-primary-custom {
+    white-space: nowrap;
+    min-height: 40px;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+.filter-clear-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
+
+.filter-segments {
+    width: 100%;
+}
+
+/* Directory cards (mobile list) */
+.directory-cards {
+    display: flex;
+    flex-direction: column;
+}
+
+.directory-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.95rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.directory-card:last-child {
+    border-bottom: none;
+}
+
+.directory-card-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.directory-card-info {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.directory-card-title {
+    font-weight: 650;
+    font-size: 0.92rem;
+    line-height: 1.35;
+    color: var(--text-primary);
+    text-decoration: none;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.directory-card-title:hover {
+    color: var(--accent-blue);
+}
+
+.directory-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    margin-top: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.directory-card-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    min-width: 0;
+}
+
+.directory-card-meta i {
+    opacity: 0.75;
+    font-size: 0.78rem;
+}
+
+.directory-card-submeta {
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.directory-card-aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.45rem;
+    flex: 0 0 auto;
+}
+
+.directory-card-aside .badge {
+    font-size: 0.72rem;
+    max-width: 7.5rem;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.directory-card-aside .table-actions {
+    gap: 0.3rem;
+}
+
+.directory-card-aside .table-actions .btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+@media (min-width: 768px) {
+    .filter-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) auto;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .filter-search-row {
+        display: contents;
+    }
+
+    .filter-search-input {
+        grid-column: 1;
+    }
+
+    .filter-segments {
+        grid-column: 2;
+        width: auto;
+    }
+
+    .filter-actions {
+        grid-column: 3;
+    }
+
+    .filter-actions .btn-primary-custom {
+        min-width: 7.5rem;
+    }
 }
 
 /* Table scroll wrapper */

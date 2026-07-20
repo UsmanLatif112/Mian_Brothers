@@ -199,7 +199,9 @@
                 <h2 class="panel-title mb-1">Top Credit Customers</h2>
                 <p class="panel-subtitle mb-0">Balances over PKR 200,000 overdue more than 30 days</p>
             </div>
-            <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0">View all dues</a>
+            <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0" title="View all dues">
+                <i class="bi bi-people me-1"></i><span class="btn-label">View all dues</span>
+            </a>
         </div>
         <div class="table-responsive">
             <table class="table table-custom table-hover mb-0">
@@ -227,8 +229,8 @@
                             <td><span class="badge badge-danger-custom">{{ row.days_overdue }} days</span></td>
                             <td>{{ row.last_payment_date or 'Never' }}</td>
                             <td>
-                                <a href="{{ url_for('customers.ledger', customer_id=row.customer.id) }}" class="btn btn-sm btn-ghost">
-                                    Ledger <i class="bi bi-chevron-right"></i>
+                                <a href="{{ url_for('customers.ledger', customer_id=row.customer.id) }}" class="btn btn-sm btn-ghost" title="Ledger">
+                                    <span class="btn-label">Ledger </span><i class="bi bi-chevron-right"></i>
                                 </a>
                             </td>
                         </tr>

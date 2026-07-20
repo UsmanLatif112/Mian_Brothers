@@ -9,9 +9,11 @@
             <p class="page-eyebrow">CRM</p>
             <h1 class="page-title">Customer Directory & Ledgers</h1>
         </div>
-        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createCustomerModal">
-            <i class="bi bi-person-plus me-2"></i> Register New Customer
-        </button>
+        <div class="page-header-actions">
+            <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createCustomerModal" title="Register New Customer">
+                <i class="bi bi-person-plus me-2"></i><span class="btn-label"> Register New Customer</span>
+            </button>
+        </div>
     </div>
     <div class="page-header-meta">
         <p class="page-subtitle">Manage customer profiles, monitor dues, and keep ledger history easy to audit.</p>
@@ -21,138 +23,187 @@
 <!-- Search & Filtering -->
 <div class="card card-premium filter-bar mb-4">
     <div class="card-body card-body-premium py-3">
-        <form action="{{ url_for('customers.index') }}" method="GET" class="row g-3 align-items-center">
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="input-group">
+        <form action="{{ url_for('customers.index') }}" method="GET" class="filter-form">
+            <div class="filter-search-row">
+                <div class="input-group filter-search-input">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control form-control-custom" name="search" placeholder="Search by name, phone, or old book no..." value="{{ search }}">
+                    <input type="text" class="form-control form-control-custom" name="search" placeholder="Search name, phone, book no..." value="{{ search }}" aria-label="Search customers">
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary-custom" title="Apply Filter">
+                        <i class="bi bi-funnel d-md-none"></i><span class="btn-label">Apply Filter</span>
+                    </button>
+                    {% if search or filter != 'all' %}
+                    <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary border-0 filter-clear-btn" title="Clear Filters">
+                        <i class="bi bi-x-circle fs-5"></i>
+                    </a>
+                    {% endif %}
                 </div>
             </div>
-            
-            <div class="col-12 col-md-6 col-lg-5">
-                <div class="segmented-control" role="group">
-                    <a href="{{ url_for('customers.index', search=search, filter='all') }}" class="btn {% if filter == 'all' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}">
-                        All Customers
-                    </a>
-                    <a href="{{ url_for('customers.index', search=search, filter='due') }}" class="btn {% if filter == 'due' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}">
-                        Outstanding Dues
-                    </a>
-                    <a href="{{ url_for('customers.index', search=search, filter='clear') }}" class="btn {% if filter == 'clear' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}">
-                        Settled Accounts
-                    </a>
-                </div>
-            </div>
-            
-            <div class="col-12 col-lg-3 d-flex gap-2">
-                <button type="submit" class="btn btn-primary-custom w-100 py-2">
-                    Apply Filter
-                </button>
-                {% if search or filter != 'all' %}
-                <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary border-0 d-flex align-items-center justify-content-center px-3" title="Clear Filters">
-                    <i class="bi bi-x-circle fs-5"></i>
+            <div class="segmented-control filter-segments" role="group">
+                <a href="{{ url_for('customers.index', search=search, filter='all') }}" class="btn {% if filter == 'all' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="All Customers">
+                    <span class="seg-label-full">All Customers</span><span class="seg-label-short">All</span>
                 </a>
-                {% endif %}
+                <a href="{{ url_for('customers.index', search=search, filter='due') }}" class="btn {% if filter == 'due' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="Outstanding Dues">
+                    <span class="seg-label-full">Outstanding Dues</span><span class="seg-label-short">Due</span>
+                </a>
+                <a href="{{ url_for('customers.index', search=search, filter='clear') }}" class="btn {% if filter == 'clear' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="Settled Accounts">
+                    <span class="seg-label-full">Settled Accounts</span><span class="seg-label-short">Settled</span>
+                </a>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Customer List Table -->
-<div class="row">
-    <div class="col-12">
-        <div class="card card-premium">
-            <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>Customer Name</th>
-                            <th>Old Book No</th>
-                            <th>Phone</th>
-                            <th>Address</th>
-                            <th>Credit Limit</th>
-                            <th>Balance</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if customers %}
-                            {% for cust in customers %}
-                            {% set balance = cust.current_balance_due or 0 %}
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="user-avatar">
-                                            {{ cust.name[0] | upper }}
-                                        </div>
-                                        <div>
-                                            <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="fw-semibold text-decoration-none" style="color: var(--text-primary);">
-                                                {{ cust.name }}
-                                            </a>
-                                            <small class="d-block text-muted-custom" style="font-size: 0.75rem;">ID: #C-{{ cust.id }}</small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>{{ cust.old_book_no or '-' }}</td>
-                                <td>{{ cust.phone or '-' }}</td>
-                                <td>{{ cust.address or '-' }}</td>
-                                <td>
-                                    {% if cust.credit_limit %}
-                                    <span class="fw-semibold">{{ cust.credit_limit | money }}</span>
-                                    {% else %}
-                                    <span class="text-muted-custom" style="font-size: 0.85rem;">No Limit</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if balance > 0 %}
-                                    <span class="badge badge-custom badge-danger-custom fw-bold fs-6">
-                                        {{ balance | money }}
-                                    </span>
-                                    {% elif balance < 0 %}
-                                    <span class="badge badge-custom badge-success-custom fw-bold fs-6">
-                                        {{ balance | money }}
-                                    </span>
-                                    {% else %}
-                                    <span class="badge badge-custom badge-staff fw-semibold">
-                                        {{ balance | money }}
-                                    </span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    <div class="btn-group gap-2">
-                                        <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="btn btn-sm btn-outline-primary border-0 d-flex align-items-center gap-1">
-                                            <i class="bi bi-journal-text"></i> Ledger
-                                        </a>
-                                        <button class="btn btn-sm btn-outline-secondary border-0 edit-customer-btn" 
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#editCustomerModal"
-                                                data-id="{{ cust.id }}"
-                                                data-name="{{ cust.name }}"
-                                                data-phone="{{ cust.phone or '' }}"
-                                                data-address="{{ cust.address or '' }}"
-                                                data-old-book-no="{{ cust.old_book_no or '' }}"
-                                                data-limit="{{ cust.credit_limit or '' }}">
-                                            <i class="bi bi-pencil-square" title="Edit Customer"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="7" class="empty-state text-center py-5">
-                                    <div class="empty-state-icon"><i class="bi bi-people-fill"></i></div>
-                                    <p class="text-muted-custom mb-0">No customers found matching the filters.</p>
-                                </td>
-                            </tr>
+<!-- Customer List -->
+<div class="card card-premium">
+    {# Mobile card list #}
+    <div class="directory-cards d-md-none">
+        {% if customers %}
+            {% for cust in customers %}
+            {% set balance = cust.current_balance_due or 0 %}
+            <article class="directory-card">
+                <div class="directory-card-main">
+                    <div class="user-avatar">{{ cust.name[0] | upper }}</div>
+                    <div class="directory-card-info">
+                        <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="directory-card-title">{{ cust.name }}</a>
+                        <div class="directory-card-meta">
+                            <span><i class="bi bi-journal-bookmark"></i> {{ cust.old_book_no or '—' }}</span>
+                            <span><i class="bi bi-telephone"></i> {{ cust.phone or '—' }}</span>
+                        </div>
+                        {% if cust.address %}
+                        <div class="directory-card-submeta">{{ cust.address }}</div>
                         {% endif %}
-                    </tbody>
-                </table>
+                    </div>
+                </div>
+                <div class="directory-card-aside">
+                    {% if balance > 0 %}
+                    <span class="badge badge-custom badge-danger-custom fw-bold">{{ balance | money }}</span>
+                    {% elif balance < 0 %}
+                    <span class="badge badge-custom badge-success-custom fw-bold">{{ balance | money }}</span>
+                    {% else %}
+                    <span class="badge badge-custom badge-staff">{{ balance | money }}</span>
+                    {% endif %}
+                    <div class="table-actions">
+                        <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="btn btn-sm btn-outline-primary border-0" title="Ledger">
+                            <i class="bi bi-journal-text"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary border-0 edit-customer-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editCustomerModal"
+                                data-id="{{ cust.id }}"
+                                data-name="{{ cust.name }}"
+                                data-phone="{{ cust.phone or '' }}"
+                                data-address="{{ cust.address or '' }}"
+                                data-old-book-no="{{ cust.old_book_no or '' }}"
+                                data-limit="{{ cust.credit_limit or '' }}"
+                                title="Edit Customer">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state text-center py-5">
+                <div class="empty-state-icon"><i class="bi bi-people-fill"></i></div>
+                <p class="text-muted-custom mb-0">No customers found matching the filters.</p>
             </div>
-            {% with pagination=customers_pagination, page_param='page', keep_args={'search': search, 'filter': filter} %}
-                {% include "partials/pagination.html" %}
-            {% endwith %}
-        </div>
+        {% endif %}
     </div>
+
+    {# Desktop table #}
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-custom table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Customer Name</th>
+                    <th>Old Book No</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Credit Limit</th>
+                    <th>Balance</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if customers %}
+                    {% for cust in customers %}
+                    {% set balance = cust.current_balance_due or 0 %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar">
+                                    {{ cust.name[0] | upper }}
+                                </div>
+                                <div>
+                                    <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="fw-semibold text-decoration-none" style="color: var(--text-primary);">
+                                        {{ cust.name }}
+                                    </a>
+                                    <small class="d-block text-muted-custom" style="font-size: 0.75rem;">ID: #C-{{ cust.id }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ cust.old_book_no or '-' }}</td>
+                        <td>{{ cust.phone or '-' }}</td>
+                        <td>{{ cust.address or '-' }}</td>
+                        <td>
+                            {% if cust.credit_limit %}
+                            <span class="fw-semibold">{{ cust.credit_limit | money }}</span>
+                            {% else %}
+                            <span class="text-muted-custom" style="font-size: 0.85rem;">No Limit</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if balance > 0 %}
+                            <span class="badge badge-custom badge-danger-custom fw-bold fs-6">
+                                {{ balance | money }}
+                            </span>
+                            {% elif balance < 0 %}
+                            <span class="badge badge-custom badge-success-custom fw-bold fs-6">
+                                {{ balance | money }}
+                            </span>
+                            {% else %}
+                            <span class="badge badge-custom badge-staff fw-semibold">
+                                {{ balance | money }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="table-actions btn-group gap-2">
+                                <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="btn btn-sm btn-outline-primary border-0 d-flex align-items-center gap-1" title="Ledger">
+                                    <i class="bi bi-journal-text"></i><span class="btn-label"> Ledger</span>
+                                </a>
+                                <button class="btn btn-sm btn-outline-secondary border-0 edit-customer-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editCustomerModal"
+                                        data-id="{{ cust.id }}"
+                                        data-name="{{ cust.name }}"
+                                        data-phone="{{ cust.phone or '' }}"
+                                        data-address="{{ cust.address or '' }}"
+                                        data-old-book-no="{{ cust.old_book_no or '' }}"
+                                        data-limit="{{ cust.credit_limit or '' }}"
+                                        title="Edit Customer">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="empty-state text-center py-5">
+                            <div class="empty-state-icon"><i class="bi bi-people-fill"></i></div>
+                            <p class="text-muted-custom mb-0">No customers found matching the filters.</p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    {% with pagination=customers_pagination, page_param='page', keep_args={'search': search, 'filter': filter} %}
+        {% include "partials/pagination.html" %}
+    {% endwith %}
 </div>
 {% endblock %}
 

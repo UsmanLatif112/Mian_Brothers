@@ -14,12 +14,12 @@
                 <h1 class="page-title">{{ customer.name }}</h1>
             </div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="payment">
-                <i class="bi bi-wallet2 me-1"></i> Record Payment
+        <div class="page-header-actions">
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="payment" title="Record Payment">
+                <i class="bi bi-wallet2 me-1"></i><span class="btn-label"> Record Payment</span>
             </button>
-            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="advance">
-                <i class="bi bi-cash-coin me-1"></i> Advance / Loan
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="advance" title="Advance / Loan">
+                <i class="bi bi-cash-coin me-1"></i><span class="btn-label"> Advance / Loan</span>
             </button>
         </div>
     </div>
@@ -70,13 +70,13 @@
 <div class="row g-4">
     <div class="col-12">
         <div class="card card-premium">
-            <div class="card-header-premium d-flex justify-content-between align-items-center">
-                <div>
+            <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="min-w-0">
                     <h2 class="panel-title mb-0">Account Statement</h2>
                     <p class="panel-subtitle mb-0">Debit, credit, and running balance</p>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary border-0" onclick="window.print()">
-                    <i class="bi bi-printer me-1"></i> Print
+                <button type="button" class="btn btn-sm btn-outline-secondary border-0" onclick="window.print()" title="Print">
+                    <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
                 </button>
             </div>
             

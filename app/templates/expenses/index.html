@@ -11,8 +11,8 @@
             <p class="page-subtitle mt-1">Record costs taken from cash, then settle when money is returned so cash in hand clears.</p>
         </div>
         <div class="page-header-actions">
-            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-                <i class="bi bi-plus-circle me-1"></i> Add Expense
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addExpenseModal" title="Add Expense">
+                <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Expense</span>
             </button>
         </div>
     </div>
@@ -84,7 +84,7 @@
                                 </td>
                                 <td>{{ e.recorder.name if e.recorder else '—' }}</td>
                                 <td>
-                                    <div class="btn-group gap-1">
+                                    <div class="table-actions btn-group gap-1">
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-secondary border-0"
@@ -111,8 +111,8 @@
                                             data-expense-name="{{ e.name }}"
                                             data-expense-amount="{{ '%.2f'|format(e.amount|float) }}"
                                             data-expense-date="{{ e.expense_date }}"
-                                            title="Return cash to till">
-                                            <i class="bi bi-check2-circle"></i> Settle
+                                            title="Settle — return cash to till">
+                                            <i class="bi bi-check2-circle"></i><span class="btn-label"> Settle</span>
                                         </button>
                                         {% else %}
                                         <form method="POST" onsubmit="return confirm('Unsettle this expense? Cash in hand will decrease again.');">
@@ -126,7 +126,7 @@
                                         <form method="POST" onsubmit="return confirm('Delete this expense?');">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="expense_id" value="{{ e.id }}">
-                                            <button class="btn btn-sm btn-outline-danger border-0" type="submit">
+                                            <button class="btn btn-sm btn-outline-danger border-0" type="submit" title="Delete">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>

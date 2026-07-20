@@ -9,9 +9,11 @@
             <p class="page-eyebrow">Accounts Payable</p>
             <h1 class="page-title">Vendor Directory & Ledgers</h1>
         </div>
-        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createVendorModal">
-            <i class="bi bi-building-add me-2"></i> Register Vendor
-        </button>
+        <div class="page-header-actions">
+            <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createVendorModal" title="Register Vendor">
+                <i class="bi bi-building-add me-2"></i><span class="btn-label"> Register Vendor</span>
+            </button>
+        </div>
     </div>
     <div class="page-header-meta">
         <p class="page-subtitle">Track suppliers from inventory purchases, payments made, and balance still payable.</p>
@@ -20,27 +22,33 @@
 
 <div class="card card-premium filter-bar mb-4">
     <div class="card-body card-body-premium py-3">
-        <form action="{{ url_for('vendors.index') }}" method="GET" class="row g-3 align-items-center">
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="input-group">
+        <form action="{{ url_for('vendors.index') }}" method="GET" class="filter-form">
+            <div class="filter-search-row">
+                <div class="input-group filter-search-input">
                     <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control form-control-custom" name="search" placeholder="Search by name, phone, or contact..." value="{{ search }}">
+                    <input type="text" class="form-control form-control-custom" name="search" placeholder="Search name, phone, contact..." value="{{ search }}" aria-label="Search vendors">
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary-custom" title="Apply Filter">
+                        <i class="bi bi-funnel d-md-none"></i><span class="btn-label">Apply Filter</span>
+                    </button>
+                    {% if search or filter != 'all' %}
+                    <a href="{{ url_for('vendors.index') }}" class="btn btn-outline-secondary border-0 filter-clear-btn" title="Clear Filters">
+                        <i class="bi bi-x-circle fs-5"></i>
+                    </a>
+                    {% endif %}
                 </div>
             </div>
-            <div class="col-12 col-md-6 col-lg-5">
-                <div class="segmented-control" role="group">
-                    <a href="{{ url_for('vendors.index', search=search, filter='all') }}" class="btn {% if filter == 'all' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}">All Vendors</a>
-                    <a href="{{ url_for('vendors.index', search=search, filter='payable') }}" class="btn {% if filter == 'payable' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}">Balance Payable</a>
-                    <a href="{{ url_for('vendors.index', search=search, filter='settled') }}" class="btn {% if filter == 'settled' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}">Settled</a>
-                </div>
-            </div>
-            <div class="col-12 col-lg-3 d-flex gap-2">
-                <button type="submit" class="btn btn-primary-custom w-100">Apply Filter</button>
-                {% if search or filter != 'all' %}
-                <a href="{{ url_for('vendors.index') }}" class="btn btn-outline-secondary border-0 d-flex align-items-center justify-content-center px-3" title="Clear Filters">
-                    <i class="bi bi-x-circle fs-5"></i>
+            <div class="segmented-control filter-segments" role="group">
+                <a href="{{ url_for('vendors.index', search=search, filter='all') }}" class="btn {% if filter == 'all' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="All Vendors">
+                    <span class="seg-label-full">All Vendors</span><span class="seg-label-short">All</span>
                 </a>
-                {% endif %}
+                <a href="{{ url_for('vendors.index', search=search, filter='payable') }}" class="btn {% if filter == 'payable' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="Balance Payable">
+                    <span class="seg-label-full">Balance Payable</span><span class="seg-label-short">Payable</span>
+                </a>
+                <a href="{{ url_for('vendors.index', search=search, filter='settled') }}" class="btn {% if filter == 'settled' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="Settled">
+                    <span class="seg-label-full">Settled</span><span class="seg-label-short">Settled</span>
+                </a>
             </div>
         </form>
     </div>
@@ -54,13 +62,65 @@
         </div>
         {% if current_user.role == 'admin' %}
         <form action="{{ url_for('vendors.sync_balances') }}" method="POST" class="d-inline">
-            <button type="submit" class="btn btn-sm btn-outline-secondary border-0" title="Rebuild balances from purchase logs">
-                <i class="bi bi-arrow-repeat me-1"></i> Sync Balances
+            <button type="submit" class="btn btn-sm btn-outline-secondary border-0" title="Sync Balances">
+                <i class="bi bi-arrow-repeat me-1"></i><span class="btn-label"> Sync Balances</span>
             </button>
         </form>
         {% endif %}
     </div>
-    <div class="table-responsive">
+
+    <div class="directory-cards d-md-none">
+        {% if vendors %}
+            {% for vendor in vendors %}
+            {% set has_payable = vendor.current_balance_payable > 0 %}
+            <article class="directory-card">
+                <div class="directory-card-main">
+                    <div class="user-avatar">{{ vendor.name[0] | upper }}</div>
+                    <div class="directory-card-info">
+                        <a href="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" class="directory-card-title">{{ vendor.name }}</a>
+                        <div class="directory-card-meta">
+                            <span><i class="bi bi-person"></i> {{ vendor.contact_person or '—' }}</span>
+                            <span><i class="bi bi-telephone"></i> {{ vendor.phone or '—' }}</span>
+                        </div>
+                        {% if vendor.address %}
+                        <div class="directory-card-submeta">{{ vendor.address }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="directory-card-aside">
+                    {% if has_payable %}
+                    <span class="badge badge-custom badge-danger-custom">{{ vendor.current_balance_payable | money }}</span>
+                    {% else %}
+                    <span class="badge badge-custom badge-success-custom">Settled</span>
+                    {% endif %}
+                    <div class="table-actions">
+                        <a href="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" class="btn btn-sm btn-outline-primary border-0" title="Ledger">
+                            <i class="bi bi-journal-text"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary border-0 edit-vendor-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editVendorModal"
+                                data-id="{{ vendor.id }}"
+                                data-name="{{ vendor.name }}"
+                                data-phone="{{ vendor.phone or '' }}"
+                                data-address="{{ vendor.address or '' }}"
+                                data-contact="{{ vendor.contact_person or '' }}"
+                                title="Edit Vendor">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state text-center py-5">
+                <div class="empty-state-icon"><i class="bi bi-building"></i></div>
+                <p class="text-muted-custom mb-0">No vendors yet. Add a vendor name when recording inventory purchases.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive d-none d-md-block">
         <table class="table table-custom table-hover mb-0">
             <thead>
                 <tr>
@@ -99,9 +159,9 @@
                             {% endif %}
                         </td>
                         <td class="text-end">
-                            <div class="btn-group gap-2">
-                                <a href="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" class="btn btn-sm btn-outline-primary border-0">
-                                    <i class="bi bi-journal-text"></i> Ledger
+                            <div class="table-actions btn-group gap-2">
+                                <a href="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" class="btn btn-sm btn-outline-primary border-0" title="Ledger">
+                                    <i class="bi bi-journal-text"></i><span class="btn-label"> Ledger</span>
                                 </a>
                                 <button class="btn btn-sm btn-outline-secondary border-0 edit-vendor-btn"
                                         data-bs-toggle="modal"
@@ -110,7 +170,8 @@
                                         data-name="{{ vendor.name }}"
                                         data-phone="{{ vendor.phone or '' }}"
                                         data-address="{{ vendor.address or '' }}"
-                                        data-contact="{{ vendor.contact_person or '' }}">
+                                        data-contact="{{ vendor.contact_person or '' }}"
+                                        title="Edit Vendor">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
                             </div>
