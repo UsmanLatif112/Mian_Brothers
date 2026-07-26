@@ -209,7 +209,7 @@
         <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
                 <h2 class="panel-title mb-1">Top Credit Customers</h2>
-                <p class="panel-subtitle mb-0">Balances over PKR 200,000 overdue more than 30 days</p>
+                <p class="panel-subtitle mb-0">Customers with credit due over PKR 200,000</p>
             </div>
             <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0" title="View all dues">
                 <i class="bi bi-people me-1"></i><span class="btn-label">View all dues</span>
@@ -250,7 +250,7 @@
                     {% else %}
                         <tr>
                             <td colspan="8" class="text-center text-muted-custom py-5">
-                                No customers with credit over PKR 200,000 overdue for more than 1 month.
+                                No customers with credit due over PKR 200,000.
                             </td>
                         </tr>
                     {% endif %}

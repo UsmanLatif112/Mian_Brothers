@@ -335,8 +335,8 @@ def index():
     recent_deliveries = StockEntry.query.order_by(StockEntry.entry_date.desc()).limit(5).all()
     other_items = OtherItem.query.order_by(OtherItem.name.asc()).all()
 
-    # Top customers: credit > 200k and uncleared for more than 1 month
-    top_credit_customers = _top_overdue_credit_customers(limit=200000, overdue_days=30)
+    # Top customers: credit due over PKR 200,000
+    top_credit_customers = _top_credit_customers(limit=200000)
 
     return render_template(
         'dashboard/index.html',
@@ -360,13 +360,12 @@ def index():
     )
 
 
-def _top_overdue_credit_customers(limit=200000, overdue_days=30):
+def _top_credit_customers(limit=200000):
     """
-    Customers with balance_due > limit whose oldest unpaid credit/loan
-    is older than overdue_days (default 1 month).
+    Customers with current_balance_due > limit, highest due first.
+    Also attaches oldest unpaid sale/loan date and last payment for display.
     """
     today = datetime.utcnow().date()
-    cutoff = today - timedelta(days=overdue_days)
     rows = []
 
     candidates = (
@@ -397,25 +396,21 @@ def _top_overdue_credit_customers(limit=200000, overdue_days=30):
             if oldest is None or e.sale_date < oldest:
                 oldest = e.sale_date
 
-        if oldest is None or oldest > cutoff:
-            continue
-
         last_payment = (
             Payment.query
             .filter_by(customer_id=customer.id)
             .order_by(Payment.payment_date.desc())
             .first()
         )
-        days_overdue = (today - oldest).days
+        days_overdue = (today - oldest).days if oldest else 0
         rows.append({
             'customer': customer,
             'due': float(customer.current_balance_due),
-            'oldest_credit_date': oldest,
+            'oldest_credit_date': oldest or '—',
             'days_overdue': days_overdue,
             'last_payment_date': last_payment.payment_date.date() if last_payment else None,
         })
 
-    rows.sort(key=lambda r: r['due'], reverse=True)
     return rows
 
 
