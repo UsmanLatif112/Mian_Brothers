@@ -288,7 +288,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     amount_by_fuel = {}
     for r in meter_rows:
         liters = float(r.liters_sold or 0)
-        rate = rate_as_of(r.fuel_type_id, r.reading_date)
+        stored = getattr(r, 'sale_rate', None)
+        rate = float(stored) if stored is not None else rate_as_of(r.fuel_type_id, r.reading_date)
         liters_by_fuel[r.fuel_type_id] = liters_by_fuel.get(r.fuel_type_id, 0.0) + liters
         amount_by_fuel[r.fuel_type_id] = amount_by_fuel.get(r.fuel_type_id, 0.0) + (liters * rate)
 

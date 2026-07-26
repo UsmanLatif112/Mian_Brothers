@@ -140,14 +140,19 @@ def index():
                 flash(f'No machines for {fuel_type.name}. Add a machine from the dropdown.', 'danger')
                 return _sales_redirect()
 
-            rate = _fuel_rate(fuel_type.id, as_of_date=sale_day)
+            # Snapshot rate at save time. Same-day hike: use latest pump price.
+            # Back-dated entry: use price effective on that sale date.
+            if sale_day >= today:
+                rate = _fuel_rate(fuel_type.id)
+            else:
+                rate = _fuel_rate(fuel_type.id, as_of_date=sale_day)
             if rate is None:
                 flash(f'No active price for {fuel_type.name}. Set price first.', 'danger')
                 return _sales_redirect()
 
             try:
                 machine_sales = []
-                total_liters = 0.0
+                segment_liters = 0.0
 
                 for machine in machines:
                     open_raw = request.form.get(f'opening_{machine.id}')
@@ -165,7 +170,9 @@ def index():
                         )
 
                     liters = closing - opening
-                    total_liters += liters
+                    if liters <= 0:
+                        continue
+                    segment_liters += liters
                     machine_sales.append({
                         'machine': machine,
                         'opening': opening,
@@ -173,64 +180,124 @@ def index():
                         'liters': liters,
                     })
 
-                if total_liters <= 0:
+                if segment_liters <= 0:
                     raise ValueError('Total liters sold must be greater than zero.')
 
                 inventory = Inventory.query.filter_by(fuel_type_id=fuel_type.id).first()
                 if not inventory:
                     raise ValueError(f'No inventory record for {fuel_type.name}.')
 
-                previous_liters = 0.0
+                stock_delta = 0.0
+                day_liters_before = 0.0
                 for machine in machines:
-                    existing = MeterReading.query.filter_by(
+                    for existing in MeterReading.query.filter_by(
                         machine_id=machine.id,
-                        reading_date=sale_day
-                    ).first()
-                    if existing and existing.liters_sold is not None:
-                        previous_liters += float(existing.liters_sold)
-
-                delta_liters = total_liters - previous_liters
-                available = float(inventory.current_stock_liters)
-                if delta_liters > available:
-                    raise ValueError(
-                        f'Insufficient {fuel_type.name} stock. Available: {available:.2f}L, '
-                        f'Additional sold: {delta_liters:.2f}L.'
-                    )
+                        reading_date=sale_day,
+                    ).all():
+                        if existing.liters_sold is not None:
+                            day_liters_before += float(existing.liters_sold)
 
                 for item in machine_sales:
                     machine = item['machine']
-                    reading = MeterReading.query.filter_by(
-                        machine_id=machine.id,
-                        reading_date=sale_day
-                    ).first()
-                    if reading:
-                        reading.opening_reading = item['opening']
-                        reading.closing_reading = item['closing']
-                        reading.liters_sold = item['liters']
-                        reading.closed_by = current_user.id
-                        reading.closed_at = datetime.utcnow()
-                        reading.fuel_type_id = fuel_type.id
-                    else:
+                    opening = item['opening']
+                    closing = item['closing']
+                    liters = item['liters']
+
+                    readings = (
+                        MeterReading.query
+                        .filter_by(machine_id=machine.id, reading_date=sale_day)
+                        .order_by(MeterReading.id.asc())
+                        .all()
+                    )
+                    latest = readings[-1] if readings else None
+
+                    def _near(a, b):
+                        return abs(float(a) - float(b)) < 0.01
+
+                    match = next(
+                        (r for r in readings if _near(opening, r.opening_reading)),
+                        None,
+                    )
+
+                    if match is not None:
+                        # Re-edit an existing segment (same opening)
+                        old_liters = float(match.liters_sold or 0)
+                        match.closing_reading = closing
+                        match.liters_sold = liters
+                        match.closed_by = current_user.id
+                        match.closed_at = datetime.utcnow()
+                        match.fuel_type_id = fuel_type.id
+                        if match.sale_rate is None:
+                            match.sale_rate = rate
+                        stock_delta += liters - old_liters
+                    elif latest and latest.closing_reading is not None and _near(
+                        opening, latest.closing_reading
+                    ):
+                        # Next segment after price change — append
                         db.session.add(MeterReading(
                             machine_id=machine.id,
                             dispenser_nozzle_id=machine.name,
                             fuel_type_id=fuel_type.id,
-                            opening_reading=item['opening'],
-                            closing_reading=item['closing'],
-                            liters_sold=item['liters'],
+                            opening_reading=opening,
+                            closing_reading=closing,
+                            liters_sold=liters,
+                            sale_rate=rate,
                             reading_date=sale_day,
                             recorded_by=current_user.id,
                             closed_by=current_user.id,
-                            closed_at=datetime.utcnow()
+                            closed_at=datetime.utcnow(),
                         ))
+                        stock_delta += liters
+                    elif not latest:
+                        db.session.add(MeterReading(
+                            machine_id=machine.id,
+                            dispenser_nozzle_id=machine.name,
+                            fuel_type_id=fuel_type.id,
+                            opening_reading=opening,
+                            closing_reading=closing,
+                            liters_sold=liters,
+                            sale_rate=rate,
+                            reading_date=sale_day,
+                            recorded_by=current_user.id,
+                            closed_by=current_user.id,
+                            closed_at=datetime.utcnow(),
+                        ))
+                        stock_delta += liters
+                    elif len(readings) == 1:
+                        # Legacy single-row replace for the day
+                        old_liters = float(latest.liters_sold or 0)
+                        latest.opening_reading = opening
+                        latest.closing_reading = closing
+                        latest.liters_sold = liters
+                        latest.sale_rate = rate
+                        latest.closed_by = current_user.id
+                        latest.closed_at = datetime.utcnow()
+                        latest.fuel_type_id = fuel_type.id
+                        stock_delta += liters - old_liters
+                    else:
+                        last_close = float(latest.closing_reading or latest.opening_reading)
+                        raise ValueError(
+                            f'{machine.name}: to add next segment after a price change, '
+                            f'set Opening to last closing ({last_close:.2f}). '
+                            f'To edit a segment, keep its Opening reading.'
+                        )
 
-                inventory.current_stock_liters = available - delta_liters
+                available = float(inventory.current_stock_liters)
+                if stock_delta > available + 0.0001:
+                    raise ValueError(
+                        f'Insufficient {fuel_type.name} stock. Available: {available:.2f}L, '
+                        f'Additional sold: {stock_delta:.2f}L.'
+                    )
+
+                inventory.current_stock_liters = available - stock_delta
                 db.session.commit()
 
-                amount = total_liters * rate
+                day_liters_after = day_liters_before + stock_delta
+                amount = segment_liters * rate
                 flash(
-                    f'{fuel_type.name} meter sale saved for {sale_day}: {total_liters:.2f}L '
-                    f'(PKR {amount:,.2f}). Inventory adjusted by {delta_liters:.2f}L.',
+                    f'{fuel_type.name} meter segment saved for {sale_day}: {segment_liters:.2f}L '
+                    f'@ PKR {rate:,.2f} (PKR {amount:,.2f}). '
+                    f'Day total {day_liters_after:.2f}L. Inventory adjusted by {stock_delta:.2f}L.',
                     'success'
                 )
             except ValueError as e:
@@ -635,8 +702,14 @@ def index():
     machines_by_fuel = {ft.id: _machines_for_fuel(ft.id) for ft in fuel_types}
 
     today_readings = {}
-    for r in MeterReading.query.filter_by(reading_date=today).all():
+    for r in (
+        MeterReading.query
+        .filter_by(reading_date=today)
+        .order_by(MeterReading.id.asc())
+        .all()
+    ):
         if r.machine_id:
+            # Keep latest segment per machine for form prefill
             today_readings[r.machine_id] = r
 
     customers = Customer.query.order_by(Customer.name.asc()).all()

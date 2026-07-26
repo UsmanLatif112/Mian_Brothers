@@ -2,10 +2,12 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app.purchasing import purchasing_bp
 from app.models import (
-    db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog
+    db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog,
+    Vendor, VendorPayment,
 )
 from app.utils import paginate, parse_period, PERIOD_CHOICES
 from datetime import datetime, time
+from sqlalchemy import func
 
 
 PER_PAGE = 15
@@ -107,6 +109,14 @@ def _compute_purchase_stats(start_date, end_date, category='all'):
                 stats['diesel_purchase'] += amount
                 stats['diesel_liters'] += liters
 
+    stats['total_purchase'] = (
+        stats['petrol_purchase']
+        + stats['diesel_purchase']
+        + stats['mobile_purchase']
+        + stats['ft_mobile_purchase']
+        + stats['filter_purchase']
+        + stats['other_purchase']
+    )
     return stats
 
 
@@ -433,13 +443,29 @@ def index():
                 PER_PAGE,
             )
 
+    purchase_stats = _compute_purchase_stats(start_date, end_date, category)
+
+    payable_total = float(
+        Vendor.query.with_entities(
+            func.coalesce(func.sum(Vendor.current_balance_payable), 0)
+        ).scalar() or 0
+    )
+    paid_total = float(
+        VendorPayment.query.with_entities(
+            func.coalesce(func.sum(VendorPayment.amount_paid), 0)
+        ).scalar() or 0
+    )
+
     return render_template(
         'purchasing/index.html',
         purchase_logs=purchase_logs,
         deliveries=deliveries,
         hist_pagination=hist_pagination,
-        purchase_stats=_compute_purchase_stats(start_date, end_date, category),
+        purchase_stats=purchase_stats,
         purchase_amount=_purchase_amount,
+        purchase_total=purchase_stats.get('total_purchase', 0),
+        payable_total=payable_total,
+        paid_total=paid_total,
         period=period,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),
