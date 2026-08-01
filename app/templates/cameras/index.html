@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Cameras — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-start">
+    <div class="col">
+        <h2 class="fw-bold mb-1">Live Cameras</h2>
+        <p class="text-muted-custom mb-0">Watch station IP camera feeds from one place.</p>
+    </div>
+    <div class="col-auto d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="reload-feeds" title="Reload all feeds">
+            <i class="bi bi-arrow-clockwise me-1"></i> Reload
+        </button>
+        {% if current_user.role == 'admin' %}
+        <a href="{{ url_for('cameras.manage') }}" class="btn btn-primary-custom btn-sm">
+            <i class="bi bi-gear me-1"></i> Manage Cameras
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if cameras %}
+<div class="row g-3 camera-grid">
+    {% for camera in cameras %}
+    <div class="col-12 {% if cameras|length == 1 %}col-xl-10 mx-xl-auto{% elif cameras|length == 2 %}col-lg-6{% else %}col-md-6 col-xl-4{% endif %}">
+        <div class="camera-tile" data-camera-id="{{ camera.id }}" data-stream-type="{{ camera.stream_type }}" data-refresh="{{ camera.refresh_seconds }}">
+            <div class="camera-tile-header">
+                <div>
+                    <div class="camera-tile-title">{{ camera.name }}</div>
+                    {% if camera.location %}
+                    <div class="camera-tile-meta"><i class="bi bi-geo-alt me-1"></i>{{ camera.location }}</div>
+                    {% endif %}
+                </div>
+                <span class="camera-status" data-status>Connecting…</span>
+            </div>
+            <div class="camera-viewport">
+                {% set feed_url = url_for('cameras.stream', camera_id=camera.id) if camera.needs_proxy() else camera.stream_url %}
+                {% if camera.stream_type == 'iframe' %}
+                <iframe class="camera-frame" src="{{ camera.stream_url }}" title="{{ camera.name }}" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>
+                {% elif camera.stream_type == 'hls' %}
+                <video class="camera-video" controls muted autoplay playsinline data-hls-src="{{ camera.stream_url }}"></video>
+                {% elif camera.stream_type == 'snapshot' %}
+                <img class="camera-feed" src="{{ feed_url }}" alt="{{ camera.name }}" data-snapshot-src="{{ feed_url }}" decoding="async">
+                {% else %}
+                <img class="camera-feed" src="{{ feed_url }}" alt="{{ camera.name }}" decoding="async">
+                {% endif %}
+                <div class="camera-overlay-error d-none" data-error>
+                    <i class="bi bi-camera-video-off fs-3 mb-2"></i>
+                    <div>Feed unavailable</div>
+                    <small class="opacity-75">Check URL, network, or camera power</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card card-premium">
+    <div class="card-body card-body-premium text-center py-5">
+        <i class="bi bi-camera-video text-muted-custom" style="font-size: 2.5rem;"></i>
+        <h5 class="fw-bold mt-3 mb-2">No cameras configured</h5>
+        <p class="text-muted-custom mb-3">
+            Add an IP camera stream URL (HTTP MJPEG, snapshot JPEG, HLS, or embed page).
+            {% if current_user.role != 'admin' %}Ask an admin to set one up.{% endif %}
+        </p>
+        {% if current_user.role == 'admin' %}
+        <a href="{{ url_for('cameras.manage') }}" class="btn btn-primary-custom">
+            <i class="bi bi-plus-circle me-1"></i> Add Camera
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if cameras %}
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+<script>
+(function () {
+    function setStatus(tile, text, ok) {
+        const el = tile.querySelector('[data-status]');
+        if (!el) return;
+        el.textContent = text;
+        el.classList.toggle('is-live', !!ok);
+        el.classList.toggle('is-error', ok === false);
+    }
+
+    function showError(tile, show) {
+        const err = tile.querySelector('[data-error]');
+        if (err) err.classList.toggle('d-none', !show);
+    }
+
+    function wireImage(tile, img) {
+        img.addEventListener('load', () => {
+            setStatus(tile, 'Live', true);
+            showError(tile, false);
+        });
+        img.addEventListener('error', () => {
+            setStatus(tile, 'Offline', false);
+            showError(tile, true);
+        });
+    }
+
+    function startSnapshot(tile, img) {
+        const src = img.getAttribute('data-snapshot-src');
+        const seconds = Math.max(1, parseInt(tile.getAttribute('data-refresh') || '2', 10));
+        wireImage(tile, img);
+        const tick = () => {
+            const joiner = src.includes('?') ? '&' : '?';
+            img.src = src + joiner + '_t=' + Date.now();
+        };
+        tick();
+        tile._snapshotTimer = setInterval(tick, seconds * 1000);
+    }
+
+    function startHls(tile, video) {
+        const src = video.getAttribute('data-hls-src');
+        if (!src) return;
+        if (window.Hls && Hls.isSupported()) {
+            const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+            hls.loadSource(src);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(() => {});
+                setStatus(tile, 'Live', true);
+                showError(tile, false);
+            });
+            hls.on(Hls.Events.ERROR, (_e, data) => {
+                if (data.fatal) {
+                    setStatus(tile, 'Offline', false);
+                    showError(tile, true);
+                }
+            });
+            tile._hls = hls;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = src;
+            video.addEventListener('loadeddata', () => {
+                setStatus(tile, 'Live', true);
+                showError(tile, false);
+            });
+            video.addEventListener('error', () => {
+                setStatus(tile, 'Offline', false);
+                showError(tile, true);
+            });
+            video.play().catch(() => {});
+        } else {
+            setStatus(tile, 'Unsupported', false);
+            showError(tile, true);
+        }
+    }
+
+    function initTile(tile) {
+        const type = tile.getAttribute('data-stream-type');
+        if (type === 'iframe') {
+            const frame = tile.querySelector('.camera-frame');
+            setStatus(tile, 'Embedded', true);
+            if (frame) {
+                frame.addEventListener('load', () => setStatus(tile, 'Embedded', true));
+            }
+            return;
+        }
+        if (type === 'hls') {
+            startHls(tile, tile.querySelector('.camera-video'));
+            return;
+        }
+        const img = tile.querySelector('.camera-feed');
+        if (!img) return;
+        if (type === 'snapshot') {
+            startSnapshot(tile, img);
+        } else {
+            wireImage(tile, img);
+        }
+    }
+
+    function reloadAll() {
+        document.querySelectorAll('.camera-tile').forEach(tile => {
+            if (tile._snapshotTimer) clearInterval(tile._snapshotTimer);
+            if (tile._hls) {
+                tile._hls.destroy();
+                tile._hls = null;
+            }
+            setStatus(tile, 'Connecting…', null);
+            showError(tile, false);
+            initTile(tile);
+            const img = tile.querySelector('.camera-feed');
+            if (img && tile.getAttribute('data-stream-type') === 'mjpeg') {
+                const base = img.src.split('?')[0];
+                img.src = base + (base.includes('?') ? '&' : '?') + '_r=' + Date.now();
+            }
+        });
+    }
+
+    document.querySelectorAll('.camera-tile').forEach(initTile);
+    const btn = document.getElementById('reload-feeds');
+    if (btn) btn.addEventListener('click', reloadAll);
+})();
+</script>
+{% endif %}
+{% endblock %}

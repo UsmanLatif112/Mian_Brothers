@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Cameras — OctaneFlow{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-start">
+    <div class="col">
+        <h2 class="fw-bold mb-1">Manage Cameras</h2>
+        <p class="text-muted-custom mb-0">Register IP camera HTTP streams for the live display page.</p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('cameras.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-camera-video me-1"></i> Live View
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info border-0 shadow-sm mb-4" style="border-radius: 10px;">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    Use an <strong>HTTP/HTTPS</strong> stream from the camera (MJPEG, JPEG snapshot, HLS <code>.m3u8</code>, or web embed).
+    Plain <strong>RTSP</strong> links do not play in browsers — convert with the camera’s HTTP stream option, or a bridge like go2rtc / ffmpeg.
+    If this app is hosted in the cloud, the stream URL must be reachable from your phone/PC (LAN URL works when you are on the station Wi‑Fi).
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-4">
+        <div class="card card-premium">
+            <div class="card-header-premium">
+                <h5 class="mb-0 fw-bold">Add Camera</h5>
+            </div>
+            <div class="card-body card-body-premium">
+                <form method="POST">
+                    <input type="hidden" name="action" value="create">
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Name</label>
+                        <input type="text" name="name" class="form-control form-control-custom" required placeholder="e.g. Forecourt Cam 1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Location</label>
+                        <input type="text" name="location" class="form-control form-control-custom" placeholder="e.g. Pump island">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Stream Type</label>
+                        <select name="stream_type" class="form-select form-control-custom" id="create-stream-type">
+                            <option value="mjpeg">MJPEG (live video)</option>
+                            <option value="snapshot">JPEG snapshot (refresh)</option>
+                            <option value="hls">HLS (.m3u8)</option>
+                            <option value="iframe">Embed / camera web page</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Stream URL</label>
+                        <input type="url" name="stream_url" class="form-control form-control-custom" required
+                               placeholder="http://192.168.1.64/video.mjpg">
+                        <small class="text-muted-custom">Examples: <code>/video.mjpg</code>, <code>/cgi-bin/snapshot.cgi</code>, <code>/stream.m3u8</code></small>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Username</label>
+                            <input type="text" name="username" class="form-control form-control-custom" autocomplete="off" placeholder="Optional">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Password</label>
+                            <input type="password" name="password" class="form-control form-control-custom" autocomplete="new-password" placeholder="Optional">
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox" name="use_proxy" value="1" id="create-proxy">
+                        <label class="form-check-label" for="create-proxy">
+                            Proxy through app <span class="text-muted-custom">(keeps login private; server must reach camera)</span>
+                        </label>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Snapshot refresh (sec)</label>
+                            <input type="number" name="refresh_seconds" class="form-control form-control-custom" value="2" min="1" max="60">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Sort order</label>
+                            <input type="number" name="sort_order" class="form-control form-control-custom" value="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">
+                        <i class="bi bi-plus-circle me-1"></i> Save Camera
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">Configured Cameras</h5>
+                <span class="badge bg-secondary">{{ cameras|length }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>URL</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for camera in cameras %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ camera.name }}</div>
+                                {% if camera.location %}<small class="text-muted-custom">{{ camera.location }}</small>{% endif %}
+                            </td>
+                            <td><span class="badge badge-custom badge-staff">{{ camera.stream_type }}</span></td>
+                            <td style="max-width: 220px;">
+                                <small class="text-muted-custom text-truncate d-inline-block" style="max-width: 200px;" title="{{ camera.stream_url }}">{{ camera.stream_url }}</small>
+                            </td>
+                            <td>
+                                {% if camera.is_active %}
+                                <span class="text-success"><i class="bi bi-circle-fill me-1" style="font-size: 0.55rem;"></i>Active</span>
+                                {% else %}
+                                <span class="text-muted-custom"><i class="bi bi-circle-fill me-1" style="font-size: 0.55rem;"></i>Hidden</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editCamera{{ camera.id }}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form method="POST" class="d-inline" onsubmit="return confirm('Delete this camera?');">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="camera_id" value="{{ camera.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted-custom py-4">No cameras yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% for camera in cameras %}
+<div class="modal fade" id="editCamera{{ camera.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--card-bg); color: var(--text-primary); border: var(--card-border);">
+            <form method="POST">
+                <input type="hidden" name="action" value="update">
+                <input type="hidden" name="camera_id" value="{{ camera.id }}">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Edit {{ camera.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Name</label>
+                        <input type="text" name="name" class="form-control form-control-custom" required value="{{ camera.name }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Location</label>
+                        <input type="text" name="location" class="form-control form-control-custom" value="{{ camera.location or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Stream Type</label>
+                        <select name="stream_type" class="form-select form-control-custom">
+                            {% for t in stream_types %}
+                            <option value="{{ t }}" {% if camera.stream_type == t %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom">Stream URL</label>
+                        <input type="url" name="stream_url" class="form-control form-control-custom" required value="{{ camera.stream_url }}">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Username</label>
+                            <input type="text" name="username" class="form-control form-control-custom" value="{{ camera.username or '' }}" autocomplete="off">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Password</label>
+                            <input type="password" name="password" class="form-control form-control-custom" placeholder="Leave blank to keep" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox" name="use_proxy" value="1" id="proxy{{ camera.id }}" {% if camera.use_proxy %}checked{% endif %}>
+                        <label class="form-check-label" for="proxy{{ camera.id }}">Proxy through app</label>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox" name="is_active" value="1" id="active{{ camera.id }}" {% if camera.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="active{{ camera.id }}">Show on live page</label>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Snapshot refresh (sec)</label>
+                            <input type="number" name="refresh_seconds" class="form-control form-control-custom" value="{{ camera.refresh_seconds }}" min="1" max="60">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label form-label-custom">Sort order</label>
+                            <input type="number" name="sort_order" class="form-control form-control-custom" value="{{ camera.sort_order }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

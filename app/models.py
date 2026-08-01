@@ -365,3 +365,33 @@ class ItemPriceLog(db.Model):
 
     def __repr__(self):
         return f"<ItemPriceLog item={self.other_item_id} price={self.sale_price}>"
+
+
+class Camera(db.Model):
+    """IP camera feed configured for live display in the app."""
+    __tablename__ = 'cameras'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(150), nullable=True)
+    # mjpeg | snapshot | hls | iframe
+    stream_type = db.Column(db.String(20), nullable=False, default='mjpeg')
+    stream_url = db.Column(db.String(500), nullable=False)
+    username = db.Column(db.String(100), nullable=True)
+    password = db.Column(db.String(200), nullable=True)
+    # When True (or username set), browser loads /cameras/<id>/stream instead of the raw URL
+    use_proxy = db.Column(db.Boolean, nullable=False, default=False)
+    refresh_seconds = db.Column(db.Integer, nullable=False, default=2)  # snapshot poll interval
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    creator = db.relationship('User', foreign_keys=[created_by])
+
+    def needs_proxy(self):
+        return bool(self.use_proxy or self.username)
+
+    def __repr__(self):
+        return f"<Camera {self.name} ({self.stream_type})>"
