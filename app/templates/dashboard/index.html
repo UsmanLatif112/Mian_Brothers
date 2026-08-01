@@ -79,10 +79,16 @@
     <div class="kpi-card kpi-credit">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-credit-card-2-front"></i></span>
-            <span class="kpi-label">Credit Sale</span>
+            <span class="kpi-label">Credit</span>
         </div>
-        <div class="kpi-value text-warning">{{ stats.activity_credit | money }}</div>
-        <div class="kpi-meta">Petrol + Diesel + Other + FT + Loans</div>
+        <div class="kpi-value text-warning">{{ stats.period_credit | money }}</div>
+        <div class="kpi-meta">
+            {% if period == 'all' %}
+            All-time due {{ stats.outstanding_credit | money }}
+            {% else %}
+            Outstanding {{ stats.outstanding_credit | money }}
+            {% endif %}
+        </div>
     </div>
 
     <div class="kpi-card kpi-purchase">
