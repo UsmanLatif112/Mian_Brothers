@@ -1,14 +1,10 @@
 import os
 import sys
 
+# cPanel LiteSpeed: do NOT os.execl (venv python symlink often breaks).
+# Inject the app virtualenv site-packages instead.
 VENV = "/home1/mygymlahore/virtualenv/octaneflow.udottechnologies.com/3.13"
-INTERP = os.path.join(VENV, "bin", "python")
 
-# Prefer venv interpreter when possible
-if os.path.exists(INTERP) and sys.executable != INTERP:
-    os.execl(INTERP, INTERP, *sys.argv)
-
-# Always expose venv packages (LiteSpeed often ignores execl)
 for p in (
     os.path.join(VENV, "lib", "python3.13", "site-packages"),
     os.path.join(VENV, "lib64", "python3.13", "site-packages"),
