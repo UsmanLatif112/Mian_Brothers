@@ -237,6 +237,8 @@ def index():
             db.session.add(FuelPrice(
                 fuel_type_id=fuel_type.id,
                 price_per_liter=sale_val,
+                effective_date=datetime.utcnow().date(),
+                effective_at=datetime.utcnow().replace(microsecond=0),
                 updated_by=current_user.id
             ))
 

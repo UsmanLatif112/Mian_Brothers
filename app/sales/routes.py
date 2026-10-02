@@ -140,13 +140,12 @@ def index():
                 flash(f'No machines for {fuel_type.name}. Add a machine from the dropdown.', 'danger')
                 return _sales_redirect()
 
-            # Snapshot rate at save time. Same-day hike: use latest pump price.
-            # Back-dated entry: use price effective on that sale date.
-            if sale_day >= today:
-                rate = _fuel_rate(fuel_type.id)
-            else:
-                rate = _fuel_rate(fuel_type.id, as_of_date=sale_day)
-            if rate is None:
+            # Snapshot rate at save time using the entry moment.
+            # Same-day price hike: meters/sales after the change use the new rate;
+            # earlier segments keep their stored sale_rate.
+            rate_as_of = datetime_from_date(sale_day)
+            rate = _fuel_rate(fuel_type.id, as_of_date=rate_as_of)
+            if not rate:
                 flash(f'No active price for {fuel_type.name}. Set price first.', 'danger')
                 return _sales_redirect()
 
@@ -229,6 +228,8 @@ def index():
                         match.fuel_type_id = fuel_type.id
                         if match.sale_rate is None:
                             match.sale_rate = rate
+                        # Keep existing sale_rate on re-edit so a later price
+                        # change does not rewrite earlier same-day liters.
                         stock_delta += liters - old_liters
                     elif latest and latest.closing_reading is not None and _near(
                         opening, latest.closing_reading
@@ -357,9 +358,9 @@ def index():
                 if not fuel_type:
                     flash('Fuel type not found.', 'danger')
                     return _sales_redirect()
-                rate = _fuel_rate(fuel_type.id, as_of_date=sale_day)
+                rate = _fuel_rate(fuel_type.id, as_of_date=datetime_from_date(sale_day))
                 item_label = fuel_type.name
-                if rate is None:
+                if not rate:
                     flash(f'No active price for {fuel_type.name}.', 'danger')
                     return _sales_redirect()
             elif is_shop_sale:

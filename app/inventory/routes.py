@@ -162,6 +162,7 @@ def index():
                     fuel_type_id=fuel_type.id,
                     price_per_liter=sale_val,
                     effective_date=entry_day,
+                    effective_at=entry_dt,
                     updated_by=current_user.id
                 ))
 

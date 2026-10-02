@@ -81,8 +81,45 @@ def create_app():
         ensure_default_fuel_types()
         # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
         ensure_meter_sale_rate_schema()
+        ensure_fuel_price_effective_at_schema()
         
     return app
+
+
+def ensure_fuel_price_effective_at_schema():
+    """Add effective_at on fuel_prices for same-day mid-day price changes."""
+    from sqlalchemy import text, inspect
+    from datetime import datetime, time as dt_time
+
+    inspector = inspect(db.engine)
+    if 'fuel_prices' not in inspector.get_table_names():
+        return
+
+    existing = {col['name'] for col in inspector.get_columns('fuel_prices')}
+    if 'effective_at' not in existing:
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE fuel_prices ADD COLUMN effective_at DATETIME NULL"
+            ))
+
+    from app.models import FuelPrice
+    rows = FuelPrice.query.filter(FuelPrice.effective_at.is_(None)).all()
+    if not rows:
+        return
+    for row in rows:
+        day = row.effective_date
+        if day is None and row.created_at:
+            day = row.created_at.date() if hasattr(row.created_at, 'date') else row.created_at
+        if day is None:
+            continue
+        if row.created_at and hasattr(row.created_at, 'time'):
+            if hasattr(row.created_at, 'date') and row.created_at.date() == day:
+                row.effective_at = row.created_at.replace(microsecond=0)
+            else:
+                row.effective_at = datetime.combine(day, row.created_at.time().replace(microsecond=0))
+        else:
+            row.effective_at = datetime.combine(day, dt_time.min)
+    db.session.commit()
 
 
 def ensure_default_fuel_types():

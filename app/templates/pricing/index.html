@@ -50,7 +50,7 @@
                             <th>Category</th>
                             <th>Item</th>
                             <th>Price</th>
-                            <th>Effective Date</th>
+                            <th>Effective From</th>
                             <th>Updated By</th>
                             <th>Logged At</th>
                         </tr>
@@ -62,7 +62,7 @@
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{{ record.category }}</span></td>
                                 <td class="fw-semibold">{{ record.item_name }}</td>
                                 <td class="fw-bold text-success">{{ record.price | money }}{% if record.unit and record.unit != 'unit' %} / {{ record.unit }}{% endif %}</td>
-                                <td>{{ record.effective_date.strftime('%Y-%m-%d') if record.effective_date else '-' }}</td>
+                                <td>{% if record.effective_at %}{{ record.effective_at.strftime('%Y-%m-%d %H:%M') }}{% elif record.effective_date %}{{ record.effective_date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
                                 <td>{{ record.updated_by }}</td>
                                 <td style="font-size: 0.85rem;" class="text-muted-custom">{{ record.logged_at.strftime('%Y-%m-%d %H:%M:%S') if record.logged_at else '-' }}</td>
                             </tr>
@@ -175,8 +175,9 @@
                         </div>
                     </div>
                     <div class="mb-1">
-                        <label for="effective_date" class="form-label form-label-custom">Effective Date</label>
-                        <input type="date" class="form-control form-control-custom" id="effective_date" name="effective_date" value="{{ today }}">
+                        <label for="effective_at" class="form-label form-label-custom">Effective From (date &amp; time)</label>
+                        <input type="datetime-local" class="form-control form-control-custom" id="effective_at" name="effective_at" value="{{ now_local }}">
+                        <small class="text-muted-custom">New meters and sales after this moment use the new price. Earlier ones keep the old rate.</small>
                     </div>
                 </div>
 

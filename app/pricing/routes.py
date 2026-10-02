@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.pricing import pricing_bp
 from app.models import db, FuelType, FuelPrice, OtherItem, ItemPriceLog
 from app.decorators import role_required
-from app.utils import parse_form_date, fuel_rate_for
+from app.utils import parse_form_datetime, fuel_rate_for
 from datetime import datetime
 
 
@@ -14,7 +14,8 @@ def index():
     if request.method == 'POST':
         item_key = (request.form.get('item_key') or '').strip()
         new_price = request.form.get('price')
-        effective = parse_form_date(request.form.get('effective_date'))
+        effective_at = parse_form_datetime(request.form.get('effective_at'))
+        effective = effective_at.date()
 
         if not item_key or not new_price:
             flash('Item and price are required.', 'danger')
@@ -39,10 +40,16 @@ def index():
                 fuel_type_id=fuel_type.id,
                 price_per_liter=price_val,
                 effective_date=effective,
-                updated_by=current_user.id
+                effective_at=effective_at,
+                updated_by=current_user.id,
+                created_at=datetime.utcnow(),
             ))
             db.session.commit()
-            flash(f"Updated price for {fuel_type.name} to PKR {price_val:,.2f}/{fuel_type.unit} successfully.", 'success')
+            flash(
+                f"Updated price for {fuel_type.name} to PKR {price_val:,.2f}/{fuel_type.unit} "
+                f"from {effective_at.strftime('%Y-%m-%d %H:%M')} onward.",
+                'success',
+            )
             return redirect(url_for('pricing.index'))
 
         if item_key.startswith('item:'):
@@ -73,7 +80,8 @@ def index():
                     sale_price=price_val,
                     cost_price=item.cost_price,
                     effective_date=effective,
-                    updated_by=current_user.id
+                    updated_by=current_user.id,
+                    created_at=effective_at,
                 ))
                 updated += 1
 
@@ -81,6 +89,7 @@ def index():
             label = shop_item.display_name()
             flash(
                 f"Updated sale price for {label} to PKR {price_val:,.2f} "
+                f"from {effective_at.strftime('%Y-%m-%d %H:%M')} "
                 f"({updated} stock row{'s' if updated != 1 else ''}).",
                 'success'
             )
@@ -103,6 +112,7 @@ def index():
         FuelPrice.effective_date.desc(),
         FuelPrice.created_at.desc(),
     ).limit(100).all():
+        at = record.effective_at or record.created_at
         price_history.append({
             'category': 'fuel',
             'item_name': record.fuel_type.name,
@@ -111,12 +121,16 @@ def index():
             'updated_by': record.updater.name if record.updater else '-',
             'logged_at': record.created_at,
             'effective_date': record.effective_date,
+            'effective_at': at,
         })
 
     for record in ItemPriceLog.query.order_by(ItemPriceLog.created_at.desc()).limit(100).all():
         eff = record.effective_date
         if eff is None and record.created_at:
             eff = record.created_at.date() if hasattr(record.created_at, 'date') else record.created_at
+        at = record.created_at
+        if eff and at is None:
+            at = datetime.combine(eff, datetime.min.time())
         price_history.append({
             'category': record.item.category if record.item else 'other',
             'item_name': record.item.display_name() if record.item else 'Unknown',
@@ -125,21 +139,24 @@ def index():
             'updated_by': record.updater.name if record.updater else '-',
             'logged_at': record.created_at,
             'effective_date': eff,
+            'effective_at': at,
         })
 
     price_history.sort(
         key=lambda r: (
-            r['effective_date'] or datetime.min.date(),
+            r.get('effective_at') or datetime.min,
             r['logged_at'] or datetime.min,
         ),
         reverse=True,
     )
 
+    now = datetime.utcnow().replace(second=0, microsecond=0)
     return render_template(
         'pricing/index.html',
         fuel_types=fuel_types,
         shop_items=shop_items,
         current_fuel_prices=current_fuel_prices,
         price_history=price_history[:100],
-        today=datetime.utcnow().date().isoformat(),
+        today=now.date().isoformat(),
+        now_local=now.strftime('%Y-%m-%dT%H:%M'),
     )

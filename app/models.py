@@ -56,6 +56,8 @@ class FuelPrice(db.Model):
     fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), nullable=False)
     price_per_liter = db.Column(db.Numeric(10, 2), nullable=False)
     effective_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+    # Moment the rate becomes active (same calendar day can have multiple revisions).
+    effective_at = db.Column(db.DateTime, nullable=True)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     

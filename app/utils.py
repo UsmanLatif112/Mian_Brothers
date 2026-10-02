@@ -1,5 +1,5 @@
 """Shared helpers for date ranges and period financial stats."""
-from datetime import datetime, timedelta, time
+from datetime import date, datetime, timedelta, time
 from types import SimpleNamespace
 from sqlalchemy import func
 
@@ -64,6 +64,28 @@ def parse_form_date(raw, default=None):
         return datetime.strptime(raw, '%Y-%m-%d').date()
     except ValueError:
         return default
+
+
+def parse_form_datetime(raw, default=None):
+    """Parse YYYY-MM-DDTHH:MM or YYYY-MM-DD HH:MM[:SS] from a form field."""
+    now = datetime.utcnow().replace(microsecond=0)
+    if default is None:
+        default = now
+    raw = (raw or '').strip()
+    if not raw:
+        return default
+    raw = raw.replace('T', ' ')
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+        try:
+            parsed = datetime.strptime(raw, fmt)
+            if fmt == '%Y-%m-%d':
+                if parsed.date() == now.date():
+                    return now
+                return datetime.combine(parsed.date(), time.min)
+            return parsed
+        except ValueError:
+            continue
+    return default
 
 
 def datetime_from_date(d, hour=12):
@@ -132,42 +154,75 @@ def _as_plain_date(val):
     return val
 
 
+def _as_plain_datetime(val):
+    """Normalize datetime/date/str to datetime or None.
+
+    Plain dates become end-of-day so a day-level lookup includes that day's prices.
+    """
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.replace(microsecond=0)
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return datetime.combine(val, time(23, 59, 59))
+    if isinstance(val, str):
+        raw = val.strip().replace('T', ' ')
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+            try:
+                parsed = datetime.strptime(raw, fmt)
+                if fmt == '%Y-%m-%d':
+                    return datetime.combine(parsed.date(), time(23, 59, 59))
+                return parsed
+            except ValueError:
+                continue
+        return None
+    return None
+
+
+def _fuel_price_effective_at(fp):
+    """Resolve the moment a FuelPrice row becomes active."""
+    if getattr(fp, 'effective_at', None):
+        return fp.effective_at.replace(microsecond=0)
+    day = _as_plain_date(fp.effective_date) or _as_plain_date(fp.created_at)
+    if day is None:
+        return None
+    if fp.created_at and hasattr(fp.created_at, 'time'):
+        return datetime.combine(day, fp.created_at.time().replace(microsecond=0))
+    return datetime.combine(day, time.min)
+
+
 def build_fuel_rate_lookup(FuelPrice):
     """
-    Load all FuelPrice rows once and return rate(fuel_type_id, as_of_date=None).
+    Load all FuelPrice rows once and return rate(fuel_type_id, as_of=None).
 
-    as_of_date: latest price with effective_date <= as_of_date.
-    None: current pump price (latest by effective_date, then created_at).
+    as_of (date or datetime): latest price with effective_at <= as_of.
+    None: current pump price (latest effective_at <= now).
     """
     from collections import defaultdict
 
     by_fuel = defaultdict(list)
-    for fp in FuelPrice.query.order_by(
-        FuelPrice.effective_date.asc(),
-        FuelPrice.created_at.asc(),
-        FuelPrice.id.asc(),
-    ).all():
-        ed = _as_plain_date(fp.effective_date) or _as_plain_date(fp.created_at)
-        if ed is None:
+    for fp in FuelPrice.query.order_by(FuelPrice.id.asc()).all():
+        at = _fuel_price_effective_at(fp)
+        if at is None:
             continue
-        by_fuel[fp.fuel_type_id].append((ed, float(fp.price_per_liter or 0)))
+        by_fuel[fp.fuel_type_id].append((at, float(fp.price_per_liter or 0), fp.id))
+
+    for fuel_id in by_fuel:
+        by_fuel[fuel_id].sort(key=lambda x: (x[0], x[2]))
 
     def rate(fuel_type_id, as_of_date=None):
         entries = by_fuel.get(fuel_type_id) or []
         if not entries:
             return 0.0
-        if as_of_date is None:
-            return entries[-1][1]
-        as_of = _as_plain_date(as_of_date)
+        as_of = _as_plain_datetime(as_of_date)
         if as_of is None:
-            return entries[-1][1]
+            as_of = datetime.utcnow().replace(microsecond=0)
         best = None
-        for ed, price in entries:
-            if ed <= as_of:
+        for at, price, _fid in entries:
+            if at <= as_of:
                 best = price
             else:
                 break
-        # Before first log: use earliest known price
         return best if best is not None else entries[0][1]
 
     return rate
@@ -177,41 +232,36 @@ def fuel_rate_for(fuel_type_id, FuelPrice, as_of_date=None):
     """
     Selling rate for a fuel type.
 
-    as_of_date: price effective on that date (effective_date <= as_of_date).
-    None: current / latest pump price.
+    as_of_date: date or datetime — price effective at that moment
+    (effective_at <= as_of). Same calendar day can have multiple rates.
+    None: current pump price (latest effective_at <= now).
     """
-    q = FuelPrice.query.filter_by(fuel_type_id=fuel_type_id)
-    as_of = _as_plain_date(as_of_date)
-    if as_of is not None:
-        row = (
-            q.filter(FuelPrice.effective_date <= as_of)
-            .order_by(
-                FuelPrice.effective_date.desc(),
-                FuelPrice.created_at.desc(),
-                FuelPrice.id.desc(),
-            )
-            .first()
-        )
-        if row is None:
-            # Before first effective log — use earliest price
-            row = (
-                q.order_by(
-                    FuelPrice.effective_date.asc(),
-                    FuelPrice.created_at.asc(),
-                    FuelPrice.id.asc(),
-                )
-                .first()
-            )
-    else:
-        row = (
-            q.order_by(
-                FuelPrice.effective_date.desc(),
-                FuelPrice.created_at.desc(),
-                FuelPrice.id.desc(),
-            )
-            .first()
-        )
-    return float(row.price_per_liter) if row else 0.0
+    as_of = _as_plain_datetime(as_of_date)
+    if as_of is None:
+        as_of = datetime.utcnow().replace(microsecond=0)
+
+    rows = FuelPrice.query.filter_by(fuel_type_id=fuel_type_id).all()
+    if not rows:
+        return 0.0
+
+    best = None
+    earliest = None
+    for row in rows:
+        at = _fuel_price_effective_at(row)
+        if at is None:
+            continue
+        price = float(row.price_per_liter or 0)
+        if earliest is None or at < earliest[0] or (at == earliest[0] and row.id < earliest[2]):
+            earliest = (at, price, row.id)
+        if at <= as_of:
+            if best is None or at > best[0] or (at == best[0] and row.id > best[2]):
+                best = (at, price, row.id)
+
+    if best is not None:
+        return best[1]
+    if earliest is not None:
+        return earliest[1]
+    return 0.0
 
 
 def paginate(query_or_list, page, per_page=15):

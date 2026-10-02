@@ -44,11 +44,13 @@ def _set_fuel_opening(name, liters, cost_per_liter, sale_per_liter, user_id, as_
     if existing_price:
         existing_price.price_per_liter = sale_per_liter
         existing_price.updated_by = user_id
+        existing_price.effective_at = as_of
     else:
         db.session.add(FuelPrice(
             fuel_type_id=fuel.id,
             price_per_liter=sale_per_liter,
             effective_date=as_of.date(),
+            effective_at=as_of,
             updated_by=user_id,
             created_at=as_of,
         ))
