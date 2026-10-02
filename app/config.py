@@ -2,8 +2,10 @@ import os
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Always load .env from project root (Passenger cwd is unreliable)
+_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+load_dotenv(os.path.join(_BASE_DIR, '.env'))
+
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-12345')
@@ -23,8 +25,7 @@ class Config:
         )
     else:
         # Fallback: SQLite in project instance/ folder
-        _base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        _instance_dir = os.path.join(_base_dir, 'instance')
+        _instance_dir = os.path.join(_BASE_DIR, 'instance')
         os.makedirs(_instance_dir, exist_ok=True)
         _db_path = os.path.join(_instance_dir, 'petrol_pump.db').replace('\\', '/')
         SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', f'sqlite:///{_db_path}')
@@ -35,6 +36,4 @@ class Config:
         'pool_recycle': 280,
     }
 
-    # Full-data backups (JSON dumps under project /backups)
-    _base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    BACKUP_DIR = os.environ.get('BACKUP_DIR', os.path.join(_base_dir, 'backups'))
+    BACKUP_DIR = os.environ.get('BACKUP_DIR', os.path.join(_BASE_DIR, 'backups'))
