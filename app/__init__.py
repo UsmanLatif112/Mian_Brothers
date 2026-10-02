@@ -78,10 +78,37 @@ def create_app():
         ensure_expenses_schema()
         ensure_till_schema()
         ensure_item_price_log_schema()
+        ensure_default_fuel_types()
         ensure_price_history_seed()
         ensure_meter_sale_rate_schema()
         
     return app
+
+
+def ensure_default_fuel_types():
+    """Ensure Petrol and Diesel fuel types (+ inventory rows) always exist."""
+    from app.models import FuelType, Inventory
+
+    defaults = ('Petrol', 'Diesel')
+    created = False
+    for name in defaults:
+        fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
+        if fuel is None:
+            fuel = FuelType(name=name, unit='Liter')
+            db.session.add(fuel)
+            db.session.flush()
+            created = True
+        inv = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
+        if inv is None:
+            db.session.add(Inventory(
+                fuel_type_id=fuel.id,
+                current_stock_liters=0,
+                reorder_threshold=0,
+            ))
+            created = True
+
+    if created:
+        db.session.commit()
 
 
 def ensure_meter_sale_rate_schema():

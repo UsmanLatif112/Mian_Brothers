@@ -47,11 +47,16 @@ def main():
         db.session.add(admin)
         db.session.commit()
 
+        # Default fuel types used across the app
+        from app import ensure_default_fuel_types
+        ensure_default_fuel_types()
+
         print("All data deleted.")
         print(f"Admin created: {ADMIN_NAME}")
         print(f"Login username: {ADMIN_NAME}")
         print(f"Account email:  {ADMIN_EMAIL}")
         print("Login password: (as provided)")
+        print("Default fuels: Petrol, Diesel")
 
 
 if __name__ == "__main__":
