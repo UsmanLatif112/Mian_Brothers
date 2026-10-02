@@ -10,24 +10,24 @@ def login():
         return redirect(url_for('dashboard.index'))
         
     if request.method == 'POST':
-        email = request.form.get('email')
+        username = (request.form.get('username') or '').strip()
         password = request.form.get('password')
         remember = True if request.form.get('remember') else False
-        
-        user = User.query.filter_by(email=email).first()
-        
+
+        user = User.query.filter_by(name=username).first()
+
         if not user or not user.check_password(password):
             flash('Please check your login credentials and try again.', 'danger')
             return redirect(url_for('auth.login'))
-            
+
         if user.status != 'active':
             flash('Your account has been disabled. Please contact the administrator.', 'danger')
             return redirect(url_for('auth.login'))
-            
+
         login_user(user, remember=remember)
         next_page = request.args.get('next')
         return redirect(next_page) if next_page else redirect(url_for('dashboard.index'))
-        
+
     return render_template('auth/login.html')
 
 @auth_bp.route('/logout')
@@ -55,7 +55,12 @@ def staff_accounts():
             if not name or not email or not password:
                 flash('Name, email, and password are required fields.', 'danger')
                 return redirect(url_for('auth.staff_accounts'))
-                
+
+            existing_name = User.query.filter_by(name=name.strip()).first()
+            if existing_name:
+                flash('A user with that username already exists.', 'danger')
+                return redirect(url_for('auth.staff_accounts'))
+
             existing_user = User.query.filter_by(email=email).first()
             if existing_user:
                 flash('A user with that email already exists.', 'danger')

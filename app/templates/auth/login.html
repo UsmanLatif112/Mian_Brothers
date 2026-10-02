@@ -16,10 +16,10 @@
             
             <form action="{{ url_for('auth.login') }}" method="POST">
                 <div class="mb-3">
-                    <label for="email" class="form-label form-label-custom">Email Address</label>
+                    <label for="username" class="form-label form-label-custom">Username</label>
                     <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                        <input type="email" class="form-control form-control-custom" id="email" name="email" placeholder="name@fuel.com" required autocomplete="email">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" class="form-control form-control-custom" id="username" name="username" placeholder="Enter your username" required autocomplete="username" autofocus>
                     </div>
                 </div>
                 

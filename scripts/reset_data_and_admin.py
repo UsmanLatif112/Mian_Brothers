@@ -49,7 +49,8 @@ def main():
 
         print("All data deleted.")
         print(f"Admin created: {ADMIN_NAME}")
-        print(f"Login email:   {ADMIN_EMAIL}")
+        print(f"Login username: {ADMIN_NAME}")
+        print(f"Account email:  {ADMIN_EMAIL}")
         print("Login password: (as provided)")
 
 
