@@ -17,28 +17,28 @@ PER_PAGE = 15
 def index():
     if request.method == 'POST':
         action = request.form.get('action')
-        
-        if action == 'create':
-            name = request.form.get('name')
-            phone = request.form.get('phone')
-            address = request.form.get('address')
+
+        if action in ('create', 'edit'):
+            name = (request.form.get('name') or '').strip()
+            phone = (request.form.get('phone') or '').strip() or None
+            address = (request.form.get('address') or '').strip() or None
             old_book_no = (request.form.get('old_book_no') or '').strip() or None
             limit = request.form.get('credit_limit')
             prev_raw = (request.form.get('previous_credit') or '').strip()
             entry_date = parse_form_date(request.form.get('entry_date'))
-            
+
             if not name:
                 flash('Customer name is required.', 'danger')
                 return redirect(url_for('customers.index'))
-                
+
             limit_val = None
             if limit:
                 try:
                     limit_val = float(limit)
                     if limit_val <= 0:
-                        raise ValueError("Limit must be greater than zero.")
+                        raise ValueError('Limit must be greater than zero.')
                 except ValueError as e:
-                    flash(f"Invalid credit limit: {e}", 'danger')
+                    flash(f'Invalid credit limit: {e}', 'danger')
                     return redirect(url_for('customers.index'))
 
             prev_credit = 0.0
@@ -50,73 +50,85 @@ def index():
                 except ValueError as e:
                     flash(f'Invalid previous credit: {e}', 'danger')
                     return redirect(url_for('customers.index'))
-                    
-            customer = Customer(
-                name=name,
-                phone=phone,
-                address=address,
-                old_book_no=old_book_no,
-                previous_credit=prev_credit if prev_credit > 0 else None,
-                credit_limit=limit_val,
-                current_balance_due=prev_credit,
-            )
-            db.session.add(customer)
-            db.session.flush()
 
-            # Opening book credit affects customer balance only — excluded from period cash KPIs.
-            if prev_credit > 0:
-                db.session.add(CreditSale(
-                    customer_id=customer.id,
-                    sale_date=entry_date,
-                    liters=0,
-                    rate=0,
-                    amount=prev_credit,
-                    amount_paid=0,
-                    entry_type='opening',
-                    payment_status='unpaid',
-                    remarks='Previous / opening book credit',
-                    recorded_by=current_user.id,
-                ))
-
-            db.session.commit()
-            flash(f"Customer '{name}' registered successfully.", 'success')
-            
-        elif action == 'edit':
-            customer_id = request.form.get('customer_id')
-            customer = Customer.query.get(customer_id)
-            if customer:
-                customer.name = request.form.get('name')
-                customer.phone = request.form.get('phone')
-                customer.address = request.form.get('address')
-                customer.old_book_no = (request.form.get('old_book_no') or '').strip() or None
-                
-                limit = request.form.get('credit_limit')
-                limit_val = None
-                if limit:
-                    try:
-                        limit_val = float(limit)
-                    except ValueError:
-                        pass
+            if action == 'create':
+                customer = Customer(
+                    name=name,
+                    phone=phone,
+                    address=address,
+                    old_book_no=old_book_no,
+                    previous_credit=prev_credit if prev_credit > 0 else None,
+                    credit_limit=limit_val,
+                    current_balance_due=0,
+                )
+                db.session.add(customer)
+                db.session.flush()
+            else:
+                customer = Customer.query.get(request.form.get('customer_id'))
+                if not customer:
+                    flash('Customer not found.', 'danger')
+                    return redirect(url_for('customers.index'))
+                customer.name = name
+                customer.phone = phone
+                customer.address = address
+                customer.old_book_no = old_book_no
                 customer.credit_limit = limit_val
-                
-                db.session.commit()
+                customer.previous_credit = prev_credit if prev_credit > 0 else None
+
+            # Opening book credit — same create/edit logic (balance via ledger recalc).
+            opening = (
+                CreditSale.query
+                .filter_by(customer_id=customer.id, entry_type='opening')
+                .order_by(CreditSale.id.asc())
+                .first()
+            )
+            if prev_credit > 0:
+                if opening:
+                    opening.amount = prev_credit
+                    opening.sale_date = entry_date
+                    opening.payment_status = 'unpaid'
+                    opening.amount_paid = 0
+                    opening.remarks = 'Previous / opening book credit'
+                else:
+                    db.session.add(CreditSale(
+                        customer_id=customer.id,
+                        sale_date=entry_date,
+                        liters=0,
+                        rate=0,
+                        amount=prev_credit,
+                        amount_paid=0,
+                        entry_type='opening',
+                        payment_status='unpaid',
+                        remarks='Previous / opening book credit',
+                        recorded_by=current_user.id,
+                    ))
+            elif opening:
+                db.session.delete(opening)
+
+            db.session.flush()
+            recalculate_customer_balance(customer)
+            db.session.commit()
+
+            if action == 'create':
+                flash(f"Customer '{name}' registered successfully.", 'success')
+            else:
                 flash(f"Customer details updated for '{customer.name}'.", 'success')
-                
+
         return redirect(url_for('customers.index'))
-        
+
     # GET request
     search_query = request.args.get('search', '').strip()
-    status_filter = request.args.get('filter', 'all') # 'all', 'due', 'clear'
-    
+    status_filter = request.args.get('filter', 'all')  # 'all', 'due', 'clear'
+
     query = Customer.query
-    
+
     if search_query:
         query = query.filter(
             Customer.name.like(f"%{search_query}%")
             | Customer.phone.like(f"%{search_query}%")
             | Customer.old_book_no.like(f"%{search_query}%")
         )
-        
+
     if status_filter == 'due':
         query = query.filter(Customer.current_balance_due > 0)
     elif status_filter == 'clear':
@@ -128,6 +140,19 @@ def index():
         PER_PAGE,
     )
 
+    opening_dates = {}
+    if customers:
+        openings = (
+            CreditSale.query
+            .filter(
+                CreditSale.customer_id.in_([c.id for c in customers]),
+                CreditSale.entry_type == 'opening',
+            )
+            .all()
+        )
+        for row in openings:
+            opening_dates[row.customer_id] = row.sale_date.isoformat() if row.sale_date else ''
+
     return render_template(
         'customers/index.html',
         customers=customers,
@@ -135,6 +160,7 @@ def index():
         search=search_query,
         filter=status_filter,
         today=datetime.utcnow().date().isoformat(),
+        opening_dates=opening_dates,
     )
 
 @customers_bp.route('/ledger/<int:customer_id>', methods=['GET', 'POST'])

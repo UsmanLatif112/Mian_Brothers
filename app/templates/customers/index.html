@@ -96,6 +96,8 @@
                                 data-phone="{{ cust.phone or '' }}"
                                 data-address="{{ cust.address or '' }}"
                                 data-old-book-no="{{ cust.old_book_no or '' }}"
+                                data-previous-credit="{{ cust.previous_credit or '' }}"
+                                data-entry-date="{{ opening_dates.get(cust.id, today) }}"
                                 data-limit="{{ cust.credit_limit or '' }}"
                                 title="Edit Customer">
                             <i class="bi bi-pencil-square"></i>
@@ -182,6 +184,8 @@
                                         data-phone="{{ cust.phone or '' }}"
                                         data-address="{{ cust.address or '' }}"
                                         data-old-book-no="{{ cust.old_book_no or '' }}"
+                                        data-previous-credit="{{ cust.previous_credit or '' }}"
+                                        data-entry-date="{{ opening_dates.get(cust.id, today) }}"
                                         data-limit="{{ cust.credit_limit or '' }}"
                                         title="Edit Customer">
                                     <i class="bi bi-pencil-square"></i>
@@ -276,23 +280,36 @@
                 <div class="modal-body customer-modal-body pt-2">
                     <div class="mb-3">
                         <label for="edit_name" class="form-label form-label-custom">Customer Name</label>
-                        <input type="text" class="form-control form-control-custom" id="edit_name" name="name" required>
+                        <input type="text" class="form-control form-control-custom" id="edit_name" name="name" required placeholder="Acme Logistics / Bob Smith">
                     </div>
                     <div class="mb-3">
                         <label for="edit_phone" class="form-label form-label-custom">Phone Number</label>
-                        <input type="text" class="form-control form-control-custom" id="edit_phone" name="phone">
+                        <input type="text" class="form-control form-control-custom" id="edit_phone" name="phone" placeholder="+1234567890">
                     </div>
                     <div class="mb-3">
                         <label for="edit_old_book_no" class="form-label form-label-custom">Old Book No <span class="text-muted-custom fw-normal">(Optional)</span></label>
                         <input type="text" class="form-control form-control-custom" id="edit_old_book_no" name="old_book_no" placeholder="Previous ledger / book number">
                     </div>
                     <div class="mb-3">
+                        <label for="edit_previous_credit" class="form-label form-label-custom">Previous Credit <span class="text-muted-custom fw-normal">(Optional)</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_previous_credit" name="previous_credit" placeholder="Opening book credit">
+                        </div>
+                        <small class="text-muted-custom" style="font-size: 0.75rem;">Sets customer due balance. Not counted in today’s cash / sales KPIs.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_entry_date" class="form-label form-label-custom">Entry Date</label>
+                        <input type="date" class="form-control form-control-custom" id="edit_entry_date" name="entry_date" value="{{ today }}">
+                    </div>
+                    <div class="mb-3">
                         <label for="edit_address" class="form-label form-label-custom">Billing Address</label>
-                        <input type="text" class="form-control form-control-custom" id="edit_address" name="address">
+                        <input type="text" class="form-control form-control-custom" id="edit_address" name="address" placeholder="123 Main St, Springfield">
                     </div>
                     <div class="mb-1">
-                        <label for="edit_limit" class="form-label form-label-custom">Credit Limit (PKR)</label>
-                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_limit" name="credit_limit">
+                        <label for="edit_limit" class="form-label form-label-custom">Credit Limit (PKR) (Optional)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_limit" name="credit_limit" placeholder="5000">
+                        <small class="text-muted-custom" style="font-size: 0.75rem;">Leave blank for unlimited credit.</small>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-2 pb-3 gap-2">
@@ -317,13 +334,17 @@
                 const phone = btn.getAttribute('data-phone');
                 const address = btn.getAttribute('data-address');
                 const oldBookNo = btn.getAttribute('data-old-book-no');
+                const previousCredit = btn.getAttribute('data-previous-credit');
+                const entryDate = btn.getAttribute('data-entry-date');
                 const limit = btn.getAttribute('data-limit');
-                
+
                 document.getElementById('edit_customer_id').value = id;
                 document.getElementById('edit_name').value = name;
                 document.getElementById('edit_phone').value = phone;
                 document.getElementById('edit_address').value = address;
                 document.getElementById('edit_old_book_no').value = oldBookNo || '';
+                document.getElementById('edit_previous_credit').value = previousCredit || '';
+                document.getElementById('edit_entry_date').value = entryDate || '{{ today }}';
                 document.getElementById('edit_limit').value = limit;
             });
         });
