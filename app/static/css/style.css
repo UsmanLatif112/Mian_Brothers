@@ -2774,6 +2774,195 @@ a.kpi-card:focus-visible {
     }
 }
 
+/* ============================================
+   Responsive pass 2 — fluid layout by viewport
+   ============================================ */
+:root {
+    --page-pad-x: clamp(0.75rem, 2.2vw, 1.5rem);
+    --page-pad-y: clamp(0.85rem, 2vw, 1.5rem);
+    --type-title: clamp(1.2rem, 1rem + 1.2vw, 1.75rem);
+    --type-body: clamp(0.84rem, 0.8rem + 0.25vw, 0.95rem);
+}
+
+.app-shell {
+    padding-left: max(var(--page-pad-x), env(safe-area-inset-left));
+    padding-right: max(var(--page-pad-x), env(safe-area-inset-right));
+}
+
+.app-main {
+    padding-top: var(--page-pad-y);
+    padding-bottom: max(clamp(1.5rem, 4vw, 3rem), env(safe-area-inset-bottom));
+}
+
+.page-title {
+    font-size: var(--type-title);
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+body {
+    font-size: var(--type-body);
+}
+
+/* Prevent wide children from blowing the layout */
+.app-main,
+.card-premium,
+.modal-body,
+.table-responsive {
+    max-width: 100%;
+}
+
+.table-responsive,
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+
+.table-responsive > .table,
+.table-scroll > .table {
+    min-width: 640px;
+}
+
+/* Touch-friendly controls */
+@media (hover: none) and (pointer: coarse) {
+    .btn,
+    .form-control-custom,
+    .form-select.form-control-custom,
+    .nav-link-custom {
+        min-height: 42px;
+    }
+
+    .table-actions .btn,
+    td .btn-group .btn {
+        min-width: 36px;
+        min-height: 36px;
+    }
+}
+
+/* Modals: nearly full screen on phones */
+@media (max-width: 575.98px) {
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100vw - 1rem);
+    }
+
+    .modal-dialog.modal-lg,
+    .modal-dialog.modal-xl,
+    .sale-form-modal.modal-dialog {
+        margin: 0.35rem;
+        max-width: calc(100vw - 0.7rem);
+        max-height: calc(100dvh - 0.7rem);
+        align-items: stretch;
+    }
+
+    .sale-form-modal .modal-content,
+    #addInventoryModal .inventory-modal-content,
+    #createCustomerModal .customer-modal-content,
+    #editCustomerModal .customer-modal-content {
+        max-height: calc(100dvh - 0.7rem);
+    }
+
+    #addInventoryModal .inventory-modal-body,
+    #createCustomerModal .customer-modal-body,
+    #editCustomerModal .customer-modal-body,
+    .sale-form-modal .modal-body {
+        max-height: none;
+        flex: 1 1 auto;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .auth-page {
+        padding: 1rem 0.5rem;
+        align-items: flex-start;
+        min-height: calc(100dvh - var(--nav-height));
+    }
+
+    .auth-card {
+        width: 100%;
+    }
+
+    /* Fuel stock cards: stack badge under title on very small screens */
+    .card-body-premium .d-flex.justify-content-between.align-items-start {
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .row.g-4 {
+        --bs-gutter-x: 0.85rem;
+        --bs-gutter-y: 0.85rem;
+    }
+
+    .filter-form .row,
+    .filter-bar {
+        row-gap: 0.55rem;
+    }
+
+    .card-header-premium {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .card-header-premium .d-flex {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    /* Tom Select full width in forms/modals */
+    .ts-wrapper,
+    .ts-control {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .input-group {
+        flex-wrap: wrap;
+    }
+
+    .kpi-grid,
+    .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .kpi-grid,
+    .metric-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cash-journal-strip {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+    }
+
+    .page-subtitle {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+/* Tablets / small laptops */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    :root {
+        --shell-max: 1140px;
+    }
+
+    .table-responsive > .table,
+    .table-scroll > .table {
+        min-width: 720px;
+    }
+}
+
 @media print {
     body {
         padding-top: 0;

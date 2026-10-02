@@ -123,7 +123,69 @@
             <div class="card-header-premium">
                 <h5 class="mb-0 fw-bold">Shop Stock (Mobile / FT Mobile Oil / Filter / Other)</h5>
             </div>
-            <div class="table-responsive">
+
+            <!-- Mobile cards -->
+            <div class="directory-cards d-md-none">
+                {% if shop_items %}
+                    {% for item in shop_items %}
+                    <article class="directory-card">
+                        <div class="directory-card-main">
+                            <div class="directory-card-info">
+                                <div class="directory-card-title">{{ item.name }}</div>
+                                <div class="directory-card-meta">
+                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span>
+                                    {% if item.company %}<span>{{ item.company }}</span>{% endif %}
+                                    {% if item.item_type %}<span>{{ item.item_type }}</span>{% endif %}
+                                </div>
+                                <div class="directory-card-submeta">
+                                    Vendor: {{ item.vendor or '—' }}
+                                    · Cost {{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}
+                                    · Sale {{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}
+                                    {% if item.category == 'ft_mobile' and item.liters is not none %}
+                                    · {{ "{:,.2f}".format(item.liters) }} L
+                                    {% elif item.category != 'ft_mobile' %}
+                                    · Qty {{ item.quantity }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="directory-card-aside">
+                            <div class="table-actions btn-group gap-1">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary border-0 edit-item-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editItemModal"
+                                        data-id="{{ item.id }}"
+                                        data-edit-url="{{ url_for('inventory.edit_item', item_id=item.id) }}"
+                                        data-name="{{ item.name }}"
+                                        data-company="{{ item.company or '' }}"
+                                        data-item-type="{{ item.item_type or '' }}"
+                                        data-vendor="{{ item.vendor or '' }}"
+                                        data-cost="{{ item.cost_price }}"
+                                        data-sale="{{ item.sale_price }}"
+                                        data-liters="{{ item.liters if item.liters is not none else '' }}"
+                                        data-quantity="{{ item.quantity }}"
+                                        title="Edit item">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <form action="{{ url_for('inventory.delete_item', item_id=item.id) }}" method="POST" class="d-inline"
+                                      onsubmit="return confirm('Delete {{ item.name }} from inventory?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete item">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                {% else %}
+                    <div class="p-4 text-center">
+                        <p class="text-muted-custom mb-0">No shop items in stock yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="table-responsive d-none d-md-block">
                 <table class="table table-custom table-hover mb-0">
                     <thead>
                         <tr>
