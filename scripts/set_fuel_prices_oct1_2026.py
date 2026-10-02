@@ -1,29 +1,40 @@
 """
-ONE-TIME: set fuel prices effective 2026-10-01 and recalculate sales.
+ONE-TIME: set current fuel prices and refresh meter sale_rate snapshots.
 
   Petrol  → 390.50 / L
-  Diesel  → 404.50 / L
+  Diesel  → 404.30 / L
 
-Then for all meter readings + fuel credit sales on/after that date:
-  - update stored sale rate
-  - recalculate credit sale amounts (liters × rate − discount)
-  - rebuild affected customer balances
+Default effective date = today (UTC). Optional:
+  --date=2026-10-02
+
+Updates:
+  - FuelPrice row for that effective date
+  - MeterReading.sale_rate for readings on/after that date
+  - Fuel CreditSale rate/amount on/after that date (entry_type=sale)
+  - Customer balances for affected credit sales
 
 Usage:
   PYTHONPATH=. python scripts/set_fuel_prices_oct1_2026.py
+  PYTHONPATH=. python scripts/set_fuel_prices_oct1_2026.py --date=2026-10-02
 """
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from app import create_app
 from app.models import db, User, FuelType, FuelPrice, MeterReading, CreditSale, Customer
 from app.customers.service import recalculate_customer_balance
 
 
-EFF = date(2026, 10, 1)
 PRICES = {
     'petrol': 390.50,
-    'diesel': 404.50,
+    'diesel': 404.30,
 }
+
+
+def _parse_day(argv):
+    for arg in argv:
+        if arg.startswith('--date='):
+            return datetime.strptime(arg.split('=', 1)[1], '%Y-%m-%d').date()
+    return datetime.utcnow().date()
 
 
 def _fuel(name_key):
@@ -42,7 +53,11 @@ def _admin_id():
     return user.id if user else None
 
 
-def main():
+def main(argv=None):
+    import sys
+    argv = list(sys.argv[1:] if argv is None else argv)
+    eff = _parse_day(argv)
+
     app = create_app()
     with app.app_context():
         user_id = _admin_id()
@@ -58,10 +73,9 @@ def main():
                 continue
             fuel_ids[fuel.id] = (fuel.name, price)
 
-            # Replace any price rows already on this effective date
             existing = FuelPrice.query.filter_by(
                 fuel_type_id=fuel.id,
-                effective_date=EFF,
+                effective_date=eff,
             ).all()
             for row in existing:
                 db.session.delete(row)
@@ -69,11 +83,11 @@ def main():
             db.session.add(FuelPrice(
                 fuel_type_id=fuel.id,
                 price_per_liter=price,
-                effective_date=EFF,
+                effective_date=eff,
                 updated_by=user_id,
-                created_at=datetime.combine(EFF, datetime.min.time()),
+                created_at=datetime.combine(eff, time.min),
             ))
-            print(f'Set {fuel.name} = PKR {price:.2f} effective {EFF.isoformat()}')
+            print(f'Set {fuel.name} = PKR {price:.2f} effective {eff.isoformat()}')
 
         if not fuel_ids:
             print('No fuels updated — abort.')
@@ -81,11 +95,10 @@ def main():
 
         db.session.flush()
 
-        # Meter readings on/after effective date → snapshot sale_rate
         meters = (
             MeterReading.query
             .filter(
-                MeterReading.reading_date >= EFF,
+                MeterReading.reading_date >= eff,
                 MeterReading.fuel_type_id.in_(list(fuel_ids.keys())),
             )
             .all()
@@ -101,11 +114,10 @@ def main():
                 f'rate {old} → {price} (liters={float(m.liters_sold or 0):.2f})'
             )
 
-        # Fuel credit/other sales on/after effective date
         sales = (
             CreditSale.query
             .filter(
-                CreditSale.sale_date >= EFF,
+                CreditSale.sale_date >= eff,
                 CreditSale.fuel_type_id.in_(list(fuel_ids.keys())),
                 CreditSale.entry_type == 'sale',
             )
@@ -122,7 +134,6 @@ def main():
             new_amount = max(round(liters * price - discount, 2), 0.0)
             s.rate = price
             s.amount = new_amount
-            # Keep amount_paid; status may become partial/over — balance rebuild handles dues
             if s.customer_id:
                 customer_ids.add(s.customer_id)
             sale_updated += 1
@@ -143,7 +154,7 @@ def main():
 
         db.session.commit()
         print(
-            f'Done. Prices set for {EFF}. '
+            f'Done. Prices set for {eff}. '
             f'Meters updated: {meter_updated}. Fuel sales updated: {sale_updated}. '
             f'Customers recalculated: {len(customer_ids)}.'
         )

@@ -1,21 +1,23 @@
 """
 Wipe ALL business data. Keep:
   - all users
-  - default fuel types Petrol + Diesel (with empty inventory)
+  - all vendors (contact details; balances reset to 0)
+  - fuel types
+  - fuel inventory (current stock liters)
 
-Deletes sales, purchases, vendors, customers, machines, prices, expenses, till, etc.
+Deletes sales, customers, machines, meters, prices, expenses, till,
+stock/purchase history, shop items, vendor payments, etc.
 
-Usage (on server, inside app venv):
+Usage:
   PYTHONPATH=. python scripts/wipe_keep_users_fuels.py
 """
 from sqlalchemy import text, inspect
 
 from app import create_app, ensure_default_fuel_types
-from app.models import db, FuelType, Inventory
+from app.models import db, FuelType, Inventory, User, Vendor
 
 
-# Tables that must stay (rows kept or restored after wipe)
-KEEP_TABLES = {'users'}
+KEEP_TABLES = {'users', 'vendors', 'fuel_types', 'inventory'}
 
 
 def main():
@@ -28,7 +30,6 @@ def main():
         if is_mysql:
             db.session.execute(text('SET FOREIGN_KEY_CHECKS=0'))
 
-        # Clear every mapped table except users
         for table in reversed(db.metadata.sorted_tables):
             if table.name in KEEP_TABLES:
                 print(f"  kept {table.name}")
@@ -36,7 +37,7 @@ def main():
             deleted = db.session.execute(table.delete()).rowcount
             print(f"  cleared {table.name}: {deleted} rows")
 
-        # Also clear any extra tables (e.g. sms_*) that models don't map
+        # Extra unmapped tables (e.g. sms_*)
         inspector = inspect(db.engine)
         mapped = {t.name for t in db.metadata.sorted_tables}
         for name in inspector.get_table_names():
@@ -48,12 +49,16 @@ def main():
             except Exception as e:
                 print(f"  skip {name}: {e}")
 
+        # Vendor details kept; payable history wiped → reset balances
+        for v in Vendor.query.all():
+            v.previous_payable = None
+            v.current_balance_payable = 0
+
         if is_mysql:
             db.session.execute(text('SET FOREIGN_KEY_CHECKS=1'))
 
         db.session.commit()
 
-        # Restore Petrol + Diesel (+ zero inventory)
         ensure_default_fuel_types()
 
         fuels = FuelType.query.order_by(FuelType.name.asc()).all()
@@ -62,13 +67,17 @@ def main():
             stock = float(inv.current_stock_liters) if inv else 0
             print(f"  fuel ready: {fuel.name} (stock {stock:.2f} L)")
 
-        from app.models import User
         users = User.query.order_by(User.id.asc()).all()
         print(f"Users kept: {len(users)}")
         for u in users:
             print(f"  - {u.name!r} ({u.role}, {u.status})")
 
-        print('Done. All history cleared. Users + Petrol/Diesel kept.')
+        vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+        print(f"Vendors kept: {len(vendors)}")
+        for v in vendors:
+            print(f"  - {v.name!r}")
+
+        print('Done. Cleared history. Kept users + vendors + fuel types + inventory.')
 
 
 if __name__ == '__main__':
