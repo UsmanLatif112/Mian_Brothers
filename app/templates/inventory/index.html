@@ -344,8 +344,30 @@
                         </div>
 
                         <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
-                            <label for="vendor" class="form-label form-label-custom">Vendor</label>
-                            <input type="text" class="form-control form-control-custom" id="vendor" name="vendor" placeholder="Supplier / vendor name">
+                            <label for="vendor_id" class="form-label form-label-custom">Vendor</label>
+                            <select class="form-select form-control-custom js-search-vendor js-create-vendor" id="vendor_id" name="vendor_id"
+                                    data-placeholder="Search or add vendor..."
+                                    data-create-url="{{ url_for('vendors.quick_vendor') }}">
+                                <option value="">Search or add vendor...</option>
+                                {% for v in vendors %}
+                                <option value="{{ v.id }}" data-phone="{{ v.phone or '' }}">
+                                    {{ v.name }}{% if v.phone %} · {{ v.phone }}{% endif %}
+                                    (Payable: {{ v.current_balance_payable | money }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted-custom">Purchase posts to this vendor account.</div>
+                        </div>
+
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                            <label for="payment_status" class="form-label form-label-custom">Payment to Vendor</label>
+                            <select class="form-select form-control-custom" id="payment_status" name="payment_status">
+                                <option value="unpaid" selected>Unpaid — add batch total to vendor payable</option>
+                                <option value="paid">Paid — settle batch total against vendor payable</option>
+                            </select>
+                            <div class="form-text text-muted-custom" id="payment_status_hint">
+                                Uses batch total (cost × liters/qty). Unpaid increases payable; Paid records payment for the same amount.
+                            </div>
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
@@ -597,15 +619,13 @@ document.addEventListener('DOMContentLoaded', () => {
             el.querySelectorAll('input, select').forEach(input => {
                 if (input.type === 'hidden') return;
                 if (visible) {
-                    if (['cost_price', 'sale_price'].includes(input.id) ||
+                    if (['cost_price', 'sale_price', 'vendor_id', 'payment_status'].includes(input.id) ||
                         (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id)) ||
                         (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id)) ||
                         (cat === 'mobile' && ['mobile_company', 'mobile_type', 'quantity', 'liters'].includes(input.id)) ||
                         (cat === 'filter' && ['filter_type', 'filter_company', 'quantity'].includes(input.id)) ||
                         (cat === 'other' && ['item_name', 'quantity'].includes(input.id))) {
                         input.required = true;
-                    } else if (input.name === 'vendor') {
-                        input.required = false;
                     }
                 } else {
                     input.required = false;
@@ -679,6 +699,10 @@ document.addEventListener('DOMContentLoaded', () => {
         typeHidden.value = '';
         const fuelSel = document.getElementById('fuel_type_id');
         if (fuelSel && fuelSel.tomselect) fuelSel.tomselect.clear(true);
+        const vendorSel = document.getElementById('vendor_id');
+        if (vendorSel && vendorSel.tomselect) vendorSel.tomselect.clear(true);
+        const paySel = document.getElementById('payment_status');
+        if (paySel) paySel.value = 'unpaid';
         syncVisibleFields();
         updateBatchTotal();
         refreshFuelDropdown();
@@ -704,6 +728,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     form.addEventListener('submit', (e) => {
         const cat = categorySelect.value;
+
+        const vendorSel = document.getElementById('vendor_id');
+        const vendorVal = vendorSel && (vendorSel.tomselect ? vendorSel.tomselect.getValue() : vendorSel.value);
+        if (!vendorVal) {
+            e.preventDefault();
+            alert('Please select or add a vendor. Inventory purchases post to the vendor account (unpaid by default).');
+            return;
+        }
 
         if (cat === 'fuel') {
             const fuelSel = document.getElementById('fuel_type_id');

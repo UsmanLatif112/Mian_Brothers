@@ -185,6 +185,46 @@ document.addEventListener('DOMContentLoaded', () => {
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
         });
 
+        document.querySelectorAll('select.js-search-vendor').forEach((el) => {
+            if (el.tomselect) return;
+            const createUrl = el.dataset.createUrl;
+            const canCreate = el.classList.contains('js-create-vendor') && createUrl;
+            const tom = new TomSelect(el, {
+                ...shared,
+                placeholder: el.dataset.placeholder || 'Type to search vendor...',
+                searchField: ['text', 'phone'],
+                dropdownParent: dropdownParentFor(el),
+                create: canCreate
+                    ? (input, callback) => {
+                          const phone = window.prompt(`Phone for "${input}" (optional):`, '') || '';
+                          postJson(createUrl, { name: input.trim(), phone: phone.trim() })
+                              .then((data) => {
+                                  if (!data.ok) {
+                                      alert(data.error || 'Could not add vendor');
+                                      callback();
+                                      return;
+                                  }
+                                  callback({
+                                      value: String(data.id),
+                                      text: data.text,
+                                      phone: data.phone || '',
+                                  });
+                              })
+                              .catch(() => {
+                                  alert('Could not add vendor');
+                                  callback();
+                              });
+                      }
+                    : false,
+                render: {
+                    ...shared.render,
+                    option_create: (data, escape) =>
+                        `<div class="create">Add vendor <strong>${escape(data.input)}</strong>…</div>`,
+                },
+            });
+            tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
+        });
+
         document.querySelectorAll('select.js-search-item').forEach((el) => {
             if (el.tomselect) return;
             const createUrl = el.dataset.createUrl;
@@ -263,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Keep Tom Select usable inside Bootstrap modals (focus + position)
         document.querySelectorAll('.modal').forEach((modalEl) => {
             modalEl.addEventListener('shown.bs.modal', () => {
-                modalEl.querySelectorAll('select.js-search-item, select.js-search-customer').forEach((el) => {
+                modalEl.querySelectorAll('select.js-search-item, select.js-search-customer, select.js-search-vendor').forEach((el) => {
                     if (!el.tomselect) return;
                     el.tomselect.positionDropdown();
                 });

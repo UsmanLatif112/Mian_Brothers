@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
 from app.models import db, Vendor, VendorPayment, ItemPurchaseLog
@@ -14,6 +14,29 @@ from app.vendors.service import (
 )
 
 PER_PAGE = 15
+
+
+@vendors_bp.route('/api/quick', methods=['POST'])
+@login_required
+def quick_vendor():
+    """Create (or return existing) vendor for searchable inventory dropdown."""
+    data = request.get_json(silent=True) or {}
+    name = normalize_vendor_name(data.get('name'))
+    phone = (data.get('phone') or '').strip() or None
+    if not name:
+        return jsonify({'ok': False, 'error': 'Vendor name is required'}), 400
+
+    vendor = get_or_create_vendor(name)
+    if phone and not vendor.phone:
+        vendor.phone = phone
+    db.session.commit()
+
+    due = float(vendor.current_balance_payable or 0)
+    label = f"{vendor.name}"
+    if vendor.phone:
+        label += f" · {vendor.phone}"
+    label += f" (Payable: PKR {due:,.2f})"
+    return jsonify({'ok': True, 'id': vendor.id, 'text': label, 'phone': vendor.phone or ''})
 
 
 @vendors_bp.route('/', methods=['GET', 'POST'])

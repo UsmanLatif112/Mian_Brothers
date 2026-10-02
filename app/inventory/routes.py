@@ -3,14 +3,33 @@ from flask_login import login_required, current_user
 from app.inventory import inventory_bp
 from app.models import (
     db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog,
-    Sale, Machine, CreditSale, DailyFuelStock,
+    Sale, Machine, CreditSale, DailyFuelStock, Vendor,
 )
 from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for
-from app.vendors.service import link_purchase_to_vendor
+from app.vendors.service import (
+    link_purchase_to_vendor,
+    resolve_vendor,
+    apply_purchase_vendor_payment,
+    purchase_log_total,
+)
 from datetime import datetime
 
 
 PER_PAGE = 15
+
+
+def _inventory_vendor_and_payment():
+    """Require vendor; default payment status is unpaid (posts to vendor account)."""
+    vendor_id = (request.form.get('vendor_id') or '').strip() or None
+    vendor_name = (request.form.get('vendor') or '').strip() or None
+    payment_status = (request.form.get('payment_status') or 'unpaid').strip().lower()
+    if payment_status not in ('unpaid', 'paid'):
+        payment_status = 'unpaid'
+
+    vendor = resolve_vendor(vendor_id=vendor_id, vendor_name=vendor_name)
+    if not vendor:
+        return None, payment_status, 'Vendor is required. Search or add a vendor for this purchase.'
+    return vendor, payment_status, None
 
 
 def _find_or_create_shop_item(category, name, company, item_type):
@@ -61,7 +80,6 @@ def _apply_product_sale_price(category, sale_val, company=None, item_type=None, 
 def index():
     if request.method == 'POST':
         category = (request.form.get('category') or '').strip().lower()
-        vendor = (request.form.get('vendor') or '').strip() or None
         cost_price = request.form.get('cost_price')
         sale_price = request.form.get('sale_price')
 
@@ -80,6 +98,11 @@ def index():
 
         entry_day = parse_form_date(request.form.get('entry_date'))
         entry_dt = datetime_from_date(entry_day)
+
+        vendor, payment_status, vendor_error = _inventory_vendor_and_payment()
+        if vendor_error:
+            flash(vendor_error, 'danger')
+            return redirect(url_for('inventory.index'))
 
         if category == 'fuel':
             fuel_type_id = request.form.get('fuel_type_id')
@@ -119,7 +142,7 @@ def index():
                 fuel_type_id=fuel_type.id,
                 liters_added=liters_val,
                 cost_per_liter=cost_val,
-                supplier=vendor,
+                supplier=vendor.name,
                 entry_date=entry_dt,
                 added_by=current_user.id
             )
@@ -147,7 +170,7 @@ def index():
             purchase_log = ItemPurchaseLog(
                 category='fuel',
                 item_name=fuel_type.name,
-                vendor=vendor,
+                vendor=vendor.name,
                 cost_price=cost_val,
                 sale_price=sale_val,
                 liters=liters_val,
@@ -156,12 +179,26 @@ def index():
                 added_by=current_user.id
             )
             db.session.add(purchase_log)
-            link_purchase_to_vendor(vendor, purchase_log, stock_entry)
+            link_purchase_to_vendor(vendor.name, purchase_log, stock_entry, vendor=vendor)
+            apply_purchase_vendor_payment(
+                vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+            )
             db.session.commit()
+            batch_total = purchase_log_total(purchase_log)
+            if payment_status == 'paid':
+                pay_note = (
+                    f'Paid PKR {batch_total:,.2f} settled on vendor account '
+                    f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
+                )
+            else:
+                pay_note = (
+                    f'Unpaid PKR {batch_total:,.2f} added to vendor payable '
+                    f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
+                )
             flash(
                 f"Purchase logged: {liters_val:,.2f}L of {fuel_type.name} @ PKR {cost_val:,.2f}/L "
                 f"(batch cost PKR {batch_total:,.2f}). Live stock now {new_stock:,.2f}L. "
-                f"Sale price for all stock: PKR {sale_val:,.2f}/L.",
+                f"Sale price for all stock: PKR {sale_val:,.2f}/L. Vendor: {vendor.name}. {pay_note}",
                 'success'
             )
             return redirect(url_for('inventory.index'))
@@ -185,7 +222,7 @@ def index():
             shop_item = _find_or_create_shop_item('ft_mobile', item_name, company, None)
             if shop_item:
                 shop_item.liters = float(shop_item.liters or 0) + liters_val
-                shop_item.vendor = vendor
+                shop_item.vendor = vendor.name
                 shop_item.cost_price = cost_val
             else:
                 shop_item = OtherItem(
@@ -193,7 +230,7 @@ def index():
                     name=item_name,
                     company=company,
                     item_type=None,
-                    vendor=vendor,
+                    vendor=vendor.name,
                     cost_price=cost_val,
                     sale_price=sale_val,
                     liters=liters_val,
@@ -218,7 +255,7 @@ def index():
                 item_name=item_name,
                 company=company,
                 item_type=None,
-                vendor=vendor,
+                vendor=vendor.name,
                 cost_price=cost_val,
                 sale_price=sale_val,
                 quantity=None,
@@ -227,13 +264,27 @@ def index():
                 added_by=current_user.id,
             )
             db.session.add(purchase_log)
-            link_purchase_to_vendor(vendor, purchase_log)
+            link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
+            apply_purchase_vendor_payment(
+                vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+            )
             db.session.commit()
+            batch_total = purchase_log_total(purchase_log)
+            if payment_status == 'paid':
+                pay_note = (
+                    f'Paid PKR {batch_total:,.2f} settled on vendor account '
+                    f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
+                )
+            else:
+                pay_note = (
+                    f'Unpaid PKR {batch_total:,.2f} added to vendor payable '
+                    f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
+                )
             msg = (
                 f"Purchase logged: {liters_val:,.2f}L FT Mobile Oil ({company}) "
-                f"@ PKR {cost_val:,.2f}/L (batch cost PKR {liters_val * cost_val:,.2f}). "
+                f"@ PKR {cost_val:,.2f}/L (batch cost PKR {batch_total:,.2f}). "
                 f"Live stock now {float(shop_item.liters):,.2f}L. "
-                f"Sale price for all stock: PKR {sale_val:,.2f}/L."
+                f"Sale price for all stock: PKR {sale_val:,.2f}/L. Vendor: {vendor.name}. {pay_note}"
             )
             flash(msg, 'success')
             return redirect(url_for('inventory.index'))
@@ -280,7 +331,7 @@ def index():
         shop_item = _find_or_create_shop_item(category, item_name, company, item_type)
         if shop_item:
             shop_item.quantity = int(shop_item.quantity) + qty_val
-            shop_item.vendor = vendor
+            shop_item.vendor = vendor.name
             shop_item.cost_price = cost_val
             if liters_val is not None:
                 shop_item.liters = liters_val
@@ -290,7 +341,7 @@ def index():
                 name=item_name,
                 company=company,
                 item_type=item_type,
-                vendor=vendor,
+                vendor=vendor.name,
                 cost_price=cost_val,
                 sale_price=sale_val,
                 liters=liters_val,
@@ -315,7 +366,7 @@ def index():
             item_name=item_name,
             company=company,
             item_type=item_type,
-            vendor=vendor,
+            vendor=vendor.name,
             cost_price=cost_val,
             sale_price=sale_val,
             quantity=qty_val,
@@ -324,13 +375,26 @@ def index():
             added_by=current_user.id
         )
         db.session.add(purchase_log)
-        link_purchase_to_vendor(vendor, purchase_log)
+        link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
+        apply_purchase_vendor_payment(
+            vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+        )
         db.session.commit()
-        batch_total = qty_val * cost_val
+        batch_total = purchase_log_total(purchase_log)
+        if payment_status == 'paid':
+            pay_note = (
+                f'Paid PKR {batch_total:,.2f} settled on vendor account '
+                f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
+            )
+        else:
+            pay_note = (
+                f'Unpaid PKR {batch_total:,.2f} added to vendor payable '
+                f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
+            )
         msg = (
             f"Purchase logged: {qty_val} × {item_name} @ PKR {cost_val:,.2f} "
             f"(batch cost PKR {batch_total:,.2f}). Stock now {shop_item.quantity}. "
-            f"Sale price for product: PKR {sale_val:,.2f}."
+            f"Sale price for product: PKR {sale_val:,.2f}. Vendor: {vendor.name}. {pay_note}"
         )
         flash(msg, 'success')
         return redirect(url_for('inventory.index'))
@@ -357,6 +421,8 @@ def index():
         PER_PAGE,
     )
 
+    vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+
     return render_template(
         'inventory/index.html',
         fuel_types=fuel_types,
@@ -365,6 +431,7 @@ def index():
         fuel_last_costs=fuel_last_costs,
         shop_items=shop_items,
         shop_pagination=shop_pagination,
+        vendors=vendors,
         today=datetime.utcnow().date().isoformat(),
     )
 
