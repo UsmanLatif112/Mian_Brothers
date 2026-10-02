@@ -137,7 +137,12 @@
                     </div>
                     <div class="mb-3">
                         <label for="create_password" class="form-label form-label-custom">Password</label>
-                        <input type="password" class="form-control form-control-custom" id="create_password" name="password" required placeholder="••••••••">
+                        <div class="input-group">
+                            <input type="password" class="form-control form-control-custom" id="create_password" name="password" required placeholder="••••••••">
+                            <button type="button" class="btn btn-outline-secondary password-toggle" data-target="create_password" aria-label="Show password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-top-0">
@@ -182,7 +187,12 @@
                     </div>
                     <div class="mb-3">
                         <label for="edit_password" class="form-label form-label-custom">Update Password (Leave blank to keep current)</label>
-                        <input type="password" class="form-control form-control-custom" id="edit_password" name="password" placeholder="••••••••">
+                        <div class="input-group">
+                            <input type="password" class="form-control form-control-custom" id="edit_password" name="password" placeholder="••••••••">
+                            <button type="button" class="btn btn-outline-secondary password-toggle" data-target="edit_password" aria-label="Show password">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-top-0">
@@ -206,7 +216,25 @@
                 document.getElementById('edit_email').value = btn.getAttribute('data-email');
                 document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
                 document.getElementById('edit_role').value = btn.getAttribute('data-role');
-                document.getElementById('edit_password').value = '';
+                const editPassword = document.getElementById('edit_password');
+                editPassword.value = '';
+                editPassword.type = 'password';
+                const toggle = document.querySelector('.password-toggle[data-target="edit_password"]');
+                if (toggle) {
+                    toggle.setAttribute('aria-label', 'Show password');
+                    toggle.innerHTML = '<i class="bi bi-eye"></i>';
+                }
+            });
+        });
+
+        document.querySelectorAll('.password-toggle').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const input = document.getElementById(btn.getAttribute('data-target'));
+                if (!input) return;
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+                btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
             });
         });
     });
