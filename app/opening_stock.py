@@ -37,13 +37,21 @@ def _set_fuel_opening(name, liters, cost_per_liter, sale_per_liter, user_id, as_
         write_history = True
     inv.current_stock_liters = liters
 
-    db.session.add(FuelPrice(
+    existing_price = FuelPrice.query.filter_by(
         fuel_type_id=fuel.id,
-        price_per_liter=sale_per_liter,
         effective_date=as_of.date(),
-        updated_by=user_id,
-        created_at=as_of,
-    ))
+    ).first()
+    if existing_price:
+        existing_price.price_per_liter = sale_per_liter
+        existing_price.updated_by = user_id
+    else:
+        db.session.add(FuelPrice(
+            fuel_type_id=fuel.id,
+            price_per_liter=sale_per_liter,
+            effective_date=as_of.date(),
+            updated_by=user_id,
+            created_at=as_of,
+        ))
 
     if write_history:
         db.session.add(StockEntry(
@@ -163,8 +171,8 @@ def seed_opening_stock(force=False):
     # First run (empty shop) also writes purchase/stock history rows
     write_history = OtherItem.query.count() == 0
 
-    _set_fuel_opening('Diesel', 1200.0, 393.0, 402.30, user_id, as_of, write_history=write_history)
-    _set_fuel_opening('Petrol', 818.0, 381.0, 390.05, user_id, as_of, write_history=write_history)
+    _set_fuel_opening('Diesel', 1200.0, 393.0, 404.30, user_id, as_of, write_history=write_history)
+    _set_fuel_opening('Petrol', 818.0, 381.0, 390.50, user_id, as_of, write_history=write_history)
 
     shop_kwargs = dict(user_id=user_id, as_of=as_of, write_history=write_history)
 
@@ -242,8 +250,8 @@ def seed_opening_stock(force=False):
 
     db.session.commit()
     print('Opening stock written to database (no vendor).')
-    print('  Diesel 1200 L @ cost 393 / sale 402.30')
-    print('  Petrol 818 L @ cost 381 / sale 390.05')
+    print('  Diesel 1200 L @ cost 393 / sale 404.30')
+    print('  Petrol 818 L @ cost 381 / sale 390.50')
     print('  FT Mobile Oil 95.25 L @ cost 450 / sale 600')
     print('  Caltex Havoline x11 @ 741 / 850 (0.75 L)')
     print('  Caltex Delo 20-50 x6 @ 4600 / 5000 (4 L)')

@@ -79,7 +79,7 @@ def create_app():
         ensure_till_schema()
         ensure_item_price_log_schema()
         ensure_default_fuel_types()
-        ensure_price_history_seed()
+        # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
         ensure_meter_sale_rate_schema()
         
     return app
