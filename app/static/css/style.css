@@ -119,29 +119,31 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-secondary);
 }
 
-/* Fixed Top Navbar — same shell width / padding as page content */
+/* Fixed Top Navbar — one row, same shell width as page content */
 .navbar-custom {
     background-color: color-mix(in srgb, var(--card-bg) 92%, transparent) !important;
     border-bottom: var(--card-border);
     backdrop-filter: saturate(1.2) blur(12px);
     -webkit-backdrop-filter: saturate(1.2) blur(12px);
-    padding: 0.55rem 0;
+    padding: 0.45rem 0;
     min-height: var(--nav-height);
     transition: background-color 0.3s ease, border-bottom 0.3s ease;
     z-index: 1030;
+    flex-wrap: nowrap;
 }
 
-.navbar-custom .container-fluid.app-shell {
+.navbar-custom .navbar-shell {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     width: 100%;
     max-width: var(--shell-max);
 }
 
 .navbar-custom .navbar-brand-custom {
     flex: 0 0 auto;
+    margin-right: 0.15rem;
 }
 
 .navbar-custom .navbar-nav-tools {
@@ -149,33 +151,41 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     gap: 0.35rem;
     flex: 0 0 auto;
+    margin-left: 0.25rem;
+}
+
+.navbar-custom .navbar-toggler {
     margin-left: auto;
 }
 
+/* Desktop / laptop: brand | scrollable links | user — never wrap to 2 lines */
 @media (min-width: 992px) {
-    .navbar-custom .navbar-nav-tools {
-        margin-left: 0;
-        order: 3;
+    .navbar-custom .navbar-shell {
+        flex-wrap: nowrap !important;
     }
 
     .navbar-custom .navbar-collapse {
-        order: 2;
-        flex: 1 1 auto;
         display: flex !important;
-        flex-basis: auto;
+        flex: 1 1 auto;
+        flex-basis: 0;
         min-width: 0;
         align-items: center;
+        overflow: hidden;
     }
 
     .navbar-custom .nav-scroll {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center;
         width: 100%;
-        flex-wrap: nowrap;
+        margin: 0 !important;
+        padding: 0;
+        gap: 0.05rem;
         overflow-x: auto;
         overflow-y: hidden;
         scrollbar-width: none;
         -ms-overflow-style: none;
-        padding-bottom: 2px;
-        gap: 0.1rem;
     }
 
     .navbar-custom .nav-scroll::-webkit-scrollbar {
@@ -185,16 +195,65 @@ h1, h2, h3, h4, h5, h6 {
     .navbar-custom .nav-item {
         flex: 0 0 auto;
     }
+
+    .navbar-custom .nav-link-custom {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.35rem 0.5rem !important;
+        font-size: 0.84rem;
+        line-height: 1.2;
+    }
+
+    .navbar-custom .nav-link-custom i {
+        font-size: 0.95rem;
+        margin: 0 !important;
+    }
+
+    .navbar-custom .navbar-nav-tools {
+        margin-left: 0.15rem;
+    }
 }
 
+/* Phone / tablet: hamburger; menu stacks under brand row */
 @media (max-width: 991.98px) {
-    .navbar-custom .container-fluid.app-shell {
+    .navbar-custom .navbar-shell {
         flex-wrap: wrap;
     }
 
+    .navbar-custom .navbar-toggler {
+        order: 2;
+    }
+
+    .navbar-custom .navbar-nav-tools {
+        order: 3;
+        margin-left: 0;
+    }
+
     .navbar-custom .navbar-collapse {
+        order: 4;
         flex: 1 0 100%;
         width: 100%;
+    }
+
+    .navbar-custom .nav-scroll {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.15rem;
+        margin: 0;
+        padding: 0.25rem 0 0;
+    }
+
+    .navbar-custom .nav-link-custom {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .navbar-custom .nav-link-custom i {
+        margin: 0 !important;
+        width: 1.1rem;
+        text-align: center;
     }
 }
 
@@ -2871,7 +2930,7 @@ body {
     min-width: 0;
 }
 
-.navbar-brand-custom > span:last-child {
+.navbar-brand-custom .brand-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2885,7 +2944,6 @@ body {
 .nav-link-custom {
     font-size: var(--nav-link-size);
     white-space: nowrap;
-    padding: 0.4rem 0.7rem !important;
 }
 
 .navbar-custom .user-avatar {
@@ -2911,7 +2969,7 @@ body {
         --nav-pad-y: 0.4rem;
     }
 
-    .navbar-brand-custom > span:last-child {
+    .navbar-brand-custom .brand-text {
         max-width: 8rem;
     }
 

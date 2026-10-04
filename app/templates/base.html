@@ -15,21 +15,77 @@
     <!-- Tom Select (searchable dropdowns) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
     <!-- Custom Theme Styling -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5">
 </head>
 <body class="{% if not current_user.is_authenticated %}no-navbar{% endif %}">
 
     {% if current_user.is_authenticated %}
-    <!-- Sticky Top Navbar -->
+    <!-- Sticky Top Navbar: brand | links (one row) | user — same width as page -->
     <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
-        <div class="container-fluid app-shell">
+        <div class="container-fluid app-shell navbar-shell">
             <a class="navbar-brand navbar-brand-custom" href="{{ url_for('dashboard.index') }}">
                 <span class="brand-mark">
                     <img src="{{ url_for('static', filename='img/logo.png') }}?v=2" alt="OctaneFlow" width="34" height="34">
                 </span>
-                <span>OctaneFlow</span>
+                <span class="brand-text">OctaneFlow</span>
             </a>
-            
+
+            <button class="navbar-toggler border-0 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav nav-scroll">
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+                            <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}">
+                            <i class="bi bi-cart3"></i><span>Sales</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}">
+                            <i class="bi bi-cash-stack"></i><span>Account</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}">
+                            <i class="bi bi-box-seam"></i><span>Inventory</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'purchasing' %}active{% endif %}" href="{{ url_for('purchasing.index') }}">
+                            <i class="bi bi-cart-plus"></i><span>Purchasing</span>
+                        </a>
+                    </li>
+                    {% if current_user.role == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}">
+                            <i class="bi bi-tags"></i><span>Pricing</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}">
+                            <i class="bi bi-people"></i><span>Customers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}">
+                            <i class="bi bi-building"></i><span>Vendors</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}">
+                            <i class="bi bi-receipt"></i><span>Expenses</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
             <div class="navbar-nav-tools">
                 <div class="dropdown">
                     <button class="btn user-menu-btn dropdown-toggle d-flex align-items-center gap-1 p-1 border-0" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
@@ -68,61 +124,6 @@
                         </li>
                     </ul>
                 </div>
-                <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-            </div>
-
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0 nav-scroll">
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
-                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}">
-                            <i class="bi bi-cart3 me-1"></i> Sales
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}">
-                            <i class="bi bi-cash-stack me-1"></i> Account
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}">
-                            <i class="bi bi-box-seam me-1"></i> Inventory
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'purchasing' %}active{% endif %}" href="{{ url_for('purchasing.index') }}">
-                            <i class="bi bi-cart-plus me-1"></i> Purchasing
-                        </a>
-                    </li>
-                    {% if current_user.role == 'admin' %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}">
-                            <i class="bi bi-tags me-1"></i> Pricing
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}">
-                            <i class="bi bi-people me-1"></i> Customers
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}">
-                            <i class="bi bi-building me-1"></i> Vendors
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}">
-                            <i class="bi bi-receipt me-1"></i> Expenses
-                        </a>
-                    </li>
-                </ul>
             </div>
         </div>
     </nav>
