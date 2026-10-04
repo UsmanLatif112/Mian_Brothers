@@ -60,8 +60,17 @@
         <div class="stat-card-label">Contact</div>
         <div class="stat-card-meta mb-1"><i class="bi bi-telephone me-1"></i>{{ customer.phone or 'No Phone' }}</div>
         <div class="stat-card-meta mb-1"><i class="bi bi-journal-bookmark me-1"></i>Old Book: {{ customer.old_book_no or '—' }}</div>
-        {% if customer.previous_credit %}
-        <div class="stat-card-meta mb-1"><i class="bi bi-book me-1"></i>Previous Credit: {{ customer.previous_credit | money }}</div>
+        {% if customer.previous_credit is not none %}
+        <div class="stat-card-meta mb-1">
+            <i class="bi bi-book me-1"></i>
+            Previous Balance:
+            {{ customer.previous_credit | money }}
+            {% if customer.previous_credit < 0 %}
+            <span class="text-success">(advance — we owe)</span>
+            {% elif customer.previous_credit > 0 %}
+            <span class="text-warning">(customer owes)</span>
+            {% endif %}
+        </div>
         {% endif %}
         <div class="stat-card-meta text-truncate"><i class="bi bi-geo-alt me-1"></i>{{ customer.address or 'No Billing Address' }}</div>
     </div>

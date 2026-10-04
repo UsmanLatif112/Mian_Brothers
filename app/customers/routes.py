@@ -45,19 +45,21 @@ def index():
             if prev_raw:
                 try:
                     prev_credit = float(prev_raw)
-                    if prev_credit < 0:
-                        raise ValueError('Previous credit cannot be negative.')
                 except ValueError as e:
-                    flash(f'Invalid previous credit: {e}', 'danger')
+                    flash(f'Invalid previous balance: {e}', 'danger')
                     return redirect(url_for('customers.index'))
 
+            # Signed previous balance:
+            #   +ve  → customer owes us (opening credit)
+            #   -ve  → advance / we owe customer
+            #    0   → clear opening balance
             if action == 'create':
                 customer = Customer(
                     name=name,
                     phone=phone,
                     address=address,
                     old_book_no=old_book_no,
-                    previous_credit=prev_credit if prev_credit > 0 else None,
+                    previous_credit=prev_credit if prev_credit != 0 else None,
                     credit_limit=limit_val,
                     current_balance_due=0,
                 )
@@ -73,37 +75,60 @@ def index():
                 customer.address = address
                 customer.old_book_no = old_book_no
                 customer.credit_limit = limit_val
-                customer.previous_credit = prev_credit if prev_credit > 0 else None
+                customer.previous_credit = prev_credit if prev_credit != 0 else None
 
-            # Opening book credit — same create/edit logic (balance via ledger recalc).
-            opening = (
+            # Replace managed opening / previous-advance rows, then recalc balance.
+            opening_rows = (
+                CreditSale.query
+                .filter(
+                    CreditSale.customer_id == customer.id,
+                    CreditSale.entry_type.in_(('opening', 'advance')),
+                    CreditSale.remarks.in_((
+                        'Previous / opening book credit',
+                        'Previous / opening advance',
+                    )),
+                )
+                .all()
+            )
+            # Also treat plain opening rows (legacy) as managed previous credit.
+            legacy_opening = (
                 CreditSale.query
                 .filter_by(customer_id=customer.id, entry_type='opening')
-                .order_by(CreditSale.id.asc())
-                .first()
+                .all()
             )
+            managed = {row.id: row for row in opening_rows}
+            for row in legacy_opening:
+                managed[row.id] = row
+            for row in managed.values():
+                db.session.delete(row)
+            db.session.flush()
+
             if prev_credit > 0:
-                if opening:
-                    opening.amount = prev_credit
-                    opening.sale_date = entry_date
-                    opening.payment_status = 'unpaid'
-                    opening.amount_paid = 0
-                    opening.remarks = 'Previous / opening book credit'
-                else:
-                    db.session.add(CreditSale(
-                        customer_id=customer.id,
-                        sale_date=entry_date,
-                        liters=0,
-                        rate=0,
-                        amount=prev_credit,
-                        amount_paid=0,
-                        entry_type='opening',
-                        payment_status='unpaid',
-                        remarks='Previous / opening book credit',
-                        recorded_by=current_user.id,
-                    ))
-            elif opening:
-                db.session.delete(opening)
+                db.session.add(CreditSale(
+                    customer_id=customer.id,
+                    sale_date=entry_date,
+                    liters=0,
+                    rate=0,
+                    amount=prev_credit,
+                    amount_paid=0,
+                    entry_type='opening',
+                    payment_status='unpaid',
+                    remarks='Previous / opening book credit',
+                    recorded_by=current_user.id,
+                ))
+            elif prev_credit < 0:
+                db.session.add(CreditSale(
+                    customer_id=customer.id,
+                    sale_date=entry_date,
+                    liters=0,
+                    rate=0,
+                    amount=abs(prev_credit),
+                    amount_paid=0,
+                    entry_type='advance',
+                    payment_status='paid',
+                    remarks='Previous / opening advance',
+                    recorded_by=current_user.id,
+                ))
 
             db.session.flush()
             recalculate_customer_balance(customer)
@@ -146,12 +171,28 @@ def index():
             CreditSale.query
             .filter(
                 CreditSale.customer_id.in_([c.id for c in customers]),
-                CreditSale.entry_type == 'opening',
+                CreditSale.entry_type.in_(('opening', 'advance')),
+                CreditSale.remarks.in_((
+                    'Previous / opening book credit',
+                    'Previous / opening advance',
+                )),
             )
             .all()
         )
         for row in openings:
             opening_dates[row.customer_id] = row.sale_date.isoformat() if row.sale_date else ''
+        # Legacy opening rows (no remarks match) still supply entry date.
+        legacy = (
+            CreditSale.query
+            .filter(
+                CreditSale.customer_id.in_([c.id for c in customers]),
+                CreditSale.entry_type == 'opening',
+            )
+            .all()
+        )
+        for row in legacy:
+            if row.customer_id not in opening_dates and row.sale_date:
+                opening_dates[row.customer_id] = row.sale_date.isoformat()
 
     return render_template(
         'customers/index.html',
@@ -354,11 +395,16 @@ def ledger(customer_id):
             'method': '',
         }
         if et == 'advance':
+            is_prev_adv = (p.remarks or '') == 'Previous / opening advance'
             ledger_entries.append({
                 **base,
                 'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
                 'type': 'payment',
-                'desc': f"Advance / prepaid {f'({p.remarks})' if p.remarks else ''}",
+                'desc': (
+                    'Previous balance (advance — we owe customer)'
+                    if is_prev_adv
+                    else f"Advance / prepaid {f'({p.remarks})' if p.remarks else ''}"
+                ),
                 'debit': 0.0,
                 'credit': float(p.amount or 0),
                 'ref_id': f"Advance #{p.id}",
@@ -380,7 +426,7 @@ def ledger(customer_id):
                 **base,
                 'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
                 'type': 'purchase',
-                'desc': f"Previous / opening credit {f'({p.remarks})' if p.remarks else ''}",
+                'desc': 'Previous balance (customer owes us)',
                 'debit': float(p.amount or 0),
                 'credit': 0.0,
                 'ref_id': f"Opening #{p.id}",
