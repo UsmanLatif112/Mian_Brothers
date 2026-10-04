@@ -15,7 +15,7 @@
     <!-- Tom Select (searchable dropdowns) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
     <!-- Custom Theme Styling -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=6">
 </head>
 <body class="{% if not current_user.is_authenticated %}no-navbar{% endif %}">
 
@@ -29,10 +29,6 @@
                 </span>
                 <span class="brand-text">OctaneFlow</span>
             </a>
-
-            <button class="navbar-toggler border-0 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav nav-scroll">
@@ -87,6 +83,9 @@
             </div>
 
             <div class="navbar-nav-tools">
+                <button class="navbar-toggler border-0 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
                 <div class="dropdown">
                     <button class="btn user-menu-btn dropdown-toggle d-flex align-items-center gap-1 p-1 border-0" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
                         <div class="user-avatar">
