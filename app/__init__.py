@@ -86,8 +86,62 @@ def create_app():
         # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
         ensure_meter_sale_rate_schema()
         ensure_fuel_price_effective_at_schema()
+        ensure_liter_precision_schema()
         
     return app
+
+
+def ensure_liter_precision_schema():
+    """Allow up to 3 decimal places on liter/qty volume columns (e.g. 25.002)."""
+    from sqlalchemy import text, inspect
+
+    inspector = inspect(db.engine)
+    url = str(db.engine.url)
+    is_mysql = url.startswith('mysql')
+
+    # table -> [(column, nullable_sql_fragment)]
+    targets = {
+        'credit_sales': [('liters', 'NOT NULL')],
+        'meter_readings': [
+            ('opening_reading', 'NOT NULL'),
+            ('closing_reading', 'NULL'),
+            ('liters_sold', 'NULL'),
+        ],
+        'inventory': [
+            ('current_stock_liters', 'NOT NULL'),
+            ('reorder_threshold', 'NOT NULL'),
+        ],
+        'other_items': [('liters', 'NULL')],
+        'stock_entries': [('liters_added', 'NOT NULL')],
+        'item_purchase_logs': [('liters', 'NULL')],
+        'sales': [('liters', 'NOT NULL')],
+    }
+
+    for table, cols in targets.items():
+        if table not in inspector.get_table_names():
+            continue
+        existing = {c['name']: c for c in inspector.get_columns(table)}
+        for col_name, null_sql in cols:
+            if col_name not in existing:
+                continue
+            col = existing[col_name]
+            # Skip if already scale >= 3
+            typ = col.get('type')
+            scale = getattr(typ, 'scale', None)
+            if scale is not None and int(scale) >= 3:
+                continue
+            try:
+                with db.engine.begin() as conn:
+                    if is_mysql:
+                        conn.execute(text(
+                            f"ALTER TABLE `{table}` MODIFY COLUMN `{col_name}` "
+                            f"NUMERIC(12, 3) {null_sql}"
+                        ))
+                    else:
+                        # SQLite: type affinity only; no strict scale — skip ALTER
+                        pass
+            except Exception as e:
+                print(f"liter precision skip {table}.{col_name}: {e}")
 
 
 def ensure_fuel_price_effective_at_schema():

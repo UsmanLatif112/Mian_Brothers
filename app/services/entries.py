@@ -145,17 +145,27 @@ def edit_credit_sale(cs, form):
     except (TypeError, ValueError) as e:
         raise EntryError(f'Invalid rate: {e}') from e
 
+    gross = round(qty * rate, 2)
+    amount_raw = (form.get('amount') or '').strip()
     try:
-        discount = float(form.get('discount') or cs.discount or 0)
-        if discount < 0:
-            raise ValueError('Discount cannot be negative.')
+        if amount_raw:
+            amount = round(float(amount_raw), 2)
+            if amount <= 0:
+                raise ValueError('Total amount must be greater than zero.')
+            if amount > gross + 0.009:
+                raise ValueError(
+                    f'Total PKR {amount:,.2f} cannot exceed subtotal PKR {gross:,.2f}.'
+                )
+            discount = round(max(gross - amount, 0.0), 2)
+        else:
+            discount = float(form.get('discount') or cs.discount or 0)
+            if discount < 0:
+                raise ValueError('Discount cannot be negative.')
+            if discount > gross:
+                raise ValueError(f'Discount cannot exceed sale total PKR {gross:,.2f}.')
+            amount = round(max(gross - discount, 0.0), 2)
     except (TypeError, ValueError) as e:
-        raise EntryError(f'Invalid discount: {e}') from e
-
-    gross = qty * rate
-    if discount > gross:
-        raise EntryError(f'Discount cannot exceed sale total PKR {gross:,.2f}.')
-    amount = max(gross - discount, 0.0)
+        raise EntryError(f'Invalid total/discount: {e}') from e
 
     payment_status = (form.get('payment_status') or cs.payment_status or 'paid').strip().lower()
     if payment_status == 'paid':

@@ -397,23 +397,30 @@ def index():
 
             # Round to 2 dp so backend totals match what the sale form displays.
             gross = round(qty_val * rate, 2)
-            # Discount applies to full sale total for all item types (fuel + shop).
+            amount_raw = (request.form.get('amount') or '').strip()
             try:
-                discount = float(discount_raw or 0)
-            except (TypeError, ValueError):
-                flash('Invalid discount amount.', 'danger')
+                # Optional billed total override (e.g. rounding). Else use discount.
+                if amount_raw:
+                    amount = round(float(amount_raw), 2)
+                    if amount <= 0:
+                        raise ValueError('Total amount must be greater than zero.')
+                    if amount > gross + 0.009:
+                        raise ValueError(
+                            f'Total PKR {amount:,.2f} cannot exceed subtotal PKR {gross:,.2f}.'
+                        )
+                    discount = round(max(gross - amount, 0.0), 2)
+                else:
+                    discount = float(discount_raw or 0)
+                    if discount < 0:
+                        raise ValueError('Discount cannot be negative.')
+                    if discount > gross:
+                        raise ValueError(
+                            f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.'
+                        )
+                    amount = round(max(gross - discount, 0.0), 2)
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid total/discount: {e}', 'danger')
                 return _sales_redirect()
-            if discount < 0:
-                flash('Discount cannot be negative.', 'danger')
-                return _sales_redirect()
-            if discount > gross:
-                flash(
-                    f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
-                    'danger'
-                )
-                return _sales_redirect()
-
-            amount = round(max(gross - discount, 0.0), 2)
 
             # Resolve cash paid now (paid / unpaid only; paid may include overpayment)
             overpayment = 0.0
@@ -566,23 +573,29 @@ def index():
                 return _sales_redirect()
 
             gross = round(liters_val * rate, 2)
-            # Discount applies to the full FT sale total.
+            amount_raw = (request.form.get('amount') or '').strip()
             try:
-                discount = float(discount_raw or 0)
-            except (TypeError, ValueError):
-                flash('Invalid discount amount.', 'danger')
+                if amount_raw:
+                    amount = round(float(amount_raw), 2)
+                    if amount <= 0:
+                        raise ValueError('Total amount must be greater than zero.')
+                    if amount > gross + 0.009:
+                        raise ValueError(
+                            f'Total PKR {amount:,.2f} cannot exceed subtotal PKR {gross:,.2f}.'
+                        )
+                    discount = round(max(gross - amount, 0.0), 2)
+                else:
+                    discount = float(discount_raw or 0)
+                    if discount < 0:
+                        raise ValueError('Discount cannot be negative.')
+                    if discount > gross:
+                        raise ValueError(
+                            f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.'
+                        )
+                    amount = round(max(gross - discount, 0.0), 2)
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid total/discount: {e}', 'danger')
                 return _sales_redirect()
-            if discount < 0:
-                flash('Discount cannot be negative.', 'danger')
-                return _sales_redirect()
-            if discount > gross:
-                flash(
-                    f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.',
-                    'danger'
-                )
-                return _sales_redirect()
-
-            amount = round(max(gross - discount, 0.0), 2)
 
             amount_paid = amount if payment_status == 'paid' else 0.0
 

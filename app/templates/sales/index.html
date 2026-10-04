@@ -253,7 +253,7 @@
                                             data-sale-date="{{ cs.sale_date }}"
                                             data-customer-id="{{ cs.customer_id or '' }}"
                                             data-item-name="{{ cs.item_name }}"
-                                            data-liters="{{ '%.2f'|format(cs.liters|float) }}"
+                                            data-liters="{{ '%.3f'|format(cs.liters|float) }}"
                                             data-rate="{{ '%.2f'|format(cs.rate|float) }}"
                                             data-discount="{{ '%.2f'|format((cs.discount or 0)|float) }}"
                                             data-amount="{{ '%.2f'|format(cs.amount|float) }}"
@@ -345,11 +345,11 @@
                                         <div class="col-12 col-md-6">
                                             <label class="form-label form-label-custom">Reading 1 (Opening)</label>
                                             <div class="input-group">
-                                                <input type="number" step="0.01" min="0"
+                                                <input type="number" step="0.001" min="0"
                                                        class="form-control form-control-custom meter-open"
                                                        name="opening_{{ machine.id }}"
                                                        data-machine="{{ machine.id }}"
-                                                       value="{{ '%.2f'|format(open_val) if open_val is not none else '' }}"
+                                                       value="{{ '%.3f'|format(open_val) if open_val is not none else '' }}"
                                                        disabled>
                                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
                                             </div>
@@ -357,11 +357,11 @@
                                         <div class="col-12 col-md-6">
                                             <label class="form-label form-label-custom">Reading 2 (Closing)</label>
                                             <div class="input-group">
-                                                <input type="number" step="0.01" min="0"
+                                                <input type="number" step="0.001" min="0"
                                                        class="form-control form-control-custom meter-close"
                                                        name="closing_{{ machine.id }}"
                                                        data-machine="{{ machine.id }}"
-                                                       value="{{ '%.2f'|format(close_val) if close_val is not none else '' }}"
+                                                       value="{{ '%.3f'|format(close_val) if close_val is not none else '' }}"
                                                        disabled>
                                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
                                             </div>
@@ -465,7 +465,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="credit_liters" id="credit_qty_label">Quantity</label>
-                        <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="liters" id="credit_liters" required>
+                        <input type="number" step="0.001" min="0.001" class="form-control form-control-custom" name="liters" id="credit_liters" required>
                         <small class="text-muted-custom" id="stock_hint"></small>
                     </div>
                     <div class="mb-3 d-none" id="discount_wrap">
@@ -475,6 +475,14 @@
                             <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="credit_discount" value="0" placeholder="0.00">
                         </div>
                         <small class="text-muted-custom">Optional — subtracted from the full sale total (qty × rate), not per item.</small>
+                    </div>
+                    <div class="mb-3 d-none" id="amount_wrap">
+                        <label class="form-label form-label-custom" for="credit_amount_input">Total Amount (PKR)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="amount" id="credit_amount_input" placeholder="0.00">
+                        </div>
+                        <small class="text-muted-custom">Auto from qty × rate − discount. Edit if the billed total differs (e.g. rounding).</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="payment_status">Payment</label>
@@ -571,7 +579,7 @@
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_liters">Liters</label>
                         <div class="input-group">
-                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="liters" id="ft_liters" required>
+                            <input type="number" step="0.001" min="0.001" class="form-control form-control-custom" name="liters" id="ft_liters" required>
                             <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
                         </div>
                         <small class="text-muted-custom" id="ft_stock_hint"></small>
@@ -583,6 +591,14 @@
                             <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="ft_discount" value="0" placeholder="0.00">
                         </div>
                         <small class="text-muted-custom">Optional — subtracted from the full sale total (liters × rate), not per item.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ft_amount_input">Total Amount (PKR)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="amount" id="ft_amount_input" placeholder="0.00">
+                        </div>
+                        <small class="text-muted-custom">Auto from liters × rate − discount. Edit if the billed total differs.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_payment_status">Payment</label>
@@ -656,7 +672,7 @@
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label form-label-custom" for="edit_liters">Qty / L</label>
-                                <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_liters" name="liters">
+                                <input type="number" step="0.001" min="0" class="form-control form-control-custom" id="edit_liters" name="liters">
                             </div>
                             <div class="col-6">
                                 <label class="form-label form-label-custom" for="edit_rate">Rate</label>
@@ -666,6 +682,11 @@
                         <div class="mb-3" id="edit_discount_wrap">
                             <label class="form-label form-label-custom" for="edit_discount">Discount (PKR)</label>
                             <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_discount" name="discount" value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_amount">Total Amount (PKR)</label>
+                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_amount" name="amount" placeholder="0.00">
+                            <small class="text-muted-custom">Edit if billed total differs from qty × rate − discount.</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label form-label-custom" for="edit_payment_status">Payment status</label>
@@ -787,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="col-12 col-md-6">
                         <label class="form-label form-label-custom">Reading 1 (Opening)</label>
                         <div class="input-group">
-                            <input type="number" step="0.01" min="0"
+                            <input type="number" step="0.001" min="0"
                                    class="form-control form-control-custom meter-open"
                                    name="opening_${machineId}"
                                    data-machine="${machineId}" value="">
@@ -797,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="col-12 col-md-6">
                         <label class="form-label form-label-custom">Reading 2 (Closing)</label>
                         <div class="input-group">
-                            <input type="number" step="0.01" min="0"
+                            <input type="number" step="0.001" min="0"
                                    class="form-control form-control-custom meter-close"
                                    name="closing_${machineId}"
                                    data-machine="${machineId}" value="">
@@ -871,11 +892,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const creditItem = document.getElementById('credit_item');
     const creditLiters = document.getElementById('credit_liters');
     const creditAmount = document.getElementById('credit_amount');
+    const creditAmountInput = document.getElementById('credit_amount_input');
     const creditSubtotal = document.getElementById('credit_subtotal');
     const creditSubtotalRow = document.getElementById('credit_subtotal_row');
     const creditDiscount = document.getElementById('credit_discount');
     const creditDiscountDisp = document.getElementById('credit_discount_disp');
     const discountWrap = document.getElementById('discount_wrap');
+    const amountWrap = document.getElementById('amount_wrap');
     const creditQtyLabel = document.getElementById('credit_qty_label');
     const creditCustomer = document.getElementById('credit_customer');
     const paymentStatus = document.getElementById('payment_status');
@@ -885,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const customerHint = document.getElementById('customer_hint');
     const stockHint = document.getElementById('stock_hint');
     const itemSaleForm = document.getElementById('item-sale-form');
+    let creditAmountManual = false;
 
     const itemValue = () => creditItem && (creditItem.tomselect ? creditItem.tomselect.getValue() : creditItem.value) || '';
     const isFuelSelected = () => itemValue().startsWith('fuel:');
@@ -930,19 +954,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         const qty = Number(creditLiters?.value || 0);
-        const gross = rate * qty;
+        const gross = Math.round(rate * qty * 100) / 100;
         const shop = isShopSelected();
         const itemSelected = isFuelSelected() || shop;
-        // Discount available for all item types (fuel + shop) on the full total.
+        // Discount + editable total for all item types (fuel + shop).
         if (discountWrap) discountWrap.classList.toggle('d-none', !itemSelected);
+        if (amountWrap) amountWrap.classList.toggle('d-none', !itemSelected);
+
         let discount = itemSelected ? Number(creditDiscount?.value || 0) : 0;
         if (!Number.isFinite(discount) || discount < 0) discount = 0;
         if (discount > gross) discount = gross;
-        const total = Math.max(gross - discount, 0);
+
+        let total;
+        if (creditAmountManual && creditAmountInput && String(creditAmountInput.value).trim() !== '') {
+            total = Number(creditAmountInput.value || 0);
+            if (!Number.isFinite(total) || total < 0) total = 0;
+            if (total > gross) total = gross;
+            discount = Math.round(Math.max(gross - total, 0) * 100) / 100;
+            if (creditDiscount && document.activeElement !== creditDiscount) {
+                creditDiscount.value = discount.toFixed(2);
+            }
+        } else {
+            total = Math.max(gross - discount, 0);
+            if (creditAmountInput && document.activeElement !== creditAmountInput) {
+                creditAmountInput.value = total > 0 ? total.toFixed(2) : '';
+            }
+        }
+
         if (creditQtyLabel) creditQtyLabel.textContent = unit === 'L' ? 'Liters' : 'Quantity';
         if (creditLiters) {
-            creditLiters.step = unit === 'L' ? '0.01' : '1';
-            creditLiters.min = unit === 'L' ? '0.01' : '1';
+            creditLiters.step = unit === 'L' ? '0.001' : '1';
+            creditLiters.min = unit === 'L' ? '0.001' : '1';
         }
         if (stockHint) {
             if (stock !== undefined && unit === 'qty') stockHint.textContent = `In stock: ${stock}`;
@@ -988,18 +1030,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (creditItem) {
         creditItem.addEventListener('change', () => {
+            creditAmountManual = false;
             if (isFuelSelected() && paymentStatus) paymentStatus.value = 'unpaid';
             syncCredit();
         });
         if (creditItem.tomselect) {
             creditItem.tomselect.on('change', () => {
+                creditAmountManual = false;
                 if (isFuelSelected() && paymentStatus) paymentStatus.value = 'unpaid';
                 syncCredit();
             });
         }
     }
-    if (creditLiters) creditLiters.addEventListener('input', syncCredit);
-    if (creditDiscount) creditDiscount.addEventListener('input', syncCredit);
+    if (creditLiters) creditLiters.addEventListener('input', () => {
+        creditAmountManual = false;
+        syncCredit();
+    });
+    if (creditDiscount) creditDiscount.addEventListener('input', () => {
+        creditAmountManual = false;
+        syncCredit();
+    });
+    if (creditAmountInput) {
+        creditAmountInput.addEventListener('input', () => {
+            creditAmountManual = true;
+            syncCredit();
+        });
+    }
     if (paymentStatus) paymentStatus.addEventListener('change', syncCredit);
     if (amountPaid) amountPaid.addEventListener('input', syncCredit);
     syncCustomerRequirement();
@@ -1061,6 +1117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ftSaleTotal = document.getElementById('ft_sale_total');
     const ftCostTotal = document.getElementById('ft_cost_total');
     const ftDiscount = document.getElementById('ft_discount');
+    const ftAmountInput = document.getElementById('ft_amount_input');
     const ftSubtotal = document.getElementById('ft_subtotal');
     const ftSubtotalRow = document.getElementById('ft_subtotal_row');
     const ftDiscountRow = document.getElementById('ft_discount_row');
@@ -1069,6 +1126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ftCustomerHint = document.getElementById('ft_customer_hint');
     const ftStockHint = document.getElementById('ft_stock_hint');
     const ftForm = document.getElementById('ft-sale-form');
+    let ftAmountManual = false;
 
     const ftItemValue = () => ftItem && (ftItem.tomselect ? ftItem.tomselect.getValue() : ftItem.value) || '';
 
@@ -1084,12 +1142,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         const liters = Number(ftLiters?.value || 0);
-        const gross = rate * liters;
+        const gross = Math.round(rate * liters * 100) / 100;
         const costTotal = cost * liters;
         let discount = Number(ftDiscount?.value || 0);
         if (!Number.isFinite(discount) || discount < 0) discount = 0;
         if (discount > gross) discount = gross;
-        const sale = Math.max(gross - discount, 0);
+
+        let sale;
+        if (ftAmountManual && ftAmountInput && String(ftAmountInput.value).trim() !== '') {
+            sale = Number(ftAmountInput.value || 0);
+            if (!Number.isFinite(sale) || sale < 0) sale = 0;
+            if (sale > gross) sale = gross;
+            discount = Math.round(Math.max(gross - sale, 0) * 100) / 100;
+            if (ftDiscount && document.activeElement !== ftDiscount) {
+                ftDiscount.value = discount.toFixed(2);
+            }
+        } else {
+            sale = Math.max(gross - discount, 0);
+            if (ftAmountInput && document.activeElement !== ftAmountInput) {
+                ftAmountInput.value = sale > 0 ? sale.toFixed(2) : '';
+            }
+        }
+
         if (ftSubtotalRow) ftSubtotalRow.classList.toggle('d-none', !(discount > 0));
         if (ftDiscountRow) ftDiscountRow.classList.toggle('d-none', !(discount > 0));
         if (ftSubtotal) ftSubtotal.textContent = gross.toFixed(2);
@@ -1097,7 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ftSaleTotal) ftSaleTotal.textContent = sale.toFixed(2);
         if (ftCostTotal) ftCostTotal.textContent = costTotal.toFixed(2);
         if (ftStockHint) {
-            ftStockHint.textContent = stock !== undefined ? `In stock: ${Number(stock).toFixed(2)} L` : '';
+            ftStockHint.textContent = stock !== undefined ? `In stock: ${Number(stock).toFixed(3)} L` : '';
         }
         const pay = ftPay?.value || 'paid';
         if (ftPaidWrap) {
@@ -1120,11 +1194,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     if (ftItem) {
-        ftItem.addEventListener('change', syncFtSale);
-        if (ftItem.tomselect) ftItem.tomselect.on('change', syncFtSale);
+        ftItem.addEventListener('change', () => { ftAmountManual = false; syncFtSale(); });
+        if (ftItem.tomselect) ftItem.tomselect.on('change', () => { ftAmountManual = false; syncFtSale(); });
     }
-    if (ftLiters) ftLiters.addEventListener('input', syncFtSale);
-    if (ftDiscount) ftDiscount.addEventListener('input', syncFtSale);
+    if (ftLiters) ftLiters.addEventListener('input', () => { ftAmountManual = false; syncFtSale(); });
+    if (ftDiscount) ftDiscount.addEventListener('input', () => { ftAmountManual = false; syncFtSale(); });
+    if (ftAmountInput) ftAmountInput.addEventListener('input', () => { ftAmountManual = true; syncFtSale(); });
     if (ftPay) ftPay.addEventListener('change', syncFtSale);
     if (ftPaid) ftPaid.addEventListener('input', syncFtSale);
     syncFtSale();
@@ -1190,6 +1265,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 litersInput.disabled = false;
                 rateInput.disabled = false;
                 document.getElementById('edit_discount').disabled = false;
+                const editAmountEl = document.getElementById('edit_amount');
+                if (editAmountEl) editAmountEl.disabled = false;
                 document.getElementById('edit_payment_status').disabled = false;
                 document.getElementById('edit_customer_id').disabled = false;
                 document.getElementById('edit_remarks').disabled = false;
@@ -1200,6 +1277,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 litersInput.value = btn.getAttribute('data-liters') || '0';
                 rateInput.value = btn.getAttribute('data-rate') || '0';
                 document.getElementById('edit_discount').value = btn.getAttribute('data-discount') || '0';
+                if (editAmountEl) editAmountEl.value = btn.getAttribute('data-amount') || '';
                 paySel.value = btn.getAttribute('data-payment-status') || 'paid';
                 paidInput.value = btn.getAttribute('data-amount-paid') || '';
                 document.getElementById('edit_remarks').value = btn.getAttribute('data-remarks') || '';
@@ -1211,6 +1289,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 litersInput.disabled = true;
                 rateInput.disabled = true;
                 document.getElementById('edit_discount').disabled = true;
+                const editAmountOff = document.getElementById('edit_amount');
+                if (editAmountOff) editAmountOff.disabled = true;
                 document.getElementById('edit_payment_status').disabled = true;
                 document.getElementById('edit_amount_paid').disabled = true;
                 document.getElementById('edit_customer_id').disabled = true;

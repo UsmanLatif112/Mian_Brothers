@@ -72,9 +72,9 @@ class Inventory(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), unique=True, nullable=False)
-    current_stock_liters = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    current_stock_liters = db.Column(db.Numeric(12, 3), nullable=False, default=0.00)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    reorder_threshold = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    reorder_threshold = db.Column(db.Numeric(12, 3), nullable=False, default=0.00)
 
     def __repr__(self):
         return f"<Inventory {self.fuel_type_id}: {self.current_stock_liters} liters>"
@@ -85,7 +85,7 @@ class StockEntry(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), nullable=False)
-    liters_added = db.Column(db.Numeric(12, 2), nullable=False)
+    liters_added = db.Column(db.Numeric(12, 3), nullable=False)
     cost_per_liter = db.Column(db.Numeric(10, 2), nullable=False)
     supplier = db.Column(db.String(100), nullable=True)
     vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=True)
@@ -120,9 +120,9 @@ class MeterReading(db.Model):
     machine_id = db.Column(db.Integer, db.ForeignKey('machines.id'), nullable=True)
     dispenser_nozzle_id = db.Column(db.String(50), nullable=True)  # legacy
     fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), nullable=False)
-    opening_reading = db.Column(db.Numeric(12, 2), nullable=False)
-    closing_reading = db.Column(db.Numeric(12, 2), nullable=True)
-    liters_sold = db.Column(db.Numeric(12, 2), nullable=True, default=0.00)
+    opening_reading = db.Column(db.Numeric(12, 3), nullable=False)
+    closing_reading = db.Column(db.Numeric(12, 3), nullable=True)
+    liters_sold = db.Column(db.Numeric(12, 3), nullable=True, default=0.00)
     sale_rate = db.Column(db.Numeric(10, 2), nullable=True)  # snapshot at save (mid-day price splits)
     reading_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -152,7 +152,7 @@ class CreditSale(db.Model):
     other_item_id = db.Column(db.Integer, db.ForeignKey('other_items.id'), nullable=True)
     sale_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     vehicle_number = db.Column(db.String(50), nullable=True)
-    liters = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # liters/qty; 0 for advance/loan
+    liters = db.Column(db.Numeric(12, 3), nullable=False, default=0.00)  # liters/qty; 0 for advance/loan
     rate = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     discount = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # PKR off list total (other items)
@@ -396,7 +396,7 @@ class OtherItem(db.Model):
     vendor = db.Column(db.String(100), nullable=True)
     cost_price = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     sale_price = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
-    liters = db.Column(db.Numeric(12, 2), nullable=True)
+    liters = db.Column(db.Numeric(12, 3), nullable=True)
     quantity = db.Column(db.Integer, nullable=False, default=0)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
