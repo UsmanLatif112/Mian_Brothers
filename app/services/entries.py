@@ -152,10 +152,6 @@ def edit_credit_sale(cs, form):
             amount = round(float(amount_raw), 2)
             if amount <= 0:
                 raise ValueError('Total amount must be greater than zero.')
-            if amount > gross + 0.009:
-                raise ValueError(
-                    f'Total PKR {amount:,.2f} cannot exceed subtotal PKR {gross:,.2f}.'
-                )
             discount = round(max(gross - amount, 0.0), 2)
         else:
             discount = float(form.get('discount') or cs.discount or 0)

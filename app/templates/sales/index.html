@@ -967,15 +967,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let total;
         if (creditAmountManual && creditAmountInput && String(creditAmountInput.value).trim() !== '') {
+            // Footer follows the edited billed total (live).
             total = Number(creditAmountInput.value || 0);
             if (!Number.isFinite(total) || total < 0) total = 0;
-            if (total > gross) total = gross;
+            total = Math.round(total * 100) / 100;
             discount = Math.round(Math.max(gross - total, 0) * 100) / 100;
             if (creditDiscount && document.activeElement !== creditDiscount) {
                 creditDiscount.value = discount.toFixed(2);
             }
         } else {
             total = Math.max(gross - discount, 0);
+            total = Math.round(total * 100) / 100;
             if (creditAmountInput && document.activeElement !== creditAmountInput) {
                 creditAmountInput.value = total > 0 ? total.toFixed(2) : '';
             }
@@ -990,7 +992,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (stock !== undefined && unit === 'qty') stockHint.textContent = `In stock: ${stock}`;
             else stockHint.textContent = unit === 'L' ? 'Fuel stock updates from meters only — this is ledger/credit.' : '';
         }
-        if (creditSubtotalRow) creditSubtotalRow.classList.toggle('d-none', !(discount > 0));
+        const amountDiffers = Math.abs(total - gross) > 0.001;
+        if (creditSubtotalRow) creditSubtotalRow.classList.toggle('d-none', !(discount > 0 || amountDiffers));
         if (creditSubtotal) creditSubtotal.textContent = gross.toFixed(2);
         if (creditDiscountDisp) creditDiscountDisp.textContent = discount.toFixed(2);
         if (creditAmount) creditAmount.textContent = total.toFixed(2);
@@ -1152,13 +1155,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ftAmountManual && ftAmountInput && String(ftAmountInput.value).trim() !== '') {
             sale = Number(ftAmountInput.value || 0);
             if (!Number.isFinite(sale) || sale < 0) sale = 0;
-            if (sale > gross) sale = gross;
+            sale = Math.round(sale * 100) / 100;
             discount = Math.round(Math.max(gross - sale, 0) * 100) / 100;
             if (ftDiscount && document.activeElement !== ftDiscount) {
                 ftDiscount.value = discount.toFixed(2);
             }
         } else {
             sale = Math.max(gross - discount, 0);
+            sale = Math.round(sale * 100) / 100;
             if (ftAmountInput && document.activeElement !== ftAmountInput) {
                 ftAmountInput.value = sale > 0 ? sale.toFixed(2) : '';
             }
