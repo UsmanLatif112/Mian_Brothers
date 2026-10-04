@@ -119,7 +119,7 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-secondary);
 }
 
-/* Fixed Top Navbar */
+/* Fixed Top Navbar — same shell width / padding as page content */
 .navbar-custom {
     background-color: color-mix(in srgb, var(--card-bg) 92%, transparent) !important;
     border-bottom: var(--card-border);
@@ -133,21 +133,38 @@ h1, h2, h3, h4, h5, h6 {
 
 .navbar-custom .container-fluid.app-shell {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: var(--shell-max);
+}
+
+.navbar-custom .navbar-brand-custom {
+    flex: 0 0 auto;
+}
+
+.navbar-custom .navbar-nav-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 @media (min-width: 992px) {
-    .navbar-custom .container-fluid.app-shell {
-        flex-wrap: nowrap;
-        gap: 0.5rem;
+    .navbar-custom .navbar-nav-tools {
+        margin-left: 0;
+        order: 3;
     }
 
     .navbar-custom .navbar-collapse {
-        flex-grow: 1;
+        order: 2;
+        flex: 1 1 auto;
         display: flex !important;
         flex-basis: auto;
         min-width: 0;
+        align-items: center;
     }
 
     .navbar-custom .nav-scroll {
@@ -158,6 +175,7 @@ h1, h2, h3, h4, h5, h6 {
         scrollbar-width: none;
         -ms-overflow-style: none;
         padding-bottom: 2px;
+        gap: 0.1rem;
     }
 
     .navbar-custom .nav-scroll::-webkit-scrollbar {
@@ -166,6 +184,17 @@ h1, h2, h3, h4, h5, h6 {
 
     .navbar-custom .nav-item {
         flex: 0 0 auto;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .navbar-custom .container-fluid.app-shell {
+        flex-wrap: wrap;
+    }
+
+    .navbar-custom .navbar-collapse {
+        flex: 1 0 100%;
+        width: 100%;
     }
 }
 
@@ -2784,11 +2813,11 @@ a.kpi-card:focus-visible {
     --type-body: clamp(0.84rem, 0.8rem + 0.25vw, 0.95rem);
     --type-eyebrow: clamp(0.65rem, 0.6rem + 0.2vw, 0.72rem);
     --type-subtitle: clamp(0.8rem, 0.75rem + 0.25vw, 0.9rem);
-    --nav-height: clamp(52px, 7.5vw, 64px);
-    --nav-brand-size: clamp(1.05rem, 0.95rem + 0.45vw, 1.2rem);
-    --nav-mark-size: clamp(28px, 4.5vw, 34px);
-    --nav-link-size: clamp(0.82rem, 0.78rem + 0.2vw, 0.92rem);
-    --nav-pad-y: clamp(0.35rem, 0.8vw, 0.55rem);
+    --nav-height: 64px;
+    --nav-brand-size: 1.15rem;
+    --nav-mark-size: 34px;
+    --nav-link-size: 0.9rem;
+    --nav-pad-y: 0.5rem;
 }
 
 .app-shell {
@@ -2829,22 +2858,16 @@ body {
     padding-top: calc(var(--nav-height) + env(safe-area-inset-top, 0px));
 }
 
-/* Top navbar scales with viewport (same resolution system as page content) */
+/* Top navbar matches page shell; compact on small screens */
 .navbar-custom {
     min-height: var(--nav-height);
     padding-top: max(var(--nav-pad-y), env(safe-area-inset-top, 0px));
     padding-bottom: var(--nav-pad-y);
 }
 
-.navbar-custom .container-fluid.app-shell {
-    min-height: calc(var(--nav-height) - (var(--nav-pad-y) * 2));
-    gap: clamp(0.35rem, 1vw, 0.65rem);
-}
-
 .navbar-brand-custom {
     font-size: var(--nav-brand-size);
-    gap: clamp(6px, 1.2vw, 10px);
-    max-width: min(100%, 14rem);
+    gap: 8px;
     min-width: 0;
 }
 
@@ -2857,42 +2880,39 @@ body {
 .brand-mark {
     width: var(--nav-mark-size);
     height: var(--nav-mark-size);
-    border-radius: clamp(8px, 1.2vw, 10px);
 }
 
 .nav-link-custom {
     font-size: var(--nav-link-size);
     white-space: nowrap;
+    padding: 0.4rem 0.7rem !important;
 }
 
 .navbar-custom .user-avatar {
-    width: clamp(30px, 4.5vw, 36px);
-    height: clamp(30px, 4.5vw, 36px);
-    font-size: clamp(0.8rem, 0.75rem + 0.2vw, 0.95rem);
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
 }
 
 .navbar-toggler {
     padding: 0.3rem;
-    width: clamp(36px, 5vw, 40px);
-    height: clamp(36px, 5vw, 40px);
+    width: 38px;
+    height: 38px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-.nav-link-custom {
-    padding: clamp(0.4rem, 0.9vw, 0.5rem) clamp(0.55rem, 1.2vw, 0.85rem) !important;
-}
-
 @media (max-width: 575.98px) {
     :root {
-        --nav-height: 52px;
+        --nav-height: 56px;
         --nav-brand-size: 1.05rem;
-        --nav-mark-size: 28px;
+        --nav-mark-size: 30px;
+        --nav-pad-y: 0.4rem;
     }
 
     .navbar-brand-custom > span:last-child {
-        max-width: 7.5rem;
+        max-width: 8rem;
     }
 
     .page-header-row {
@@ -2901,13 +2921,6 @@ body {
 
     .page-eyebrow {
         letter-spacing: 0.06em;
-    }
-}
-
-@media (min-width: 1200px) {
-    :root {
-        --nav-height: 64px;
-        --nav-link-size: 0.92rem;
     }
 }
 
