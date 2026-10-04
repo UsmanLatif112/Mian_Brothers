@@ -23,6 +23,10 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
 
+    # Request/response logs for cPanel: logs/app.log (+ stderr)
+    from app.request_logging import setup_request_logging
+    setup_request_logging(app)
+
     @app.template_filter('money')
     def money_filter(value):
         from jinja2 import Undefined

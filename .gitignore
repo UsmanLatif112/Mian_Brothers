@@ -16,6 +16,10 @@ instance/*.db
 # Database backup dumps
 backups/
 
+# Runtime logs (cPanel: tail -f logs/app.log)
+logs/
+!logs/.gitkeep
+
 # IDE / OS
 .idea/
 .vscode/
