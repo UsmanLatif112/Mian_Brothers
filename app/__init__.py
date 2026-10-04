@@ -86,20 +86,28 @@ def create_app():
         # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
         ensure_meter_sale_rate_schema()
         ensure_fuel_price_effective_at_schema()
-        ensure_liter_precision_schema()
+        # Intentionally NOT calling ensure_liter_precision_schema() during boot.
+        # ALTER TABLE under Passenger can metadata-lock MySQL and freeze the site.
+        # Run once from cPanel when traffic is quiet:
+        #   PYTHONPATH=. python -c "from app import create_app; from app import ensure_liter_precision_schema; app=create_app.__wrapped__ if False else None
+        # Prefer: PYTHONPATH=. python scripts/migrate_liter_precision.py
         
     return app
 
 
 def ensure_liter_precision_schema():
-    """Allow up to 3 decimal places on liter/qty volume columns (e.g. 25.002)."""
+    """Allow up to 3 decimal places on liter/qty volume columns (e.g. 25.002).
+
+    Uses a short MySQL lock wait so a blocked ALTER cannot hang the whole app boot.
+    """
     from sqlalchemy import text, inspect
 
-    inspector = inspect(db.engine)
     url = str(db.engine.url)
     is_mysql = url.startswith('mysql')
+    if not is_mysql:
+        return  # SQLite affinity ignores numeric scale
 
-    # table -> [(column, nullable_sql_fragment)]
+    # table -> [(column, nullability)]
     targets = {
         'credit_sales': [('liters', 'NOT NULL')],
         'meter_readings': [
@@ -117,31 +125,38 @@ def ensure_liter_precision_schema():
         'sales': [('liters', 'NOT NULL')],
     }
 
-    for table, cols in targets.items():
-        if table not in inspector.get_table_names():
-            continue
-        existing = {c['name']: c for c in inspector.get_columns(table)}
-        for col_name, null_sql in cols:
-            if col_name not in existing:
-                continue
-            col = existing[col_name]
-            # Skip if already scale >= 3
-            typ = col.get('type')
-            scale = getattr(typ, 'scale', None)
-            if scale is not None and int(scale) >= 3:
-                continue
-            try:
-                with db.engine.begin() as conn:
-                    if is_mysql:
+    try:
+        with db.engine.begin() as conn:
+            # Fail fast if another session holds a metadata lock (common under Passenger).
+            conn.execute(text('SET SESSION lock_wait_timeout = 3'))
+            conn.execute(text('SET SESSION innodb_lock_wait_timeout = 3'))
+
+            for table, cols in targets.items():
+                for col_name, null_sql in cols:
+                    row = conn.execute(text(
+                        """
+                        SELECT NUMERIC_SCALE
+                        FROM INFORMATION_SCHEMA.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE()
+                          AND TABLE_NAME = :table
+                          AND COLUMN_NAME = :col
+                        """
+                    ), {'table': table, 'col': col_name}).first()
+                    if not row:
+                        continue
+                    scale = row[0]
+                    if scale is not None and int(scale) >= 3:
+                        continue
+                    try:
                         conn.execute(text(
                             f"ALTER TABLE `{table}` MODIFY COLUMN `{col_name}` "
                             f"NUMERIC(12, 3) {null_sql}"
                         ))
-                    else:
-                        # SQLite: type affinity only; no strict scale — skip ALTER
-                        pass
-            except Exception as e:
-                print(f"liter precision skip {table}.{col_name}: {e}")
+                    except Exception as e:
+                        # Don't block app start — retry on next boot if lock/timeout.
+                        print(f"liter precision skip {table}.{col_name}: {e}")
+    except Exception as e:
+        print(f"liter precision migration skipped: {e}")
 
 
 def ensure_fuel_price_effective_at_schema():
@@ -454,15 +469,12 @@ def ensure_customers_schema():
 
 
 def ensure_vendors_schema():
-    """Create vendor tables/columns and backfill from existing purchase logs."""
+    """Ensure vendor_id columns exist. Heavy history backfill is one-time only.
+
+    Never scan purchase logs on every boot — that can hang the whole app if
+    MySQL holds a metadata lock on item_purchase_logs (e.g. stuck ALTER).
+    """
     from sqlalchemy import text, inspect
-    from app.models import Vendor, ItemPurchaseLog, StockEntry
-    from app.vendors.service import (
-        get_or_create_vendor,
-        normalize_vendor_name,
-        link_purchase_to_vendor,
-        recalculate_vendor_balance,
-    )
 
     inspector = inspect(db.engine)
     tables = set(inspector.get_table_names())
@@ -477,56 +489,18 @@ def ensure_vendors_schema():
         if 'vendor_id' not in existing:
             alters.append('ALTER TABLE stock_entries ADD COLUMN vendor_id INTEGER')
 
-    if alters:
+    if not alters:
+        return
+
+    try:
         with db.engine.begin() as conn:
+            if str(db.engine.url).startswith('mysql'):
+                conn.execute(text('SET SESSION lock_wait_timeout = 3'))
             for stmt in alters:
                 conn.execute(text(stmt))
         print('Upgraded purchase tables for vendor_id.')
-
-    if 'vendors' not in tables:
-        return
-
-    names = set()
-    if 'item_purchase_logs' in tables:
-        for log in ItemPurchaseLog.query.filter(ItemPurchaseLog.vendor.isnot(None)).all():
-            n = normalize_vendor_name(log.vendor)
-            if n:
-                names.add(n)
-    if 'stock_entries' in tables:
-        for entry in StockEntry.query.filter(StockEntry.supplier.isnot(None)).all():
-            n = normalize_vendor_name(entry.supplier)
-            if n:
-                names.add(n)
-
-    for name in names:
-        get_or_create_vendor(name)
-    db.session.commit()
-
-    linked_any = False
-    for log in ItemPurchaseLog.query.filter(
-        ItemPurchaseLog.vendor_id.is_(None),
-        ItemPurchaseLog.vendor.isnot(None),
-    ).all():
-        link_purchase_to_vendor(log.vendor, log, increment_balance=False)
-        linked_any = True
-
-    for entry in StockEntry.query.filter(
-        StockEntry.vendor_id.is_(None),
-        StockEntry.supplier.isnot(None),
-    ).all():
-        vendor = get_or_create_vendor(entry.supplier)
-        if vendor:
-            entry.vendor_id = vendor.id
-            entry.supplier = vendor.name
-            linked_any = True
-
-    if linked_any or alters:
-        db.session.commit()
-        for vendor in Vendor.query.all():
-            recalculate_vendor_balance(vendor)
-        db.session.commit()
-        if linked_any:
-            print('Backfilled vendor links from purchase history.')
+    except Exception as e:
+        print(f'vendor schema upgrade skipped: {e}')
 
 
 def ensure_journal_schema():
