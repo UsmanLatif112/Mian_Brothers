@@ -199,6 +199,16 @@ body.sidebar-open .sidebar-backdrop {
     letter-spacing: 0.01em;
 }
 
+.sidebar-credit-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.sidebar-credit-link:hover strong {
+    text-decoration: underline;
+    color: var(--accent-blue-hover);
+}
+
 .sidebar-credit strong {
     display: inline-block;
     margin-top: 0.1rem;
