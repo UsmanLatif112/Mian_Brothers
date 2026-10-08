@@ -24,6 +24,105 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------
+    // Shopify-style shell: sidebar + global search
+    // -------------------------------------------------------
+    const body = document.body;
+    const sidebar = document.getElementById('appSidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    const openBtn = document.getElementById('sidebarOpen');
+    const closeBtn = document.getElementById('sidebarClose');
+
+    function openSidebar() {
+        if (!sidebar) return;
+        body.classList.add('sidebar-open');
+        if (backdrop) backdrop.hidden = false;
+        body.style.overflow = window.innerWidth < 992 ? 'hidden' : '';
+    }
+
+    function closeSidebar() {
+        body.classList.remove('sidebar-open');
+        if (backdrop) backdrop.hidden = true;
+        body.style.overflow = '';
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openSidebar);
+    if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+
+    sidebar?.querySelectorAll('.sidebar-link').forEach((link) => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth < 992) closeSidebar();
+        });
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 992) closeSidebar();
+    });
+
+    const searchInput = document.getElementById('globalSearch');
+    const searchPanel = document.getElementById('searchPanel');
+    const searchResults = document.getElementById('searchResults');
+    const searchForm = document.getElementById('globalSearchForm');
+    const navLinks = Array.from(document.querySelectorAll('.sidebar-link[data-search-label]')).map((el) => ({
+        label: el.getAttribute('data-search-label') || el.textContent.trim(),
+        href: el.getAttribute('href'),
+        icon: el.querySelector('i')?.className || 'bi bi-arrow-right',
+    }));
+
+    function renderSearch(query) {
+        if (!searchPanel || !searchResults) return;
+        const q = (query || '').trim().toLowerCase();
+        if (!q) {
+            searchPanel.hidden = true;
+            searchResults.innerHTML = '';
+            return;
+        }
+        const matches = navLinks.filter((item) => item.label.toLowerCase().includes(q)).slice(0, 8);
+        const customerJump = {
+            label: `Search customers for “${query.trim()}”`,
+            href: `${searchForm?.action || '/customers/'}?search=${encodeURIComponent(query.trim())}`,
+            icon: 'bi bi-people',
+        };
+        const items = [...matches, customerJump];
+        searchResults.innerHTML = items
+            .map(
+                (item, idx) =>
+                    `<a class="topbar-search-item${idx === 0 ? ' is-active' : ''}" href="${item.href}">
+                        <i class="${item.icon}"></i><span>${item.label}</span>
+                     </a>`
+            )
+            .join('');
+        searchPanel.hidden = false;
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => renderSearch(searchInput.value));
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim()) renderSearch(searchInput.value);
+        });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchPanel.hidden = true;
+                searchInput.blur();
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!searchForm?.contains(e.target) && searchPanel) searchPanel.hidden = true;
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            const tag = (document.activeElement?.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
+            if (!searchInput) return;
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+        }
+    });
+
+    // -------------------------------------------------------
     // Prevent duplicate submits / double-clicks (global)
     // -------------------------------------------------------
     function getFormSubmitButtons(form) {

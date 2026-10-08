@@ -3,119 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#6366f1">
+    <meta name="theme-color" content="#008060">
     <title>{% block title %}Fuel Station Manager{% endblock %}</title>
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}?v=3" type="image/png" sizes="512x512">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}?v=3">
-    
-    <!-- Bootstrap 5 CSS CDN -->
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
-    <!-- Tom Select (searchable dropdowns) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
-    <!-- Custom Theme Styling -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=7">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/shell.css') }}?v=1">
 </head>
-<body class="{% if not current_user.is_authenticated %}no-navbar{% endif %}">
+<body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
 
     {% if current_user.is_authenticated %}
-    <!-- Sticky Top Navbar: brand | links (one row) | user — same width as page -->
-    <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
-        <div class="container-fluid app-shell navbar-shell">
-            <a class="navbar-brand navbar-brand-custom" href="{{ url_for('dashboard.index') }}">
+    <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+
+    <aside class="app-sidebar" id="appSidebar" aria-label="Main navigation">
+        <div class="sidebar-brand">
+            <a class="sidebar-brand-link" href="{{ url_for('dashboard.index') }}">
                 <span class="brand-mark">
-                    <img src="{{ url_for('static', filename='img/logo.png') }}?v=2" alt="OctaneFlow" width="34" height="34">
+                    <img src="{{ url_for('static', filename='img/logo.png') }}?v=2" alt="" width="36" height="36">
                 </span>
-                <span class="brand-text">OctaneFlow</span>
+                <span class="brand-copy">
+                    <span class="brand-text">OctaneFlow</span>
+                    <span class="brand-tag">Station OS</span>
+                </span>
+            </a>
+            <button type="button" class="sidebar-close d-lg-none" id="sidebarClose" aria-label="Close menu">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <p class="sidebar-section-label">Home</p>
+            <a class="sidebar-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" data-search-label="Dashboard">
+                <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
+            </a>
+            <a class="sidebar-link {% if request.endpoint == 'dashboard.reports' %}active{% endif %}" href="{{ url_for('dashboard.reports') }}" data-search-label="Reports">
+                <i class="bi bi-graph-up-arrow"></i><span>Reports</span>
             </a>
 
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav nav-scroll">
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
-                            <i class="bi bi-speedometer2"></i><span>Dashboard</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}">
-                            <i class="bi bi-cart3"></i><span>Sales</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}">
-                            <i class="bi bi-cash-stack"></i><span>Account</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}">
-                            <i class="bi bi-box-seam"></i><span>Inventory</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'purchasing' %}active{% endif %}" href="{{ url_for('purchasing.index') }}">
-                            <i class="bi bi-cart-plus"></i><span>Purchasing</span>
-                        </a>
-                    </li>
-                    {% if current_user.role == 'admin' %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}">
-                            <i class="bi bi-tags"></i><span>Pricing</span>
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}">
-                            <i class="bi bi-people"></i><span>Customers</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}">
-                            <i class="bi bi-building"></i><span>Vendors</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link nav-link-custom {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}">
-                            <i class="bi bi-receipt"></i><span>Expenses</span>
-                        </a>
-                    </li>
-                </ul>
+            <p class="sidebar-section-label">Operations</p>
+            <a class="sidebar-link {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}" data-search-label="Sales">
+                <i class="bi bi-cart3"></i><span>Sales</span>
+            </a>
+            <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
+                <i class="bi bi-wallet2"></i><span>Account</span>
+            </a>
+            <a class="sidebar-link {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
+                <i class="bi bi-box-seam"></i><span>Inventory</span>
+            </a>
+            <a class="sidebar-link {% if request.blueprint == 'purchasing' %}active{% endif %}" href="{{ url_for('purchasing.index') }}" data-search-label="Purchasing">
+                <i class="bi bi-bag-plus"></i><span>Purchasing</span>
+            </a>
+            <a class="sidebar-link {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}" data-search-label="Expenses">
+                <i class="bi bi-receipt"></i><span>Expenses</span>
+            </a>
+
+            <p class="sidebar-section-label">People</p>
+            <a class="sidebar-link {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}" data-search-label="Customers">
+                <i class="bi bi-people"></i><span>Customers</span>
+            </a>
+            <a class="sidebar-link {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}" data-search-label="Vendors">
+                <i class="bi bi-building"></i><span>Vendors</span>
+            </a>
+
+            {% if current_user.role == 'admin' %}
+            <p class="sidebar-section-label">Admin</p>
+            <a class="sidebar-link {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}" data-search-label="Pricing">
+                <i class="bi bi-tags"></i><span>Pricing</span>
+            </a>
+            <a class="sidebar-link {% if request.blueprint == 'backup' %}active{% endif %}" href="{{ url_for('backup.index') }}" data-search-label="Backup">
+                <i class="bi bi-cloud-arrow-up"></i><span>Backup</span>
+            </a>
+            <a class="sidebar-link {% if request.endpoint == 'auth.staff_accounts' %}active{% endif %}" href="{{ url_for('auth.staff_accounts') }}" data-search-label="Staff">
+                <i class="bi bi-person-gear"></i><span>Staff</span>
+            </a>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user-chip">
+                <div class="user-avatar user-avatar-sm">{{ current_user.name[0] | upper }}</div>
+                <div class="sidebar-user-meta">
+                    <span class="sidebar-user-name">{{ current_user.name }}</span>
+                    <span class="sidebar-user-role">{{ current_user.role | capitalize }}</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="app-frame">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button type="button" class="topbar-icon-btn d-lg-none" id="sidebarOpen" aria-label="Open menu">
+                    <i class="bi bi-list"></i>
+                </button>
+                <form class="topbar-search" id="globalSearchForm" action="{{ url_for('customers.index') }}" method="GET" role="search">
+                    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+                    <input type="search" class="topbar-search-input" id="globalSearch" name="search"
+                           placeholder="Search customers, pages…" autocomplete="off" aria-label="Search">
+                    <kbd class="topbar-search-kbd d-none d-md-inline">/</kbd>
+                    <div class="topbar-search-panel" id="searchPanel" hidden>
+                        <p class="topbar-search-hint">Jump to</p>
+                        <div class="topbar-search-results" id="searchResults"></div>
+                    </div>
+                </form>
             </div>
 
-            <div class="navbar-nav-tools">
-                <button class="navbar-toggler border-0 d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+            <div class="topbar-right">
                 <div class="dropdown">
-                    <button class="btn user-menu-btn dropdown-toggle d-flex align-items-center gap-1 p-1 border-0" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="user-avatar">
-                            {{ current_user.name[0] | upper }}
+                    <button class="topbar-icon-btn" type="button" id="notifMenu" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
+                        <i class="bi bi-bell"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-app topbar-dropdown shadow border-0 p-0" aria-labelledby="notifMenu">
+                        <div class="topbar-dropdown-head">
+                            <strong>Notifications</strong>
                         </div>
+                        <div class="topbar-notif-empty">
+                            <i class="bi bi-check2-circle"></i>
+                            <p class="mb-0">You're all caught up</p>
+                            <small class="text-muted-custom">Station alerts will show here.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="topbar-icon-btn theme-toggle-btn" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
+                    <i class="bi bi-moon-stars-fill"></i>
+                </button>
+
+                <div class="dropdown">
+                    <button class="btn user-menu-btn dropdown-toggle d-flex align-items-center gap-2 border-0" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-avatar">{{ current_user.name[0] | upper }}</div>
+                        <span class="user-menu-label d-none d-md-flex flex-column align-items-start">
+                            <span class="user-name">{{ current_user.name }}</span>
+                            <span class="badge badge-custom {% if current_user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %} user-role-badge">{{ current_user.role | capitalize }}</span>
+                        </span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-app shadow border-0 p-2 mt-2" aria-labelledby="userMenu">
-                        <li>
-                            <button class="dropdown-item rounded py-2 px-3 theme-toggle-btn" id="theme-toggle" title="Toggle theme" type="button" aria-label="Toggle theme">
-                                <i class="bi bi-moon-stars-fill me-2"></i> Dark Mode
-                            </button>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
                         <li class="px-3 py-2">
                             <small class="d-block user-name">{{ current_user.name }}</small>
                             <span class="badge badge-custom {% if current_user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %} user-role-badge">{{ current_user.role | capitalize }}</span>
                         </li>
                         {% if current_user.role == 'admin' %}
+                        <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item rounded py-2 px-3" href="{{ url_for('auth.staff_accounts') }}">
                                 <i class="bi bi-person-gear me-2"></i> Manage Staff
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item rounded py-2 px-3 {% if request.blueprint == 'backup' %}active{% endif %}" href="{{ url_for('backup.index') }}">
+                            <a class="dropdown-item rounded py-2 px-3" href="{{ url_for('backup.index') }}">
                                 <i class="bi bi-cloud-arrow-up me-2"></i> Backup
                             </a>
                         </li>
-                        <li><hr class="dropdown-divider"></li>
                         {% endif %}
+                        <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item rounded py-2 px-3 text-danger" href="{{ url_for('auth.logout') }}">
                                 <i class="bi bi-box-arrow-right me-2"></i> Logout
@@ -124,40 +168,44 @@
                     </ul>
                 </div>
             </div>
-        </div>
-    </nav>
+        </header>
+
+        <div class="app-main">
+    {% else %}
+    <div class="container-fluid app-shell app-main py-3 py-md-4">
     {% endif %}
 
-    <!-- Main Content -->
-    <div class="container-fluid app-shell app-main py-3 py-md-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="flash-stack mb-3">
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category if category != 'danger' else 'danger' }} alert-dismissible fade show alert-app border-0" role="alert">
-                            <i class="bi {% if category == 'success' %}bi-check-circle-fill{% elif category == 'danger' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-        
-        <main class="animate-fade-in">
-            {% block content %}{% endblock %}
-        </main>
-    </div>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-stack mb-3">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category if category != 'danger' else 'danger' }} alert-dismissible fade show alert-app border-0" role="alert">
+                                <i class="bi {% if category == 'success' %}bi-check-circle-fill{% elif category == 'danger' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
 
-    <!-- Modals Block -->
+            <main class="animate-fade-in">
+                {% block content %}{% endblock %}
+            </main>
+
+    {% if current_user.is_authenticated %}
+        </div><!-- /.app-main -->
+    </div><!-- /.app-frame -->
+    {% else %}
+    </div>
+    {% endif %}
+
     {% block modals %}{% endblock %}
 
-    <!-- Bootstrap 5 Bundle JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
-    <!-- Custom theme functionality -->
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-    
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=7"></script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>
