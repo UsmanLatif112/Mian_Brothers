@@ -150,6 +150,21 @@ def index():
         reverse=True,
     )
 
+    search_q = (request.args.get('search') or '').strip().lower()
+    if search_q:
+        price_history = [
+            r for r in price_history
+            if search_q in (r.get('item_name') or '').lower()
+            or search_q in (r.get('category') or '').lower()
+            or search_q in (r.get('updated_by') or '').lower()
+        ]
+        shop_items = [
+            i for i in shop_items
+            if search_q in (i.name or '').lower()
+            or search_q in (i.category or '').lower()
+            or search_q in (i.company or '').lower()
+        ]
+
     now = datetime.utcnow().replace(second=0, microsecond=0)
     return render_template(
         'pricing/index.html',
@@ -159,4 +174,5 @@ def index():
         price_history=price_history[:100],
         today=now.date().isoformat(),
         now_local=now.strftime('%Y-%m-%dT%H:%M'),
+        search=search_q,
     )

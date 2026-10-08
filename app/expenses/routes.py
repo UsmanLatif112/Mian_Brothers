@@ -154,11 +154,21 @@ def index():
     )
     settled_total = total - unsettled_total
 
+    search_q = (request.args.get('search') or '').strip()
     expenses_q = (
         Expense.query
         .filter(Expense.expense_date >= start, Expense.expense_date <= end)
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
     )
+    if search_q:
+        like = f'%{search_q}%'
+        expenses_q = expenses_q.filter(
+            db.or_(
+                Expense.name.ilike(like),
+                Expense.description.ilike(like),
+                Expense.settle_note.ilike(like),
+            )
+        )
     expenses, expenses_pagination = paginate(expenses_q, request.args.get('page', 1), PER_PAGE)
 
     from app.charts_data import expenses_listing_series
@@ -176,6 +186,7 @@ def index():
         period_choices=PERIOD_CHOICES,
         today=datetime.utcnow().date().isoformat(),
         chart_series=expenses_listing_series(expenses),
+        search=search_q,
     )
 
 
@@ -201,4 +212,11 @@ def _filter_args():
             args['start_date'] = start
         if end:
             args['end_date'] = end
+    search = (request.args.get('search') or request.form.get('search') or '').strip()
+    if not search and request.referrer:
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(request.referrer).query)
+        search = (qs.get('search') or [''])[0]
+    if search:
+        args['search'] = search
     return args

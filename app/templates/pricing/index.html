@@ -2,6 +2,14 @@
 
 {% block title %}Pricing — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('pricing.index') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search price history…" value="{{ search or '' }}" autocomplete="off" aria-label="Search prices">
+</form>
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
@@ -85,12 +93,12 @@
 <!-- Inventory Item Prices Table -->
 <div class="row g-4 mt-1">
     <div class="col-12">
-        <div class="card card-premium">
+        <div class="card card-premium list-panel">
             <div class="card-header-premium">
                 <h5 class="mb-0 fw-bold">Inventory Item Prices</h5>
             </div>
             <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0">
+                <table class="table table-custom table-hover mb-0 list-table">
                     <thead>
                         <tr>
                             <th>Category</th>

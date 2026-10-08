@@ -212,22 +212,32 @@ def inventory_listing_series():
 
 
 def customer_ledger_pie(ledger_entries):
-    """Pie: composition of customer ledger debits/credits."""
+    """Pie: sales paid / unpaid, payments, advance, loan."""
     buckets = defaultdict(float)
     for e in ledger_entries or []:
-        pay_type = (e.get('pay_type') or e.get('type') or 'other').lower()
+        kind = (e.get('entry_kind') or e.get('pay_type') or '').lower()
+        etype = (e.get('type') or '').lower()
         debit = float(e.get('debit') or 0)
         credit = float(e.get('credit') or 0)
-        if pay_type in ('advance',):
-            buckets['Advance'] += credit or debit
-        elif pay_type in ('loan',):
-            buckets['Loan'] += debit or credit
-        elif pay_type in ('opening',):
-            buckets['Opening'] += debit or credit
-        elif pay_type in ('payment',) or e.get('type') == 'payment':
-            buckets['Payments'] += credit or debit
+        amount = float(e.get('amount') or 0)
+        paid = float(e.get('amount_paid') or 0)
+
+        if kind == 'advance' or (etype == 'payment' and kind == 'advance'):
+            buckets['Advance'] += credit or amount or debit
+        elif kind == 'loan':
+            buckets['Loan'] += debit or amount
+        elif kind == 'opening':
+            buckets['Opening'] += debit or amount
+        elif etype == 'payment' or kind == 'payment':
+            buckets['Paid'] += credit or amount or paid
         else:
-            buckets['Sales'] += debit or credit
+            unpaid = max(debit, amount - paid, 0)
+            if paid > 0:
+                buckets['Paid'] += paid
+            if unpaid > 0:
+                buckets['Unpaid'] += unpaid
+            elif debit > 0 and paid <= 0:
+                buckets['Unpaid'] += debit
     pairs = sorted(((k, v) for k, v in buckets.items() if v > 0), key=lambda x: -x[1])
     return {
         'labels': [p[0] for p in pairs],
@@ -236,6 +246,7 @@ def customer_ledger_pie(ledger_entries):
 
 
 def vendor_ledger_pie(total_purchased, total_paid, balance):
+    """Pie: purchased paid / unpaid (still payable)."""
     purchased = max(float(total_purchased or 0), 0)
     paid = max(float(total_paid or 0), 0)
     due = max(float(balance or 0), 0)
@@ -244,7 +255,7 @@ def vendor_ledger_pie(total_purchased, total_paid, balance):
         labels.append('Paid')
         values.append(round(paid, 2))
     if due:
-        labels.append('Still payable')
+        labels.append('Unpaid')
         values.append(round(due, 2))
     if not labels and purchased:
         labels = ['Purchased']

@@ -102,5 +102,14 @@ def staff_accounts():
         return redirect(url_for('auth.staff_accounts'))
         
     # GET request
+    search_q = (request.args.get('search') or '').strip().lower()
     users = User.query.all()
-    return render_template('auth/staff.html', users=users)
+    if search_q:
+        users = [
+            u for u in users
+            if search_q in (u.name or '').lower()
+            or search_q in (u.email or '').lower()
+            or search_q in (u.phone or '').lower()
+            or search_q in (u.role or '').lower()
+        ]
+    return render_template('auth/staff.html', users=users, search=search_q)

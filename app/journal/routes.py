@@ -48,8 +48,22 @@ def index():
         include_opening_credit=False,
     )
     flow = build_cash_flow_rows(stats, direction=direction, entry_type=entry_type)
+    search_q = (request.args.get('search') or '').strip().lower()
+    rows = flow['rows']
+    if search_q:
+        def _journal_match(row):
+            blob = ' '.join([
+                str(getattr(row, 'type_label', '') or ''),
+                str(getattr(row, 'party', '') or ''),
+                str(getattr(row, 'item_name', '') or ''),
+                str(getattr(row, 'entry_type', '') or ''),
+                str(getattr(row, 'cash_direction', '') or ''),
+            ]).lower()
+            return search_q in blob
+        rows = [r for r in rows if _journal_match(r)]
+
     page = request.args.get('page', 1)
-    page_rows, pagination = paginate(flow['rows'], page, PER_PAGE)
+    page_rows, pagination = paginate(rows, page, PER_PAGE)
 
     from app.charts_data import journal_listing_series
 
@@ -61,7 +75,7 @@ def index():
         total_out=flow['total_out'],
         net=flow['net'],
         by_type=flow['by_type'],
-        row_count=flow['count'],
+        row_count=len(rows),
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
@@ -70,5 +84,6 @@ def index():
         entry_type=entry_type,
         direction_choices=DIRECTION_FILTER_CHOICES,
         type_choices=TYPE_FILTER_CHOICES,
-        chart_series=journal_listing_series(flow['rows']),
+        chart_series=journal_listing_series(rows),
+        search=search_q,
     )

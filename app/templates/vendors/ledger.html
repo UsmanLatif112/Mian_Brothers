@@ -23,40 +23,27 @@
 {% endblock %}
 
 {% block content %}
-<div class="card card-premium ledger-name-card">
-    <div class="ledger-name-row">
-        <div class="d-flex align-items-center gap-3 min-w-0">
-            <a href="{{ url_for('vendors.index') }}" class="btn-back" title="Back to Vendors"><i class="bi bi-arrow-left"></i></a>
-            <div class="min-w-0">
-                <p class="page-eyebrow mb-1">Vendor Ledger</p>
-                <h1 class="ledger-name-title text-truncate">{{ vendor.name }}</h1>
-            </div>
+<div class="ledger-name-row">
+    <div class="d-flex align-items-center gap-3 min-w-0">
+        <a href="{{ url_for('vendors.index') }}" class="btn-back" title="Back to Vendors"><i class="bi bi-arrow-left"></i></a>
+        <div class="min-w-0">
+            <p class="page-eyebrow mb-1">Vendor Ledger</p>
+            <h1 class="ledger-name-title text-truncate">{{ vendor.name }}</h1>
         </div>
-        <div class="page-header-actions">
-            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#vendorPaymentModal" title="Record Payment">
-                <i class="bi bi-wallet2 me-1"></i><span class="btn-label"> Record Payment</span>
-            </button>
-        </div>
+    </div>
+    <div class="page-header-actions">
+        <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#vendorPaymentModal" title="Record Payment">
+            <i class="bi bi-wallet2 me-1"></i><span class="btn-label"> Record Payment</span>
+        </button>
+        <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+            <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
+        </button>
     </div>
 </div>
 
-<section class="ledger-overview" aria-label="Vendor overview">
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Payable mix</h2>
-            <p class="chart-card-sub">Paid vs owed</p>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="vendorLedgerPie"></canvas></div>
-        </div>
-    </article>
-
-    <article class="card card-premium ledger-profile-card">
+<article class="card card-premium ledger-hero-card" aria-label="Vendor overview">
+    <div class="ledger-hero-details">
         <ul class="ledger-profile-list">
-            <li>
-                <span class="ledger-profile-label">Contact</span>
-                <span class="ledger-profile-value">{{ vendor.contact_person or '—' }}</span>
-            </li>
             <li>
                 <span class="ledger-profile-label">Phone</span>
                 <span class="ledger-profile-value">{{ vendor.phone or '—' }}</span>
@@ -66,28 +53,37 @@
                 <span class="ledger-profile-value">{{ vendor.address or '—' }}</span>
             </li>
             <li>
-                <span class="ledger-profile-label">Previous payable</span>
+                <span class="ledger-profile-label">Previous book / payable</span>
                 <span class="ledger-profile-value">
                     {% if vendor.previous_payable %}{{ vendor.previous_payable | money }}{% else %}—{% endif %}
                 </span>
             </li>
         </ul>
-    </article>
+    </div>
+    <div class="ledger-hero-chart">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Purchase mix</h2>
+            <p class="chart-card-sub">Paid · unpaid</p>
+        </div>
+        <div class="chart-canvas-wrap is-pie"><canvas id="vendorLedgerPie"></canvas></div>
+    </div>
+</article>
 
+<section class="ledger-kpi-row" aria-label="Vendor KPIs">
     <article class="ledger-kpi {% if vendor.current_balance_payable > 0 %}stat-warning{% else %}stat-success{% endif %}">
-        <div class="ledger-kpi-label">Balance payable</div>
+        <div class="ledger-kpi-label">Payable</div>
         <div class="ledger-kpi-value {% if vendor.current_balance_payable <= 0 %}text-success{% else %}text-warning{% endif %}">
             {{ vendor.current_balance_payable | money }}
         </div>
         <div class="ledger-kpi-meta">Still owed to vendor</div>
     </article>
     <article class="ledger-kpi">
-        <div class="ledger-kpi-label">Total purchased</div>
+        <div class="ledger-kpi-label">Total purchase</div>
         <div class="ledger-kpi-value">{{ total_purchased | money }}</div>
         <div class="ledger-kpi-meta">All purchase batches</div>
     </article>
     <article class="ledger-kpi">
-        <div class="ledger-kpi-label">Total paid</div>
+        <div class="ledger-kpi-label">Total pay</div>
         <div class="ledger-kpi-value text-success">{{ total_paid | money }}</div>
         <div class="ledger-kpi-meta">Payments recorded</div>
     </article>
@@ -107,76 +103,104 @@ document.addEventListener('DOMContentLoaded', () => {
         OctaneCharts.doughnutChart(canvas, {
             labels: labels.length ? labels : ['No data'],
             values: labels.length ? values : [1],
-            centerText: { title: 'Payable', value: labels.length ? OctaneCharts.money(total) : '—' },
+            centerText: { title: 'Purchase', value: labels.length ? OctaneCharts.money(total) : '—' },
         });
     };
     boot();
 });
 </script>
 
-<div class="row g-4">
-    <div class="col-12">
-        <div class="card card-premium">
-            <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div class="min-w-0">
-                    <h2 class="panel-title mb-0">Vendor Statement</h2>
-                    <p class="panel-subtitle mb-0">Purchases (+) and payments (−)</p>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary border-0" onclick="window.print()" title="Print">
-                    <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
-                </button>
-            </div>
-            <div class="table-responsive table-scroll">
-                <table class="table table-custom table-hover mb-0 ledger-table">
-                    <thead>
-                        <tr>
-                            <th>Date / Time</th>
-                            <th>Reference</th>
-                            <th>Description</th>
-                            <th class="text-end">Purchase (+)</th>
-                            <th class="text-end">Paid (−)</th>
-                            <th class="text-end">Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if ledger_entries %}
-                            {% for entry in ledger_entries %}
-                            <tr>
-                                <td style="font-size: 0.85rem;" class="text-muted-custom">
-                                    {{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '—' }}
-                                </td>
-                                <td class="fw-semibold ledger-ref">{{ entry.ref_id }}</td>
-                                <td class="ledger-desc-cell">
-                                    <div class="ledger-desc-wrap">
-                                        <span class="ledger-desc-text">{{ entry.desc }}</span>
-                                        {% if entry.pay_type %}
-                                        <span class="ledger-badge badge badge-custom badge-staff text-uppercase">{{ entry.pay_type }}</span>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                                <td class="text-end text-danger fw-semibold">
-                                    {% if entry.debit > 0 %}+{{ entry.debit | money }}{% else %}—{% endif %}
-                                </td>
-                                <td class="text-end text-success fw-semibold">
-                                    {% if entry.credit > 0 %}-{{ entry.credit | money }}{% else %}—{% endif %}
-                                </td>
-                                <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="6" class="empty-state text-center py-5">
-                                    <div class="empty-state-icon"><i class="bi bi-journal-check"></i></div>
-                                    <p class="text-muted-custom">No transactions yet for this vendor.</p>
-                                </td>
-                            </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+<div class="card card-premium list-panel ledger-list-card">
+    <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="min-w-0">
+            <h2 class="panel-title mb-0">Vendor Statement</h2>
+            <p class="panel-subtitle mb-0">Purchases (+) and payments (−)</p>
         </div>
     </div>
+    <div class="table-responsive table-scroll">
+        <table class="table table-custom table-hover mb-0 ledger-table list-table">
+            <thead>
+                <tr>
+                    <th>Date / Time</th>
+                    <th>Reference</th>
+                    <th>Description</th>
+                    <th class="text-end">Purchase (+)</th>
+                    <th class="text-end">Paid (−)</th>
+                    <th class="text-end">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if ledger_entries %}
+                    {% for entry in ledger_entries %}
+                    <tr>
+                        <td class="text-muted-custom list-cell-muted">
+                            {{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '—' }}
+                        </td>
+                        <td class="fw-semibold ledger-ref">{{ entry.ref_id }}</td>
+                        <td class="ledger-desc-cell">
+                            <div class="ledger-desc-wrap">
+                                <span class="ledger-desc-text">{{ entry.desc }}</span>
+                                {% if entry.pay_type %}
+                                <span class="ledger-badge badge badge-custom badge-staff text-uppercase">{{ entry.pay_type }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-end text-danger fw-semibold">
+                            {% if entry.debit > 0 %}+{{ entry.debit | money }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-success fw-semibold">
+                            {% if entry.credit > 0 %}−{{ entry.credit | money }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="empty-state text-center py-5">
+                            <div class="empty-state-icon"><i class="bi bi-journal-check"></i></div>
+                            <p class="text-muted-custom">No transactions yet for this vendor.</p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+<aside class="thermal-slip" aria-hidden="true">
+    <div class="thermal-slip-head">
+        <div class="thermal-brand">OctaneFlow</div>
+        <div class="thermal-sub">Vendor Statement</div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-meta"><span>Vendor</span><span>{{ vendor.name }}</span></div>
+    {% if vendor.phone %}<div class="thermal-meta"><span>Phone</span><span>{{ vendor.phone }}</span></div>{% endif %}
+    <div class="thermal-meta"><span>Printed</span><span>{{ today }}</span></div>
+    <hr class="thermal-rule">
+    <div class="thermal-title">Purchase Invoice</div>
+    <div class="thermal-lines">
+        {% for entry in ledger_entries %}
+        <div class="thermal-line">
+            <div class="thermal-line-desc">{{ entry.date.strftime('%d/%m %H:%M') if entry.date else '—' }} · {{ entry.ref_id }}</div>
+            <div class="thermal-line-desc">{{ entry.desc }}</div>
+            <div class="thermal-row">
+                <span>{% if entry.debit > 0 %}Pur {{ '%.2f'|format(entry.debit) }}{% elif entry.credit > 0 %}Pay {{ '%.2f'|format(entry.credit) }}{% else %}—{% endif %}</span>
+                <span>Bal {{ '%.2f'|format(entry.running_balance) }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="thermal-line-desc">No entries</div>
+        {% endfor %}
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-totals">
+        <div class="thermal-row"><span>Total purchase</span><span>{{ '%.2f'|format(total_purchased) }}</span></div>
+        <div class="thermal-row"><span>Total pay</span><span>{{ '%.2f'|format(total_paid) }}</span></div>
+        <div class="thermal-row"><span>Payable</span><span>{{ '%.2f'|format(vendor.current_balance_payable or 0) }}</span></div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-foot">Thank you · OctaneFlow</div>
+</aside>
 {% endblock %}
 
 {% block modals %}

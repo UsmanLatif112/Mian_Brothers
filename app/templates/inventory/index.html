@@ -2,6 +2,14 @@
 
 {% block title %}Inventory — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('inventory.index') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search stock items…" value="{{ search or '' }}" autocomplete="off" aria-label="Search inventory">
+</form>
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
@@ -125,7 +133,7 @@
 <!-- Current Shop Stock -->
 <div class="row g-4 mb-4">
     <div class="col-12">
-        <div class="card card-premium">
+        <div class="card card-premium list-panel">
             <div class="card-header-premium">
                 <h5 class="mb-0 fw-bold">Shop Stock (Mobile / FT Mobile Oil / Filter / Other)</h5>
             </div>
@@ -192,7 +200,7 @@
             </div>
 
             <div class="table-responsive d-none d-md-block">
-                <table class="table table-custom table-hover mb-0">
+                <table class="table table-custom table-hover mb-0 list-table">
                     <thead>
                         <tr>
                             <th>Category</th>
@@ -259,7 +267,7 @@
                     </tbody>
                 </table>
             </div>
-            {% with pagination=shop_pagination, page_param='stock_page' %}
+            {% with pagination=shop_pagination, page_param='stock_page', keep_args={'search': search} %}
                 {% include "partials/pagination.html" %}
             {% endwith %}
         </div>

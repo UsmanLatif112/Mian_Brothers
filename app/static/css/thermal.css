@@ -1,0 +1,119 @@
+/* 80mm thermal invoice — Boltwood-style receipt */
+
+.thermal-slip {
+    display: none;
+}
+
+@media print {
+    @page {
+        size: 80mm auto;
+        margin: 0;
+    }
+
+    html, body {
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    .thermal-slip,
+    .thermal-slip * {
+        visibility: visible !important;
+    }
+
+    .thermal-slip {
+        display: block !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 72mm !important;
+        max-width: 72mm !important;
+        margin: 0 !important;
+        padding: 3mm 4mm 8mm !important;
+        font-family: "Courier New", Courier, monospace !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        color: #000 !important;
+        background: #fff !important;
+        z-index: 99999 !important;
+    }
+
+    .app-sidebar,
+    .app-topbar,
+    .sidebar-backdrop,
+    .modal,
+    .modal-backdrop,
+    .flash-stack {
+        display: none !important;
+    }
+}
+
+.thermal-slip-head {
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.thermal-brand {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.thermal-sub {
+    font-size: 10px;
+}
+
+.thermal-rule {
+    border: none;
+    border-top: 1px dashed #000;
+    margin: 6px 0;
+}
+
+.thermal-meta,
+.thermal-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.thermal-meta span:last-child,
+.thermal-row span:last-child {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.thermal-title {
+    text-align: center;
+    font-weight: 800;
+    margin: 4px 0;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.thermal-lines {
+    margin: 4px 0;
+}
+
+.thermal-line {
+    margin-bottom: 4px;
+}
+
+.thermal-line-desc {
+    word-break: break-word;
+}
+
+.thermal-totals .thermal-row {
+    font-weight: 700;
+}
+
+.thermal-foot {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 10px;
+}

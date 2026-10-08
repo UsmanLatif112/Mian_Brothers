@@ -2,6 +2,14 @@
 
 {% block title %}Manage Staff — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('auth.staff_accounts') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search staff…" value="{{ search or '' }}" autocomplete="off" aria-label="Search staff">
+</form>
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">

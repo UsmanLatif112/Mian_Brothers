@@ -6,7 +6,7 @@
 <form class="topbar-search" action="{{ url_for('customers.index') }}" method="GET" role="search" data-search-mode="page">
     <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
     <input type="search" class="topbar-search-input" name="search"
-           placeholder="Search customers only…" value="{{ search or '' }}" autocomplete="off" aria-label="Search customers">
+           placeholder="Search customers…" value="{{ search or '' }}" autocomplete="off" aria-label="Search customers">
     <input type="hidden" name="filter" value="{{ filter or 'all' }}">
 </form>
 {% endblock %}
@@ -47,7 +47,7 @@
 {% endif %}
 
 <!-- Customer List -->
-<div class="card card-premium">
+<div class="card card-premium list-panel">
     {# Mobile card list #}
     <div class="directory-cards d-md-none">
         {% if customers %}
@@ -107,7 +107,7 @@
 
     {# Desktop table #}
     <div class="table-responsive d-none d-md-block">
-        <table class="table table-custom table-hover mb-0">
+        <table class="table table-custom table-hover mb-0 list-table">
             <thead>
                 <tr>
                     <th>Customer Name</th>

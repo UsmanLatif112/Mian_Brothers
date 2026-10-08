@@ -3182,6 +3182,82 @@ body.has-app-shell {
     }
 }
 
+/* Listing panels — cooler table surfaces */
+.list-panel {
+    overflow: hidden;
+    border-radius: 18px;
+}
+
+.list-panel > .card-header-premium {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--accent-blue) 6%, var(--card-bg)) 0%,
+        var(--card-bg) 100%
+    );
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+    padding: 1.05rem 1.25rem;
+}
+
+.list-table tbody tr {
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.list-table tbody tr:hover td {
+    background: color-mix(in srgb, var(--accent-blue) 7%, var(--table-row-hover));
+}
+
+.list-cell-muted {
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.list-table tbody td:first-child {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Add / edit modals — tighter premium feel */
+.modal-dialog-centered .modal-content {
+    border-radius: 18px !important;
+    overflow: hidden;
+}
+
+.modal-header {
+    padding: 1.15rem 1.35rem 0.65rem;
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--accent-blue) 5%, var(--card-bg)) 0%,
+        transparent 100%
+    );
+}
+
+.modal-body {
+    padding: 0.85rem 1.35rem 1rem;
+}
+
+.modal-footer {
+    padding: 0.75rem 1.35rem 1.15rem;
+    background: color-mix(in srgb, var(--bg-secondary, var(--card-bg)) 55%, transparent);
+}
+
+.modal .form-label-custom {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.modal .form-control-custom,
+.modal .form-select.form-control-custom {
+    border-radius: 12px;
+    min-height: 2.55rem;
+}
+
+.modal .btn-primary-custom {
+    border-radius: 12px;
+    padding-inline: 1.15rem;
+}
+
 @media print {
     body {
         padding-top: 0;

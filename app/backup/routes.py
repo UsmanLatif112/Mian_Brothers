@@ -229,10 +229,17 @@ def restore_backup_file(filename):
 def index():
     _cleanup_old_backups()
     backups = _list_backups()
+    search_q = (request.args.get('search') or '').strip().lower()
+    if search_q:
+        backups = [
+            b for b in backups
+            if search_q in str(b.get('filename') or b.get('name') or b or '').lower()
+        ]
     return render_template(
         'backup/index.html',
         backups=backups,
         retention_days=BACKUP_RETENTION_DAYS,
+        search=search_q,
     )
 
 

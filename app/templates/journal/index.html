@@ -2,8 +2,24 @@
 
 {% block title %}Journal — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('journal.index') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search journal entries…" value="{{ search or '' }}" autocomplete="off" aria-label="Search journal">
+    <input type="hidden" name="period" value="{{ period }}">
+    {% if period == 'custom' %}
+    <input type="hidden" name="start_date" value="{{ start_date }}">
+    <input type="hidden" name="end_date" value="{{ end_date }}">
+    {% endif %}
+    <input type="hidden" name="direction" value="{{ direction }}">
+    <input type="hidden" name="type" value="{{ entry_type }}">
+</form>
+{% endblock %}
+
 {% block topbar_filters %}
 <form method="GET" class="topbar-filters" id="journal-filter-form" data-allow-multi-submit="1">
+    {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
     <select name="direction" class="form-select form-control-custom topbar-filter-select" aria-label="Cash direction" onchange="this.form.submit()">
         {% for value, label in direction_choices %}
         <option value="{{ value }}" {% if direction == value %}selected{% endif %}>{{ label }}</option>
@@ -98,7 +114,7 @@
         {% endfor %}
     </section>
 
-    <div class="card card-premium journal-table-card">
+    <div class="card card-premium journal-table-card list-panel">
         <div class="card-header-premium d-flex flex-wrap align-items-center justify-content-between gap-2">
             <div>
                 <h5 class="mb-0 fw-bold">Cash movements</h5>
@@ -106,7 +122,7 @@
             </div>
         </div>
         <div class="table-responsive">
-            <table class="table table-custom journal-table mb-0">
+            <table class="table table-custom journal-table list-table mb-0">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -149,7 +165,7 @@
                 </tbody>
             </table>
         </div>
-        {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'direction': direction, 'type': entry_type} %}
+        {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'direction': direction, 'type': entry_type, 'search': search} %}
             {% include "partials/pagination.html" %}
         {% endwith %}
     </div>

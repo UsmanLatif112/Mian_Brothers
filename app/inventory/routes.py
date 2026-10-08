@@ -415,12 +415,20 @@ def index():
         )
         fuel_last_costs[ft.id] = float(last_buy.cost_price) if last_buy else None
 
+    search_q = (request.args.get('search') or '').strip()
     stock_page = request.args.get('stock_page', 1)
-    shop_items, shop_pagination = paginate(
-        OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc()),
-        stock_page,
-        PER_PAGE,
-    )
+    items_q = OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc())
+    if search_q:
+        like = f'%{search_q}%'
+        items_q = items_q.filter(
+            db.or_(
+                OtherItem.name.ilike(like),
+                OtherItem.category.ilike(like),
+                OtherItem.vendor.ilike(like),
+                OtherItem.company.ilike(like),
+            )
+        )
+    shop_items, shop_pagination = paginate(items_q, stock_page, PER_PAGE)
 
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
 
@@ -437,6 +445,7 @@ def index():
         vendors=vendors,
         today=datetime.utcnow().date().isoformat(),
         chart_series=inventory_listing_series(),
+        search=search_q,
     )
 
 

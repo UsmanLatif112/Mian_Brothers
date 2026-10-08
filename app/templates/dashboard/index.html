@@ -2,6 +2,19 @@
 
 {% block title %}Dashboard — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" id="globalSearchForm" action="{{ url_for('customers.index') }}" method="GET" role="search" data-search-mode="global">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" id="globalSearch" name="search"
+           placeholder="Search entire app…" autocomplete="off" aria-label="Search entire app">
+    <kbd class="topbar-search-kbd d-none d-md-inline">/</kbd>
+    <div class="topbar-search-panel" id="searchPanel" hidden>
+        <p class="topbar-search-hint">Jump to</p>
+        <div class="topbar-search-results" id="searchResults"></div>
+    </div>
+</form>
+{% endblock %}
+
 {% block topbar_filters %}
 {% include "partials/topbar_period_filter.html" %}
 {% endblock %}

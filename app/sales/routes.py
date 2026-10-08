@@ -83,7 +83,7 @@ def _apply_sale_overpayment(customer, overpayment, sale_day, item_label, recorde
 
 
 def _filter_args():
-    """Preserve period filter after create/edit (same as Account)."""
+    """Preserve period / type / search filters after create/edit."""
     args = {}
     period = (request.args.get('period') or request.form.get('period') or '').strip()
     if period:
@@ -94,6 +94,12 @@ def _filter_args():
         args['start_date'] = start_date
     if end_date:
         args['end_date'] = end_date
+    entry_type = (request.args.get('entry_type') or request.form.get('entry_type') or '').strip()
+    if entry_type and entry_type != 'all':
+        args['entry_type'] = entry_type
+    search = (request.args.get('search') or request.form.get('search') or '').strip()
+    if search:
+        args['search'] = search
     return args
 
 
@@ -750,10 +756,35 @@ def index():
     day_cash = DailyCashCount.query.filter_by(count_date=today).first()
 
     entries_page = request.args.get('page', 1)
+    entry_type = (request.args.get('entry_type') or 'all').strip().lower()
+    if entry_type not in {'all', 'sale', 'advance', 'loan', 'payment'}:
+        entry_type = 'all'
+    search_q = (request.args.get('search') or '').strip().lower()
+
     editable_entries = [
         e for e in stats['entries']
         if (getattr(e, 'entry_type', None) or 'sale').lower() != 'opening'
     ]
+    if entry_type != 'all':
+        editable_entries = [
+            e for e in editable_entries
+            if (getattr(e, 'entry_type', None) or 'sale').lower() == entry_type
+        ]
+    if search_q:
+        def _sale_match(e):
+            cust = getattr(e, 'customer', None)
+            cust_name = (cust.name if cust else '') or ''
+            blob = ' '.join([
+                str(getattr(e, 'id', '') or ''),
+                cust_name,
+                str(getattr(e, 'item_name', '') or ''),
+                str(getattr(e, 'entry_type', '') or ''),
+                str(getattr(e, 'payment_status', '') or ''),
+                str(getattr(e, 'remarks', '') or ''),
+            ]).lower()
+            return search_q in blob
+        editable_entries = [e for e in editable_entries if _sale_match(e)]
+
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
     from app.charts_data import sales_listing_series
@@ -778,6 +809,8 @@ def index():
         period_choices=PERIOD_CHOICES,
         today=today.isoformat() if hasattr(today, 'isoformat') else today,
         day_cash=day_cash,
+        entry_type=entry_type,
+        search=search_q,
     )
 
 

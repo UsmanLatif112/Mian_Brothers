@@ -114,14 +114,24 @@ def index():
         args['period'] = 'today'
     period, start, end = parse_period(args)
     stats = compute_period_stats(start, end, _models_ns())
+    search_q = (request.args.get('search') or '').strip().lower()
+    taken_rows = cash_taken_rows(start, end)
+    if search_q:
+        taken_rows = [
+            r for r in taken_rows
+            if search_q in (getattr(r, 'person_name', '') or '').lower()
+            or search_q in (getattr(r, 'note', '') or '').lower()
+            or search_q in str(getattr(r, 'taken_date', '') or '').lower()
+        ]
 
     return render_template(
         'account/index.html',
         today=today.isoformat(),
         stats=stats,
-        taken_rows=cash_taken_rows(start, end),
+        taken_rows=taken_rows,
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
         period_choices=PERIOD_CHOICES,
+        search=search_q,
     )
