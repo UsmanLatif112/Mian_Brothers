@@ -25,6 +25,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='vendorLedgerPie', chart_title='Payable mix', chart_subtitle='Paid vs still owed', chart_series=chart_series, center_title='Payable' %}
+{% include "partials/page_pie_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <div class="stat-row cols-4">
     <div class="stat-card {% if vendor.current_balance_payable > 0 %}stat-warning{% else %}stat-success{% endif %}">
         <div class="stat-card-label">Balance Payable</div>

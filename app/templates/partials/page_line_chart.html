@@ -1,0 +1,31 @@
+{# expects: chart_id, chart_title, chart_subtitle, chart_series (dict) #}
+<section class="page-chart-strip">
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">{{ chart_title }}</h2>
+            {% if chart_subtitle %}<p class="chart-card-sub">{{ chart_subtitle }}</p>{% endif %}
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap" style="height: 240px;">
+                <canvas id="{{ chart_id }}"></canvas>
+            </div>
+        </div>
+    </article>
+</section>
+<script type="application/json" id="{{ chart_id }}-json">{{ chart_series | tojson }}</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const boot = () => {
+        if (!window.OctaneCharts || !window.Chart) return setTimeout(boot, 40);
+        const data = OctaneCharts.parseJsonScript('{{ chart_id }}-json');
+        const canvas = document.getElementById('{{ chart_id }}');
+        if (!data || !canvas) return;
+        OctaneCharts.gaLineChart(canvas, {
+            labels: data.labels || [],
+            datasets: data.datasets || [],
+            yMoney: {{ 'false' if chart_y_money is defined and not chart_y_money else 'true' }},
+        });
+    };
+    boot();
+});
+</script>

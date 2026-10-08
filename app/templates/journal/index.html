@@ -50,6 +50,12 @@
         <p class="page-subtitle mb-0">Cash in from customers &amp; settles · cash out to vendors, loans &amp; expenses. Opening balances and unpaid purchases stay on ledgers.</p>
     </header>
 
+    {% if chart_series %}
+    {% with chart_id='journalTrendChart', chart_title='Cash in vs out', chart_subtitle='Filtered movements over time', chart_series=chart_series %}
+    {% include "partials/page_line_chart.html" %}
+    {% endwith %}
+    {% endif %}
+
     <section class="journal-kpi-grid mb-4" aria-label="Journal totals">
         <article class="journal-kpi journal-kpi-in">
             <div class="journal-kpi-top">

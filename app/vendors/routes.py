@@ -131,6 +131,8 @@ def index():
         PER_PAGE,
     )
 
+    from app.charts_data import vendors_listing_series
+
     return render_template(
         'vendors/index.html',
         vendors=vendors,
@@ -138,6 +140,7 @@ def index():
         search=search_query,
         filter=status_filter,
         today=datetime.utcnow().date().isoformat(),
+        chart_series=vendors_listing_series(),
     )
 
 
@@ -251,6 +254,8 @@ def ledger(vendor_id):
         total_purchased += float(vendor.previous_payable)
     total_paid = sum(float(p.amount_paid or 0) for p in payments)
 
+    from app.charts_data import vendor_ledger_pie
+
     return render_template(
         'vendors/ledger.html',
         vendor=vendor,
@@ -258,6 +263,11 @@ def ledger(vendor_id):
         total_purchased=total_purchased,
         total_paid=total_paid,
         today=datetime.utcnow().date().isoformat(),
+        chart_series=vendor_ledger_pie(
+            total_purchased,
+            total_paid,
+            vendor.current_balance_payable,
+        ),
     )
 
 

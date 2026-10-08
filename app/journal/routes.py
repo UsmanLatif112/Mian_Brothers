@@ -51,6 +51,8 @@ def index():
     page = request.args.get('page', 1)
     page_rows, pagination = paginate(flow['rows'], page, PER_PAGE)
 
+    from app.charts_data import journal_listing_series
+
     return render_template(
         'journal/index.html',
         rows=page_rows,
@@ -68,4 +70,5 @@ def index():
         entry_type=entry_type,
         direction_choices=DIRECTION_FILTER_CHOICES,
         type_choices=TYPE_FILTER_CHOICES,
+        chart_series=journal_listing_series(flow['rows']),
     )

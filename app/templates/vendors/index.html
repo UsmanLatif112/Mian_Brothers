@@ -20,6 +20,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='vendorsTrendChart', chart_title='Vendor cash flow', chart_subtitle='Last 14 days · purchases vs payments', chart_series=chart_series %}
+{% include "partials/page_line_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <div class="card card-premium filter-bar mb-4">
     <div class="card-body card-body-premium py-3">
         <form action="{{ url_for('vendors.index') }}" method="GET" class="filter-form">

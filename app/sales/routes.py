@@ -756,6 +756,7 @@ def index():
     ]
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
+    from app.charts_data import sales_listing_series
 
     return render_template(
         'sales/index.html',
@@ -770,6 +771,7 @@ def index():
         period_entries=period_entries,
         entries_pagination=entries_pagination,
         sale_overs=sale_overs,
+        chart_series=sales_listing_series(stats),
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),

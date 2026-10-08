@@ -20,6 +20,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='inventoryTrendChart', chart_title='Stock received', chart_subtitle='Last 14 days · fuel liters & shop qty', chart_series=chart_series, chart_y_money=false %}
+{% include "partials/page_line_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <!-- Live Fuel Stock Levels -->
 <div class="row g-4 mb-4">
     {% for ft in fuel_types %}

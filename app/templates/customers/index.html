@@ -20,6 +20,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='customersTrendChart', chart_title='Customer cash flow', chart_subtitle='Last 14 days · credit sales vs payments', chart_series=chart_series %}
+{% include "partials/page_line_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <!-- Search & Filtering -->
 <div class="card card-premium filter-bar mb-4">
     <div class="card-body card-body-premium py-3">

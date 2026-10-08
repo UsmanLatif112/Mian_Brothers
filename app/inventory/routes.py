@@ -424,6 +424,8 @@ def index():
 
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
 
+    from app.charts_data import inventory_listing_series
+
     return render_template(
         'inventory/index.html',
         fuel_types=fuel_types,
@@ -434,6 +436,7 @@ def index():
         shop_pagination=shop_pagination,
         vendors=vendors,
         today=datetime.utcnow().date().isoformat(),
+        chart_series=inventory_listing_series(),
     )
 
 

@@ -4,7 +4,7 @@ from app.dashboard import dashboard_bp
 from app.models import (
     db, Sale, StockEntry, Customer, Inventory, FuelType, FuelPrice,
     OtherItem, MeterReading, CreditSale, Expense, Payment, DailyCashCount,
-    ItemPurchaseLog,
+    ItemPurchaseLog, Vendor,
 )
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
@@ -337,6 +337,7 @@ def index():
 
     # Top customers: credit due over PKR 200,000
     top_credit_customers = _top_credit_customers(limit=200000)
+    insights = _dashboard_insights(start, end, stock_summary, other_items)
 
     return render_template(
         'dashboard/index.html',
@@ -353,11 +354,158 @@ def index():
         top_credit_customers=top_credit_customers,
         recent_deliveries=recent_deliveries,
         other_items=other_items,
+        insights=insights,
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
         period_choices=PERIOD_CHOICES,
     )
+
+
+def _dashboard_insights(start, end, stock_summary, other_items):
+    """Pie-card datasets for dashboard insight cards."""
+    from collections import defaultdict
+
+    fuel_labels = []
+    fuel_values = []
+    for name, liters in sorted((stock_summary or {}).items(), key=lambda x: -float(x[1] or 0)):
+        qty = float(liters or 0)
+        if qty <= 0:
+            continue
+        fuel_labels.append(name)
+        fuel_values.append(round(qty, 2))
+
+    other_labels = []
+    other_values = []
+    for item in other_items or []:
+        if (item.category or '') == 'ft_mobile':
+            qty = float(item.liters or 0)
+        else:
+            qty = float(item.quantity or 0)
+        if qty <= 0:
+            continue
+        other_labels.append(item.display_name())
+        other_values.append(round(qty, 2))
+    # Keep chart readable
+    if len(other_labels) > 8:
+        paired = sorted(zip(other_labels, other_values), key=lambda x: -x[1])
+        top = paired[:7]
+        rest = sum(v for _, v in paired[7:])
+        other_labels = [n for n, _ in top] + (['Other'] if rest else [])
+        other_values = [v for _, v in top] + ([round(rest, 2)] if rest else [])
+
+    # Profit by item (same COGS rules as trend chart)
+    rate_as_of = build_fuel_rate_lookup(FuelPrice)
+    fuel_costs = defaultdict(list)
+    for log in ItemPurchaseLog.query.filter(
+        ItemPurchaseLog.category == 'fuel',
+        ItemPurchaseLog.fuel_type_id.isnot(None),
+    ).order_by(ItemPurchaseLog.entry_date.asc()).all():
+        ed = log.entry_date
+        d = ed.date() if isinstance(ed, datetime) else ed
+        if d:
+            fuel_costs[log.fuel_type_id].append((d, float(log.cost_price or 0)))
+    fuels_with_logs = set(fuel_costs.keys())
+    for se in StockEntry.query.order_by(StockEntry.entry_date.asc()).all():
+        if not se.fuel_type_id or se.fuel_type_id in fuels_with_logs:
+            continue
+        ed = se.entry_date
+        d = ed.date() if isinstance(ed, datetime) else ed
+        if d:
+            fuel_costs[se.fuel_type_id].append((d, float(se.cost_per_liter or 0)))
+
+    def fuel_cost_as_of(fuel_type_id, sale_date):
+        entries = fuel_costs.get(fuel_type_id) or []
+        best = None
+        for d, cost in entries:
+            if sale_date and d <= sale_date:
+                best = cost
+            else:
+                break
+        if best is not None:
+            return best
+        return entries[0][1] if entries else 0.0
+
+    item_costs = {oi.id: float(oi.cost_price or 0) for oi in OtherItem.query.all()}
+    profit_by = defaultdict(float)
+
+    for reading in MeterReading.query.filter(
+        MeterReading.reading_date >= start,
+        MeterReading.reading_date <= end,
+        MeterReading.closing_reading.isnot(None),
+    ).all():
+        d = reading.reading_date
+        liters = float(reading.liters_sold or 0)
+        stored = getattr(reading, 'sale_rate', None)
+        rate = float(stored) if stored is not None else rate_as_of(reading.fuel_type_id, d)
+        cost = fuel_cost_as_of(reading.fuel_type_id, d)
+        name = reading.fuel_type.name if reading.fuel_type else f'Fuel #{reading.fuel_type_id}'
+        profit_by[name] += liters * (rate - cost)
+
+    for e in CreditSale.query.filter(
+        CreditSale.sale_date >= start,
+        CreditSale.sale_date <= end,
+    ).all():
+        et = (e.entry_type or 'sale').lower()
+        if et in ('advance', 'loan', 'opening'):
+            continue
+        sale_val = float(e.amount or 0)
+        qty = float(e.liters or 0)
+        cogs = 0.0
+        if e.fuel_type_id:
+            cogs = qty * fuel_cost_as_of(e.fuel_type_id, e.sale_date)
+            name = e.fuel_type.name if e.fuel_type else e.item_name
+        elif e.other_item_id:
+            cogs = qty * item_costs.get(e.other_item_id, 0.0)
+            name = e.item_name
+        else:
+            name = e.item_name or 'Sale'
+        profit_by[name] += sale_val - cogs
+
+    top_profit = sorted(profit_by.items(), key=lambda x: -x[1])[:3]
+    top_profit = [(n, round(v, 2)) for n, v in top_profit if v > 0]
+
+    exp_rows = (
+        Expense.query
+        .filter(Expense.expense_date >= start, Expense.expense_date <= end)
+        .order_by(Expense.amount.desc())
+        .limit(5)
+        .all()
+    )
+    top_expenses = [(e.name, round(float(e.amount or 0), 2)) for e in exp_rows if float(e.amount or 0) > 0]
+
+    top_recv = (
+        Customer.query
+        .filter(Customer.current_balance_due > 0)
+        .order_by(Customer.current_balance_due.desc())
+        .limit(5)
+        .all()
+    )
+    top_customers = [(c.name, round(float(c.current_balance_due or 0), 2)) for c in top_recv]
+
+    top_pay = (
+        Vendor.query
+        .filter(Vendor.current_balance_payable > 0)
+        .order_by(Vendor.current_balance_payable.desc())
+        .limit(5)
+        .all()
+    )
+    top_vendors = [(v.name, round(float(v.current_balance_payable or 0), 2)) for v in top_pay]
+
+    def pack(pairs):
+        return {
+            'labels': [p[0] for p in pairs],
+            'values': [p[1] for p in pairs],
+        }
+
+    return {
+        'fuel_stock': {'labels': fuel_labels, 'values': fuel_values},
+        'other_stock': {'labels': other_labels, 'values': other_values},
+        'top_profit': pack(top_profit),
+        'top_expenses': pack(top_expenses),
+        'top_customers': pack(top_customers),
+        'top_vendors': pack(top_vendors),
+    }
 
 
 def _top_credit_customers(limit=200000):

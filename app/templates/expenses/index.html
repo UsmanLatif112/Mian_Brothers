@@ -22,6 +22,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='expensesTrendChart', chart_title='Expense trend', chart_subtitle='Period spend by day', chart_series=chart_series %}
+{% include "partials/page_line_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <div class="row g-4 mb-4">
     <div class="col-12 col-md-4">
         <div class="stat-card stat-warning">

@@ -194,6 +194,8 @@ def index():
             if row.customer_id not in opening_dates and row.sale_date:
                 opening_dates[row.customer_id] = row.sale_date.isoformat()
 
+    from app.charts_data import customers_listing_series
+
     return render_template(
         'customers/index.html',
         customers=customers,
@@ -202,6 +204,7 @@ def index():
         filter=status_filter,
         today=datetime.utcnow().date().isoformat(),
         opening_dates=opening_dates,
+        chart_series=customers_listing_series(),
     )
 
 @customers_bp.route('/ledger/<int:customer_id>', methods=['GET', 'POST'])
@@ -514,7 +517,12 @@ def ledger(customer_id):
     # Reverse list for displaying newest first
     ledger_entries.reverse()
     
-    return render_template('customers/ledger.html', 
-                           customer=customer, 
-                           ledger_entries=ledger_entries,
-                           today=datetime.utcnow().date().isoformat())
+    from app.charts_data import customer_ledger_pie
+
+    return render_template(
+        'customers/ledger.html',
+        customer=customer,
+        ledger_entries=ledger_entries,
+        today=datetime.utcnow().date().isoformat(),
+        chart_series=customer_ledger_pie(ledger_entries),
+    )

@@ -161,6 +161,8 @@ def index():
     )
     expenses, expenses_pagination = paginate(expenses_q, request.args.get('page', 1), PER_PAGE)
 
+    from app.charts_data import expenses_listing_series
+
     return render_template(
         'expenses/index.html',
         expenses=expenses,
@@ -173,6 +175,7 @@ def index():
         end_date=end.isoformat(),
         period_choices=PERIOD_CHOICES,
         today=datetime.utcnow().date().isoformat(),
+        chart_series=expenses_listing_series(expenses),
     )
 
 

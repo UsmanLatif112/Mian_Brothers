@@ -30,6 +30,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='salesTrendChart', chart_title='Sales trend', chart_subtitle='Period sale amounts', chart_series=chart_series %}
+{% include "partials/page_line_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <!-- Period stats -->
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-4 dashboard-stats">
     {% set petrol_credit_meta %}

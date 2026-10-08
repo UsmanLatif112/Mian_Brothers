@@ -28,6 +28,12 @@
     </div>
 </header>
 
+{% if chart_series %}
+{% with chart_id='customerLedgerPie', chart_title='Ledger mix', chart_subtitle='Sales, payments, advances & loans', chart_series=chart_series, center_title='Activity' %}
+{% include "partials/page_pie_chart.html" %}
+{% endwith %}
+{% endif %}
+
 <div class="stat-row">
     <div class="stat-card {% if customer.current_balance_due < 0 %}stat-success{% elif customer.current_balance_due > 0 %}stat-warning{% else %}stat-info{% endif %}">
         <div class="stat-card-label">

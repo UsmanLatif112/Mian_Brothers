@@ -36,7 +36,7 @@
     <div class="dash-hero-copy">
         <p class="page-eyebrow mb-1">Operations overview</p>
         <h1 class="page-title mb-1">Dashboard</h1>
-        <p class="page-subtitle mb-0">Sales, inventory, and credit health for the selected period.</p>
+        <p class="page-subtitle mb-0">Sales, margin, and receivable / payable health for the selected period.</p>
     </div>
 </header>
 
@@ -83,13 +83,7 @@
             <span class="kpi-label">Credit</span>
         </div>
         <div class="kpi-value text-warning">{{ stats.period_credit | money }}</div>
-        <div class="kpi-meta">
-            {% if period == 'all' %}
-            All-time due {{ stats.outstanding_credit | money }}
-            {% else %}
-            Outstanding {{ stats.outstanding_credit | money }}
-            {% endif %}
-        </div>
+        <div class="kpi-meta">Outstanding {{ stats.outstanding_credit | money }}</div>
     </div>
 
     <div class="kpi-card kpi-purchase">
@@ -129,94 +123,83 @@
     </div>
 </section>
 
-{% set petrol_liters = stock_summary.get('Petrol', 0) or 0 %}
-{% set diesel_liters = stock_summary.get('Diesel', 0) or 0 %}
-{% set petrol_bar = [petrol_liters / 50000 * 100, 100]|min %}
-{% set diesel_bar = [diesel_liters / 50000 * 100, 100]|min %}
-<section class="stock-grid" aria-label="Live fuel stock">
-    <div class="stock-card stock-petrol">
-        <div class="stock-card-body">
-            <div>
-                <span class="stock-label">Petrol Inventory</span>
-                <div class="stock-value">{{ "{:,.0f}".format(petrol_liters) }} <span class="stock-unit">L</span></div>
-            </div>
-            <span class="stock-icon"><i class="bi bi-fuel-pump-fill"></i></span>
+<section class="chart-insight-grid mt-4" aria-label="Insight charts">
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Fuel inventory</h2>
+            <p class="chart-card-sub">Live liters on hand</p>
         </div>
-        <div class="stock-bar" aria-hidden="true"><span style="width: {{ petrol_bar if petrol_bar > 4 or petrol_liters == 0 else 4 }}%"></span></div>
-    </div>
-    <div class="stock-card stock-diesel">
-        <div class="stock-card-body">
-            <div>
-                <span class="stock-label">Diesel Inventory</span>
-                <div class="stock-value text-success">{{ "{:,.0f}".format(diesel_liters) }} <span class="stock-unit">L</span></div>
-            </div>
-            <span class="stock-icon"><i class="bi bi-fuel-pump"></i></span>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="pieFuelStock"></canvas></div>
         </div>
-        <div class="stock-bar" aria-hidden="true"><span style="width: {{ diesel_bar if diesel_bar > 4 or diesel_liters == 0 else 4 }}%"></span></div>
-    </div>
+    </article>
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Other items</h2>
+            <p class="chart-card-sub">Shop &amp; FT stock mix</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="pieOtherStock"></canvas></div>
+        </div>
+    </article>
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Top 3 profitable</h2>
+            <p class="chart-card-sub">Highest margin items this period</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopProfit"></canvas></div>
+        </div>
+    </article>
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Top 5 expenses</h2>
+            <p class="chart-card-sub">Largest cash outs</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopExpenses"></canvas></div>
+        </div>
+    </article>
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Top 5 receivables</h2>
+            <p class="chart-card-sub">Customers who owe the most</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopCustomers"></canvas></div>
+        </div>
+    </article>
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Top 5 payables</h2>
+            <p class="chart-card-sub">Vendors we owe the most</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopVendors"></canvas></div>
+        </div>
+    </article>
 </section>
 
-<section class="dashboard-section mt-3">
-    <div class="card card-premium">
-        <div class="card-header-premium">
-            <h2 class="panel-title mb-1">Other Items</h2>
-            <p class="panel-subtitle mb-0">Shop stock on hand</p>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-custom mb-0">
-                <thead>
-                    <tr>
-                        <th>Item</th>
-                        <th>Type</th>
-                        <th class="text-end">Stock</th>
-                        <th class="text-end">Price</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in other_items %}
-                    <tr>
-                        <td class="fw-semibold">{{ item.display_name() }}</td>
-                        <td><span class="badge badge-muted">{{ item.category }}</span></td>
-                        <td class="text-end fw-semibold">
-                            {% if item.category == 'ft_mobile' %}
-                                {{ "{:,.2f}".format(item.liters or 0) }} L
-                            {% else %}
-                                {{ item.quantity }} pcs
-                            {% endif %}
-                        </td>
-                        <td class="text-end">{{ item.sale_price | money }}</td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="4" class="text-center text-muted-custom py-4">No items in inventory.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
-
-<section class="dashboard-section mt-4">
-    <div class="card card-premium dashboard-chart-card">
-        <div class="card-header-premium">
+<section class="chart-line-panel">
+    <article class="chart-card">
+        <div class="chart-card-head d-flex flex-wrap justify-content-between align-items-start gap-2">
             <div>
-                <h2 class="panel-title mb-1">Revenue &amp; Margin</h2>
-                <p class="panel-subtitle mb-0">Sales vs net profit across the period</p>
+                <h2 class="chart-card-title">Revenue &amp; margin</h2>
+                <p class="chart-card-sub">Google Analytics–style trend · sales vs net profit</p>
             </div>
         </div>
-        <div class="card-body card-body-premium">
-            <div class="chart-wrap">
-                <canvas id="trendChart"></canvas>
-            </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-line-lg"><canvas id="trendChart"></canvas></div>
         </div>
-    </div>
+    </article>
 </section>
 
 <section class="dashboard-section mt-4">
     <div class="card card-premium">
         <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
-                <h2 class="panel-title mb-1">Top Credit Customers</h2>
-                <p class="panel-subtitle mb-0">Customers with credit due over PKR 200,000</p>
+                <h2 class="panel-title mb-1">High credit customers</h2>
+                <p class="panel-subtitle mb-0">Due over PKR 200,000</p>
             </div>
             <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0" title="View all dues">
                 <i class="bi bi-people me-1"></i><span class="btn-label">View all dues</span>
@@ -268,141 +251,63 @@
 </section>
 
 </div>
+
+<script type="application/json" id="dash-insights-json">{{ insights | tojson }}</script>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const insights = OctaneCharts.parseJsonScript('dash-insights-json') || {};
+    const empty = { labels: ['No data'], values: [1] };
+
+    function pie(id, data, centerTitle) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const payload = (data && data.labels && data.labels.length) ? data : empty;
+        const total = (payload.values || []).reduce((a, b) => a + Number(b || 0), 0);
+        OctaneCharts.doughnutChart(canvas, {
+            labels: payload.labels,
+            values: payload.values,
+            centerText: {
+                title: centerTitle,
+                value: data && data.labels && data.labels.length ? OctaneCharts.money(total) : '—',
+            },
+        });
+    }
+
+    pie('pieFuelStock', insights.fuel_stock, 'Stock L');
+    pie('pieOtherStock', insights.other_stock, 'Units');
+    pie('pieTopProfit', insights.top_profit, 'Profit');
+    pie('pieTopExpenses', insights.top_expenses, 'Spend');
+    pie('pieTopCustomers', insights.top_customers, 'Due');
+    pie('pieTopVendors', insights.top_vendors, 'Payable');
+
     const params = new URLSearchParams({
         period: '{{ period }}',
         start_date: '{{ start_date }}',
         end_date: '{{ end_date }}',
     });
-    const qs = params.toString();
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(99, 102, 241, 0.08)';
-    const tickColor = isDark ? '#94a3b8' : '#6b7280';
-    const salesColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-sales').trim() || '#6366f1';
-    const profitColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-profit').trim() || '#10b981';
-    const money = (n) => 'PKR ' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    fetch(`{{ url_for('dashboard.chart_data') }}?${qs}`)
-        .then(r => {
+    fetch(`{{ url_for('dashboard.chart_data') }}?${params}`)
+        .then((r) => {
             if (!r.ok) throw new Error('Chart data failed');
             return r.json();
         })
-        .then(data => {
-            const ctx = document.getElementById('trendChart');
-            if (!ctx) return;
-            const grainLabel = data.grain === 'week' ? 'Week' : (data.grain === 'month' ? 'Month' : 'Day');
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: [
-                        {
-                            label: `${grainLabel} Sales`,
-                            data: data.sales_trend,
-                            borderColor: salesColor,
-                            backgroundColor: isDark ? 'rgba(129, 140, 248, 0.16)' : 'rgba(99, 102, 241, 0.14)',
-                            tension: 0.4,
-                            fill: true,
-                            borderWidth: 3,
-                            pointRadius: 0,
-                            pointHoverRadius: 6,
-                            pointHoverBackgroundColor: salesColor,
-                            pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2,
-                        },
-                        {
-                            label: `${grainLabel} Profit`,
-                            data: data.profit_trend,
-                            borderColor: profitColor,
-                            backgroundColor: isDark ? 'rgba(52, 211, 153, 0.12)' : 'rgba(16, 185, 129, 0.1)',
-                            tension: 0.4,
-                            fill: true,
-                            borderWidth: 3,
-                            pointRadius: 0,
-                            pointHoverRadius: 6,
-                            pointHoverBackgroundColor: profitColor,
-                            pointHoverBorderColor: '#fff',
-                            pointHoverBorderWidth: 2,
-                        },
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: tickColor,
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                padding: 20,
-                                font: { family: 'Outfit', size: 12, weight: '600' }
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: isDark ? '#1e1b4b' : '#111827',
-                            titleFont: { family: 'Outfit', weight: '700' },
-                            bodyFont: { family: 'Outfit', weight: '500' },
-                            padding: 12,
-                            cornerRadius: 12,
-                            boxPadding: 4,
-                            callbacks: {
-                                title: (items) => {
-                                    if (!items || !items.length) return '';
-                                    const i = items[0].dataIndex;
-                                    const dates = data.date_labels || data.labels || [];
-                                    return dates[i] || items[0].label || '';
-                                },
-                                label: () => null,
-                                afterBody: (items) => {
-                                    if (!items || !items.length) return [];
-                                    const i = items[0].dataIndex;
-                                    const sales = Number((data.sales_trend || [])[i] ?? 0);
-                                    const net = Number((data.profit_trend || [])[i] ?? 0);
-                                    const expenses = Number((data.expense_trend || [])[i] ?? 0);
-                                    let gross = Number((data.gross_trend || [])[i]);
-                                    if (!Number.isFinite(gross)) gross = net + expenses;
-                                    let cogs = Number((data.cogs_trend || [])[i]);
-                                    if (!Number.isFinite(cogs)) cogs = sales - gross;
-                                    return [
-                                        `Sale amount: ${money(sales)}`,
-                                        `Cost amount (COGS): ${money(cogs)}`,
-                                        `Gross profit: ${money(gross)}`,
-                                        `Expense: ${money(expenses)}`,
-                                        `Net profit: ${money(net)}`,
-                                    ];
-                                },
-                                footer: () => null,
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: tickColor, font: { family: 'Outfit', size: 11, weight: '500' } }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: gridColor },
-                            border: { display: false },
-                            ticks: { color: tickColor, font: { family: 'Outfit', size: 11, weight: '500' } }
-                        }
-                    }
-                }
+        .then((data) => {
+            const canvas = document.getElementById('trendChart');
+            if (!canvas) return;
+            const grain = data.grain === 'week' ? 'Week' : (data.grain === 'month' ? 'Month' : 'Day');
+            OctaneCharts.gaLineChart(canvas, {
+                labels: data.labels,
+                datasets: [
+                    { label: `${grain} Sales`, data: data.sales_trend, borderColor: '#008060' },
+                    { label: `${grain} Profit`, data: data.profit_trend, borderColor: '#0891b2' },
+                ],
             });
         })
         .catch(() => {
-            const wrap = document.querySelector('.chart-wrap');
-            if (wrap) {
-                wrap.innerHTML = '<p class="text-muted-custom mb-0 py-4 text-center">Chart could not be loaded.</p>';
-            }
+            const wrap = document.querySelector('#trendChart')?.parentElement;
+            if (wrap) wrap.innerHTML = '<p class="text-muted-custom mb-0 py-4 text-center">Chart could not be loaded.</p>';
         });
 });
 </script>
