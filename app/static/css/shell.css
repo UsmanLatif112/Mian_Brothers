@@ -185,39 +185,27 @@ body.sidebar-open .sidebar-backdrop {
 
 .sidebar-footer {
     flex-shrink: 0;
-    padding: 0.75rem;
+    padding: 0.85rem 1rem 1rem;
     border-top: 1px solid var(--sidebar-border);
 }
 
-.sidebar-user-chip {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.55rem 0.65rem;
-    border-radius: 12px;
-    background: var(--sidebar-link-hover);
-}
-
-.sidebar-user-meta {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    line-height: 1.2;
-}
-
-.sidebar-user-name {
-    font-weight: 700;
-    font-size: 0.85rem;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.sidebar-user-role {
-    font-size: 0.7rem;
+.sidebar-credit {
+    margin: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    line-height: 1.45;
     color: var(--text-secondary);
-    font-weight: 600;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.sidebar-credit strong {
+    display: inline-block;
+    margin-top: 0.1rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--accent-blue);
 }
 
 /* Frame: topbar + content to the right of sidebar */
