@@ -123,6 +123,20 @@
     </div>
 </section>
 
+<section class="chart-line-panel mt-4">
+    <article class="chart-card">
+        <div class="chart-card-head d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+                <h2 class="chart-card-title">Revenue &amp; margin</h2>
+                <p class="chart-card-sub">Google Analytics–style trend · sales vs net profit</p>
+            </div>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-line-lg"><canvas id="trendChart"></canvas></div>
+        </div>
+    </article>
+</section>
+
 <section class="chart-insight-grid mt-4" aria-label="Insight charts">
     <article class="chart-card">
         <div class="chart-card-head">
@@ -178,76 +192,6 @@
             <div class="chart-canvas-wrap is-pie"><canvas id="pieTopVendors"></canvas></div>
         </div>
     </article>
-</section>
-
-<section class="chart-line-panel">
-    <article class="chart-card">
-        <div class="chart-card-head d-flex flex-wrap justify-content-between align-items-start gap-2">
-            <div>
-                <h2 class="chart-card-title">Revenue &amp; margin</h2>
-                <p class="chart-card-sub">Google Analytics–style trend · sales vs net profit</p>
-            </div>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-line-lg"><canvas id="trendChart"></canvas></div>
-        </div>
-    </article>
-</section>
-
-<section class="dashboard-section mt-4">
-    <div class="card card-premium">
-        <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-3">
-            <div>
-                <h2 class="panel-title mb-1">High credit customers</h2>
-                <p class="panel-subtitle mb-0">Due over PKR 200,000</p>
-            </div>
-            <a href="{{ url_for('customers.index', filter='due') }}" class="btn btn-sm btn-outline-secondary border-0" title="View all dues">
-                <i class="bi bi-people me-1"></i><span class="btn-label">View all dues</span>
-            </a>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-custom table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Customer</th>
-                        <th>Phone</th>
-                        <th>Credit Due</th>
-                        <th>Oldest Unpaid</th>
-                        <th>Days Overdue</th>
-                        <th>Last Payment</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if top_credit_customers %}
-                        {% for row in top_credit_customers %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td class="fw-semibold">{{ row.customer.name }}</td>
-                            <td>{{ row.customer.phone or '—' }}</td>
-                            <td class="text-warning fw-bold">{{ row.due | money }}</td>
-                            <td>{{ row.oldest_credit_date }}</td>
-                            <td><span class="badge badge-danger-custom">{{ row.days_overdue }} days</span></td>
-                            <td>{{ row.last_payment_date or 'Never' }}</td>
-                            <td>
-                                <a href="{{ url_for('customers.ledger', customer_id=row.customer.id) }}" class="btn btn-sm btn-ghost" title="Ledger">
-                                    <span class="btn-label">Ledger </span><i class="bi bi-chevron-right"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="8" class="text-center text-muted-custom py-5">
-                                No customers with credit due over PKR 200,000.
-                            </td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-    </div>
 </section>
 
 </div>

@@ -335,8 +335,6 @@ def index():
     recent_deliveries = StockEntry.query.order_by(StockEntry.entry_date.desc()).limit(5).all()
     other_items = OtherItem.query.order_by(OtherItem.name.asc()).all()
 
-    # Top customers: credit due over PKR 200,000
-    top_credit_customers = _top_credit_customers(limit=200000)
     insights = _dashboard_insights(start, end, stock_summary, other_items)
 
     return render_template(
@@ -351,7 +349,6 @@ def index():
         petrol_stock=petrol_stock,
         diesel_stock=diesel_stock,
         dry_threshold=DRY_THRESHOLD,
-        top_credit_customers=top_credit_customers,
         recent_deliveries=recent_deliveries,
         other_items=other_items,
         insights=insights,
