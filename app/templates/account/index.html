@@ -2,6 +2,10 @@
 
 {% block title %}Account — OctaneFlow{% endblock %}
 
+{% block topbar_tools %}
+{% include "partials/topbar_period_filter.html" %}
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
@@ -20,9 +24,6 @@
     </div>
     <div class="page-header-meta">
         <p class="page-subtitle">Track cash taken from the till and carry the remaining balance forward.</p>
-    </div>
-    <div class="page-header-toolbar account-period-tools">
-        {% include "partials/period_filter.html" %}
     </div>
 </header>
 

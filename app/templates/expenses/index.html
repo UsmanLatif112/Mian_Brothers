@@ -2,6 +2,10 @@
 
 {% block title %}Expenses — OctaneFlow{% endblock %}
 
+{% block topbar_tools %}
+{% include "partials/topbar_period_filter.html" %}
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
@@ -15,9 +19,6 @@
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Expense</span>
             </button>
         </div>
-    </div>
-    <div class="page-header-toolbar">
-        {% include "partials/period_filter.html" %}
     </div>
 </header>
 

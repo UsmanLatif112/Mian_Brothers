@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Journal — OctaneFlow{% endblock %}
+
+{% block topbar_tools %}
+<form method="GET" class="topbar-page-filters journal-top-filters" id="journal-filter-form" data-allow-multi-submit="1">
+    <div class="topbar-filter-seg" role="group" aria-label="Cash direction">
+        {% for value, label in direction_choices %}
+        <a href="{{ url_for('journal.index', period=period, start_date=start_date, end_date=end_date, direction=value, type=entry_type) }}"
+           class="topbar-seg-btn {% if direction == value %}is-active topbar-seg-{{ value }}{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+
+    <select name="period" id="journal-period-select" class="form-select form-control-custom topbar-filter-select" aria-label="Period">
+        {% for value, label in period_choices %}
+        <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+
+    <div class="topbar-filter-dates {% if period != 'custom' %}d-none{% endif %}" id="journal-custom-dates">
+        <input type="date" name="start_date" class="form-control form-control-custom topbar-filter-date" value="{{ start_date }}" aria-label="From">
+        <span class="topbar-date-sep">–</span>
+        <input type="date" name="end_date" class="form-control form-control-custom topbar-filter-date" value="{{ end_date }}" aria-label="To">
+        <button type="submit" class="btn btn-primary-custom topbar-filter-apply" title="Apply"><i class="bi bi-check-lg"></i></button>
+    </div>
+
+    <select name="type" class="form-select form-control-custom topbar-filter-select topbar-filter-type" aria-label="Entry type" onchange="this.form.submit()">
+        {% for value, label in type_choices %}
+        <option value="{{ value }}" {% if entry_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+
+    <input type="hidden" name="direction" value="{{ direction }}">
+</form>
+{% endblock %}
+
+{% block content %}
+<div class="journal-page">
+    <header class="page-header journal-hero mb-4">
+        <div class="page-header-row">
+            <div class="page-header-text">
+                <p class="page-eyebrow">Cash flow</p>
+                <h1 class="page-title">Journal</h1>
+            </div>
+            <div class="journal-range-chip">
+                <i class="bi bi-calendar3"></i>
+                <span>{{ start_date }} → {{ end_date }}</span>
+            </div>
+        </div>
+        <p class="page-subtitle mb-0">Cash in from customers &amp; settles · cash out to vendors, loans &amp; expenses. Opening balances and unpaid purchases stay on ledgers.</p>
+    </header>
+
+    <section class="journal-kpi-grid mb-4" aria-label="Journal totals">
+        <article class="journal-kpi journal-kpi-in">
+            <div class="journal-kpi-top">
+                <span class="journal-kpi-icon"><i class="bi bi-arrow-down-left"></i></span>
+                <span class="journal-kpi-label">Cash In</span>
+            </div>
+            <div class="journal-kpi-value">{{ total_in | money }}</div>
+            <div class="journal-kpi-meta">Settles · advances · returns</div>
+        </article>
+        <article class="journal-kpi journal-kpi-out">
+            <div class="journal-kpi-top">
+                <span class="journal-kpi-icon"><i class="bi bi-arrow-up-right"></i></span>
+                <span class="journal-kpi-label">Cash Out</span>
+            </div>
+            <div class="journal-kpi-value">{{ total_out | money }}</div>
+            <div class="journal-kpi-meta">Vendors · loans · expenses</div>
+        </article>
+        <article class="journal-kpi journal-kpi-net {% if net >= 0 %}is-positive{% else %}is-negative{% endif %}">
+            <div class="journal-kpi-top">
+                <span class="journal-kpi-icon"><i class="bi bi-arrow-left-right"></i></span>
+                <span class="journal-kpi-label">Net</span>
+            </div>
+            <div class="journal-kpi-value">{{ net | money }}</div>
+            <div class="journal-kpi-meta">{{ row_count }} movement{% if row_count != 1 %}s{% endif %}</div>
+        </article>
+    </section>
+
+    <section class="journal-breakdown mb-4" aria-label="By type">
+        {% set chips = [
+            ('payment', 'Settle'),
+            ('advance', 'Advance'),
+            ('loan', 'Loan'),
+            ('vendor_pay', 'Vendor'),
+            ('expense', 'Expense'),
+            ('settle', 'Exp. settle'),
+            ('cash_taken', 'Taken'),
+        ] %}
+        {% for key, label in chips %}
+        {% set amt = by_type.get(key, 0) %}
+        {% if amt %}
+        <div class="journal-chip journal-chip-{{ key }}">
+            <span>{{ label }}</span>
+            <strong>{{ amt | money }}</strong>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </section>
+
+    <div class="card card-premium journal-table-card">
+        <div class="card-header-premium d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+                <h5 class="mb-0 fw-bold">Cash movements</h5>
+                <small class="text-muted-custom">In = received · Out = paid</small>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-custom journal-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Flow</th>
+                        <th>Type</th>
+                        <th>Party</th>
+                        <th>Description</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if rows %}
+                        {% for row in rows %}
+                        <tr class="journal-row journal-row-{{ row.cash_direction }}">
+                            <td class="journal-date">{{ row.sale_date }}</td>
+                            <td>
+                                <span class="journal-flow journal-flow-{{ row.cash_direction }}">
+                                    {% if row.cash_direction == 'in' %}
+                                    <i class="bi bi-arrow-down-left"></i> In
+                                    {% else %}
+                                    <i class="bi bi-arrow-up-right"></i> Out
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td><span class="journal-type journal-type-{{ row.entry_type }}">{{ row.type_label }}</span></td>
+                            <td>{{ row.party }}</td>
+                            <td><div class="journal-desc">{{ row.item_name }}</div></td>
+                            <td class="text-end fw-bold journal-amt-{{ row.cash_direction }}">
+                                {% if row.cash_direction == 'out' %}−{% endif %}{{ row.amount | money }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted-custom py-5">
+                                No cash movements for this filter.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'direction': direction, 'type': entry_type} %}
+            {% include "partials/pagination.html" %}
+        {% endwith %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const form = document.getElementById('journal-filter-form');
+    const sel = document.getElementById('journal-period-select');
+    const customWrap = document.getElementById('journal-custom-dates');
+    if (!form || !sel || !customWrap) return;
+
+    const startInput = form.querySelector('[name="start_date"]');
+    const endInput = form.querySelector('[name="end_date"]');
+
+    const setCustom = (on) => {
+        customWrap.classList.toggle('d-none', !on);
+        if (startInput) startInput.name = on ? 'start_date' : '';
+        if (endInput) endInput.name = on ? 'end_date' : '';
+    };
+    setCustom(sel.value === 'custom');
+
+    sel.addEventListener('change', () => {
+        const isCustom = sel.value === 'custom';
+        setCustom(isCustom);
+        if (!isCustom) form.submit();
+    });
+})();
+</script>
+{% endblock %}

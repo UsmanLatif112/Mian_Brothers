@@ -2,11 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Theme Management
     const themeToggleBtn = document.getElementById('theme-toggle');
     const htmlElement = document.documentElement;
-    const themeIcon = themeToggleBtn ? themeToggleBtn.querySelector('i') : null;
 
     const savedTheme = localStorage.getItem('theme') || 'light';
     htmlElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
+    updateThemeToggle(savedTheme);
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
@@ -14,13 +13,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             htmlElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            updateThemeIcon(newTheme);
+            updateThemeToggle(newTheme);
         });
     }
 
-    function updateThemeIcon(theme) {
-        if (!themeIcon) return;
-        themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+    function updateThemeToggle(theme) {
+        if (!themeToggleBtn) return;
+        const isDark = theme === 'dark';
+        if (themeToggleBtn.classList.contains('dropdown-item')) {
+            themeToggleBtn.innerHTML = isDark
+                ? '<i class="bi bi-sun-fill me-2"></i> Light Mode'
+                : '<i class="bi bi-moon-stars-fill me-2"></i> Dark Mode';
+            return;
+        }
+        const icon = themeToggleBtn.querySelector('i');
+        if (icon) icon.className = isDark ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
 
     // -------------------------------------------------------

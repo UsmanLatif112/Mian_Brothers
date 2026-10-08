@@ -8,7 +8,6 @@ from app.models import (
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
     paginate, parse_form_date, datetime_from_date, infer_sale_overpayments,
-    build_period_cash_entries, build_cash_journal_summary,
 )
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale,
@@ -756,9 +755,6 @@ def index():
         if (getattr(e, 'entry_type', None) or 'sale').lower() != 'opening'
     ]
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
-    journal_page = request.args.get('journal_page', 1)
-    journal_entries, journal_pagination = paginate(build_period_cash_entries(stats), journal_page, PER_PAGE)
-    cash_summary = build_cash_journal_summary(stats)
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
 
     return render_template(
@@ -773,9 +769,6 @@ def index():
         stats=stats,
         period_entries=period_entries,
         entries_pagination=entries_pagination,
-        journal_entries=journal_entries,
-        journal_pagination=journal_pagination,
-        cash_summary=cash_summary,
         sale_overs=sale_overs,
         period=period,
         start_date=start.isoformat(),

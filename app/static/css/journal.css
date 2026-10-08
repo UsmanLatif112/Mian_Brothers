@@ -1,0 +1,429 @@
+/* ============================================
+   Journal page — cyan/teal identity, IN/OUT
+   ============================================ */
+
+:root {
+    --journal-in: #0d9488;
+    --journal-in-soft: rgba(13, 148, 136, 0.12);
+    --journal-out: #e11d48;
+    --journal-out-soft: rgba(225, 29, 72, 0.1);
+    --journal-net: #0369a1;
+    --journal-net-soft: rgba(3, 105, 161, 0.12);
+    --journal-accent: #0891b2;
+}
+
+[data-theme="dark"] {
+    --journal-in: #2dd4bf;
+    --journal-in-soft: rgba(45, 212, 191, 0.14);
+    --journal-out: #fb7185;
+    --journal-out-soft: rgba(251, 113, 133, 0.14);
+    --journal-net: #38bdf8;
+    --journal-net-soft: rgba(56, 189, 248, 0.14);
+    --journal-accent: #22d3ee;
+}
+
+/* Topbar page filters */
+.topbar-page-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-left: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.topbar-filter-seg {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 11px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    gap: 2px;
+}
+
+.topbar-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.topbar-seg-btn:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+}
+
+.topbar-seg-btn.is-active {
+    color: #fff;
+    background: var(--accent-blue);
+}
+
+.topbar-seg-btn.is-active.topbar-seg-in {
+    background: var(--journal-in);
+}
+
+.topbar-seg-btn.is-active.topbar-seg-out {
+    background: var(--journal-out);
+}
+
+.topbar-filter-select {
+    width: auto;
+    min-width: 7.5rem;
+    max-width: 11rem;
+    height: 36px;
+    padding: 0.25rem 1.8rem 0.25rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 10px !important;
+}
+
+.topbar-filter-type {
+    min-width: 9rem;
+    max-width: 12rem;
+}
+
+.topbar-filter-dates {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.topbar-filter-date {
+    width: 8.2rem;
+    height: 36px;
+    padding: 0.2rem 0.45rem;
+    font-size: 0.78rem;
+    border-radius: 10px !important;
+}
+
+.topbar-date-sep {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.topbar-filter-apply {
+    width: 36px;
+    height: 36px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px !important;
+}
+
+.app-topbar:has(.topbar-page-filters) .topbar-search {
+    max-width: 220px;
+}
+
+@media (max-width: 1199.98px) {
+    .app-topbar:has(.topbar-page-filters) .topbar-search {
+        display: none;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .app-topbar:has(.topbar-page-filters) {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: var(--topbar-height);
+        padding-bottom: 0.55rem;
+    }
+
+    .topbar-left {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .topbar-page-filters {
+        margin-left: 0;
+        width: 100%;
+        order: 3;
+    }
+
+    .topbar-filter-select,
+    .topbar-filter-type {
+        flex: 1 1 auto;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .topbar-filter-seg {
+        width: 100%;
+    }
+
+    .topbar-seg-btn {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .topbar-filter-dates {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .topbar-filter-date {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+    }
+}
+
+/* Journal hero + KPIs */
+.journal-hero .page-title {
+    background: linear-gradient(120deg, var(--journal-accent), var(--journal-in));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.journal-range-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    background: var(--journal-net-soft);
+    color: var(--journal-net);
+    font-size: 0.78rem;
+    font-weight: 700;
+    border: 1px solid color-mix(in srgb, var(--journal-net) 25%, transparent);
+}
+
+.journal-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.journal-kpi {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    padding: 1.1rem 1.15rem;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+    animation: shellFade 0.4s ease both;
+}
+
+.journal-kpi:nth-child(2) { animation-delay: 0.05s; }
+.journal-kpi:nth-child(3) { animation-delay: 0.1s; }
+
+.journal-kpi::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+}
+
+.journal-kpi-in::before { background: var(--journal-in); }
+.journal-kpi-out::before { background: var(--journal-out); }
+.journal-kpi-net::before { background: var(--journal-net); }
+
+.journal-kpi-in { background: linear-gradient(135deg, var(--journal-in-soft), var(--card-bg) 55%); }
+.journal-kpi-out { background: linear-gradient(135deg, var(--journal-out-soft), var(--card-bg) 55%); }
+.journal-kpi-net { background: linear-gradient(135deg, var(--journal-net-soft), var(--card-bg) 55%); }
+
+.journal-kpi-top {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+}
+
+.journal-kpi-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+.journal-kpi-in .journal-kpi-icon {
+    background: var(--journal-in-soft);
+    color: var(--journal-in);
+}
+
+.journal-kpi-out .journal-kpi-icon {
+    background: var(--journal-out-soft);
+    color: var(--journal-out);
+}
+
+.journal-kpi-net .journal-kpi-icon {
+    background: var(--journal-net-soft);
+    color: var(--journal-net);
+}
+
+.journal-kpi-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.journal-kpi-value {
+    font-size: clamp(1.15rem, 0.9rem + 1.2vw, 1.55rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.journal-kpi-in .journal-kpi-value { color: var(--journal-in); }
+.journal-kpi-out .journal-kpi-value { color: var(--journal-out); }
+.journal-kpi-net.is-positive .journal-kpi-value { color: var(--journal-in); }
+.journal-kpi-net.is-negative .journal-kpi-value { color: var(--journal-out); }
+
+.journal-kpi-meta {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.journal-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.journal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+}
+
+.journal-chip strong {
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+.journal-chip-payment,
+.journal-chip-advance,
+.journal-chip-settle,
+.journal-chip-overpay {
+    border-color: color-mix(in srgb, var(--journal-in) 30%, var(--border-color));
+    background: var(--journal-in-soft);
+}
+
+.journal-chip-loan,
+.journal-chip-expense,
+.journal-chip-vendor_pay,
+.journal-chip-cash_taken {
+    border-color: color-mix(in srgb, var(--journal-out) 30%, var(--border-color));
+    background: var(--journal-out-soft);
+}
+
+.journal-table-card {
+    overflow: hidden;
+}
+
+.journal-table tbody tr {
+    transition: background 0.15s ease;
+}
+
+.journal-row-in:hover {
+    background: var(--journal-in-soft) !important;
+}
+
+.journal-row-out:hover {
+    background: var(--journal-out-soft) !important;
+}
+
+.journal-flow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.journal-flow-in {
+    background: var(--journal-in-soft);
+    color: var(--journal-in);
+}
+
+.journal-flow-out {
+    background: var(--journal-out-soft);
+    color: var(--journal-out);
+}
+
+.journal-type {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--bg-color);
+    color: var(--text-secondary);
+}
+
+.journal-type-payment,
+.journal-type-advance,
+.journal-type-settle,
+.journal-type-overpay {
+    background: var(--journal-in-soft);
+    color: var(--journal-in);
+}
+
+.journal-type-loan,
+.journal-type-expense,
+.journal-type-vendor_pay,
+.journal-type-cash_taken {
+    background: var(--journal-out-soft);
+    color: var(--journal-out);
+}
+
+.journal-desc {
+    max-width: 28rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.journal-amt-in { color: var(--journal-in); }
+.journal-amt-out { color: var(--journal-out); }
+
+.journal-date {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767.98px) {
+    .journal-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .journal-desc {
+        max-width: 12rem;
+    }
+}
+
+@media (min-width: 576px) and (max-width: 991.98px) {
+    .journal-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}

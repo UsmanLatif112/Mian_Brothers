@@ -12,7 +12,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=7">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/shell.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/shell.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/journal.css') }}?v=1">
 </head>
 <body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
 
@@ -37,25 +38,22 @@
 
         <nav class="sidebar-nav">
             <p class="sidebar-section-label">Home</p>
-            <a class="sidebar-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" data-search-label="Dashboard">
+            <a class="sidebar-link {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" data-search-label="Dashboard">
                 <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
-            </a>
-            <a class="sidebar-link {% if request.endpoint == 'dashboard.reports' %}active{% endif %}" href="{{ url_for('dashboard.reports') }}" data-search-label="Reports">
-                <i class="bi bi-graph-up-arrow"></i><span>Reports</span>
             </a>
 
             <p class="sidebar-section-label">Operations</p>
             <a class="sidebar-link {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}" data-search-label="Sales">
                 <i class="bi bi-cart3"></i><span>Sales</span>
             </a>
+            <a class="sidebar-link {% if request.blueprint == 'journal' %}active{% endif %}" href="{{ url_for('journal.index') }}" data-search-label="Journal">
+                <i class="bi bi-journal-text"></i><span>Journal</span>
+            </a>
             <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
                 <i class="bi bi-wallet2"></i><span>Account</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
                 <i class="bi bi-box-seam"></i><span>Inventory</span>
-            </a>
-            <a class="sidebar-link {% if request.blueprint == 'purchasing' %}active{% endif %}" href="{{ url_for('purchasing.index') }}" data-search-label="Purchasing">
-                <i class="bi bi-bag-plus"></i><span>Purchasing</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}" data-search-label="Expenses">
                 <i class="bi bi-receipt"></i><span>Expenses</span>
@@ -109,6 +107,7 @@
                         <div class="topbar-search-results" id="searchResults"></div>
                     </div>
                 </form>
+                {% block topbar_tools %}{% endblock %}
             </div>
 
             <div class="topbar-right">
@@ -128,22 +127,20 @@
                     </div>
                 </div>
 
-                <button class="topbar-icon-btn theme-toggle-btn" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
-                    <i class="bi bi-moon-stars-fill"></i>
-                </button>
-
                 <div class="dropdown">
-                    <button class="btn user-menu-btn dropdown-toggle d-flex align-items-center gap-2 border-0" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                    <button class="btn user-menu-btn dropdown-toggle d-flex align-items-center gap-1 border-0 p-1" type="button" id="userMenu" data-bs-toggle="dropdown" aria-expanded="false" aria-label="User menu">
                         <div class="user-avatar">{{ current_user.name[0] | upper }}</div>
-                        <span class="user-menu-label d-none d-md-flex flex-column align-items-start">
-                            <span class="user-name">{{ current_user.name }}</span>
-                            <span class="badge badge-custom {% if current_user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %} user-role-badge">{{ current_user.role | capitalize }}</span>
-                        </span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-app shadow border-0 p-2 mt-2" aria-labelledby="userMenu">
                         <li class="px-3 py-2">
                             <small class="d-block user-name">{{ current_user.name }}</small>
                             <span class="badge badge-custom {% if current_user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %} user-role-badge">{{ current_user.role | capitalize }}</span>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <button class="dropdown-item rounded py-2 px-3 theme-toggle-btn" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle theme">
+                                <i class="bi bi-moon-stars-fill me-2"></i> Dark Mode
+                            </button>
                         </li>
                         {% if current_user.role == 'admin' %}
                         <li><hr class="dropdown-divider"></li>
@@ -203,7 +200,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=7"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=8"></script>
 
     {% block scripts %}{% endblock %}
 </body>

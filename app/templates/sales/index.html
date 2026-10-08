@@ -2,6 +2,10 @@
 
 {% block title %}Sales — OctaneFlow{% endblock %}
 
+{% block topbar_tools %}
+{% include "partials/topbar_period_filter.html" %}
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
@@ -23,9 +27,6 @@
     </div>
     <div class="page-header-meta">
         <p class="page-subtitle">Meter, other items, and FT mobile oil with payment status insights.</p>
-    </div>
-    <div class="page-header-toolbar">
-        {% include "partials/period_filter.html" %}
     </div>
 </header>
 
@@ -75,109 +76,6 @@
     </div>
     {% endfor %}
 </div>
-
-<!-- Cash journal -->
-<section class="mb-4" id="cash-journal">
-    <div class="card card-premium">
-        <div class="card-header-premium">
-            <h5 class="mb-0 fw-bold">Cash In / Out Journal</h5>
-            <small class="text-muted-custom">Sales, payments, advances, loans, expenses, cash taken, and previous balance. Customer opening entries are excluded.</small>
-        </div>
-        <div class="card-body card-body-premium pb-2">
-            <div class="cash-journal-strip">
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Previous</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.previous_balance | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Cash In Hand</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.cash_in_hand | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Receiving</span>
-                    <span class="cash-journal-metric-value">{{ (cash_summary.advances + cash_summary.payments_total) | money }}</span>
-                </div>
-                <div class="cash-journal-metric cash-journal-metric-warn">
-                    <span class="cash-journal-metric-label">Loans</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.loans | money }}</span>
-                </div>
-                <div class="cash-journal-metric cash-journal-metric-warn">
-                    <span class="cash-journal-metric-label">Expenses</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.expense_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Settles</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.expense_return_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric cash-journal-metric-warn">
-                    <span class="cash-journal-metric-label">Cash Taken</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.cash_taken_total | money }}</span>
-                </div>
-                <div class="cash-journal-metric">
-                    <span class="cash-journal-metric-label">Remaining</span>
-                    <span class="cash-journal-metric-value">{{ cash_summary.remaining_balance | money }}</span>
-                </div>
-            </div>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-custom cash-journal-table mb-0">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Party</th>
-                        <th>Description</th>
-                        <th class="text-end">Qty / L</th>
-                        <th class="text-end">Amount</th>
-                        <th class="text-end">Paid</th>
-                        <th class="text-end">Other</th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if journal_entries %}
-                        {% for row in journal_entries %}
-                        <tr>
-                            <td>{{ row.sale_date }}</td>
-                            <td><span class="cash-journal-type cash-journal-type-{{ row.entry_type }}">{{ row.entry_type }}</span></td>
-                            <td>
-                                {% if row.customer %}
-                                    {{ row.customer.name }}
-                                {% elif row.vendor_name is defined and row.vendor_name %}
-                                    {{ row.vendor_name }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                            <td><div class="cash-journal-desc">{{ row.item_name }}</div></td>
-                            <td class="text-end">
-                                {% if row.liters %}
-                                    {{ "{:,.2f}".format(row.liters) }}{% if row.is_fuel or (row.other_item and row.other_item.category == 'ft_mobile') %} L{% endif %}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                            <td class="text-end">{{ row.amount | money }}</td>
-                            <td class="text-end">{{ row.amount_paid | money }}</td>
-                            <td class="text-end {% if row.other_kind == 'over' %}text-info{% elif row.other_amount %}text-warning{% endif %}">
-                                {% if row.other_kind == 'over' %}+{% endif %}{{ row.other_amount | money }}
-                            </td>
-                            <td class="text-center">
-                                <span class="cash-journal-status cash-journal-status-{{ row.payment_status }}">{{ row.payment_status }}</span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr><td colspan="9" class="text-center text-muted-custom py-4">No cash activity in this period.</td></tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-        {% with pagination=journal_pagination, page_param='journal_page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'page': entries_pagination.page} %}
-            {% include "partials/pagination.html" %}
-        {% endwith %}
-    </div>
-</section>
 
 <!-- Period ledger -->
 <div class="row g-4">

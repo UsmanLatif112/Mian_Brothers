@@ -2,6 +2,10 @@
 
 {% block title %}Dashboard — OctaneFlow{% endblock %}
 
+{% block topbar_tools %}
+{% include "partials/topbar_period_filter.html" %}
+{% endblock %}
+
 {% block content %}
 <div class="dashboard-page">
 
@@ -33,9 +37,6 @@
         <p class="page-eyebrow mb-1">Operations overview</p>
         <h1 class="page-title mb-1">Dashboard</h1>
         <p class="page-subtitle mb-0">Sales, inventory, and credit health for the selected period.</p>
-    </div>
-    <div class="dash-hero-tools">
-        {% include "partials/period_filter.html" %}
     </div>
 </header>
 

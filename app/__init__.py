@@ -51,6 +51,7 @@ def create_app():
     from app.backup import backup_bp
     from app.vendors import vendors_bp
     from app.account import account_bp
+    from app.journal import journal_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -58,6 +59,7 @@ def create_app():
     app.register_blueprint(inventory_bp, url_prefix='/inventory')
     app.register_blueprint(purchasing_bp, url_prefix='/purchasing')
     app.register_blueprint(sales_bp, url_prefix='/sales')
+    app.register_blueprint(journal_bp, url_prefix='/journal')
     app.register_blueprint(account_bp, url_prefix='/account')
     app.register_blueprint(customers_bp, url_prefix='/customers')
     app.register_blueprint(vendors_bp, url_prefix='/vendors')
