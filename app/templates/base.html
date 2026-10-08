@@ -39,20 +39,14 @@
         </div>
 
         <nav class="sidebar-nav">
-            <p class="sidebar-section-label">Home</p>
             <a class="sidebar-link {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" data-search-label="Dashboard">
                 <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
-            </a>
-
-            <p class="sidebar-section-label">Operations</p>
-            <a class="sidebar-link {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}" data-search-label="Sales">
-                <i class="bi bi-cart3"></i><span>Sales</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'journal' %}active{% endif %}" href="{{ url_for('journal.index') }}" data-search-label="Journal">
                 <i class="bi bi-journal-text"></i><span>Journal</span>
             </a>
-            <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
-                <i class="bi bi-wallet2"></i><span>Account</span>
+            <a class="sidebar-link {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}" data-search-label="Sales">
+                <i class="bi bi-cart3"></i><span>Sales</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'inventory' %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
                 <i class="bi bi-box-seam"></i><span>Inventory</span>
@@ -60,17 +54,16 @@
             <a class="sidebar-link {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}" data-search-label="Expenses">
                 <i class="bi bi-receipt"></i><span>Expenses</span>
             </a>
-
-            <p class="sidebar-section-label">People</p>
             <a class="sidebar-link {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}" data-search-label="Customers">
                 <i class="bi bi-people"></i><span>Customers</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}" data-search-label="Vendors">
                 <i class="bi bi-building"></i><span>Vendors</span>
             </a>
-
+            <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
+                <i class="bi bi-wallet2"></i><span>Account</span>
+            </a>
             {% if current_user.role == 'admin' %}
-            <p class="sidebar-section-label">Admin</p>
             <a class="sidebar-link {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}" data-search-label="Pricing">
                 <i class="bi bi-tags"></i><span>Pricing</span>
             </a>
