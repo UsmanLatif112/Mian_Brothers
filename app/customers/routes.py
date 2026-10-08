@@ -516,13 +516,45 @@ def ledger(customer_id):
         
     # Reverse list for displaying newest first
     ledger_entries.reverse()
-    
+
+    total_sales = sum(float(e.get('debit') or 0) for e in ledger_entries)
+    total_received = sum(float(e.get('credit') or 0) for e in ledger_entries)
+
+    entry_filter = (request.args.get('filter') or 'all').strip().lower()
+    allowed = {'all', 'sale', 'payment', 'advance', 'loan', 'opening'}
+    if entry_filter not in allowed:
+        entry_filter = 'all'
+    search_q = (request.args.get('search') or '').strip().lower()
+
+    def _customer_entry_kind(e):
+        kind = (e.get('entry_kind') or e.get('pay_type') or '').lower()
+        if kind in ('advance', 'loan', 'opening'):
+            return kind
+        if (e.get('type') or '').lower() == 'payment' or kind == 'payment':
+            return 'payment'
+        return 'sale'
+
+    visible_entries = ledger_entries
+    if entry_filter != 'all':
+        visible_entries = [e for e in visible_entries if _customer_entry_kind(e) == entry_filter]
+    if search_q:
+        visible_entries = [
+            e for e in visible_entries
+            if search_q in (e.get('desc') or '').lower()
+            or search_q in (e.get('ref_id') or '').lower()
+            or search_q in (e.get('pay_type') or '').lower()
+        ]
+
     from app.charts_data import customer_ledger_pie
 
     return render_template(
         'customers/ledger.html',
         customer=customer,
-        ledger_entries=ledger_entries,
+        ledger_entries=visible_entries,
+        total_sales=total_sales,
+        total_received=total_received,
+        entry_filter=entry_filter,
+        search=search_q,
         today=datetime.utcnow().date().isoformat(),
         chart_series=customer_ledger_pie(ledger_entries),
     )

@@ -2,16 +2,37 @@
 
 {% block title %}Ledger: {{ customer.name }} — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('customers.ledger', customer_id=customer.id) }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search this ledger…" value="{{ search or '' }}" autocomplete="off" aria-label="Search ledger">
+    <input type="hidden" name="filter" value="{{ entry_filter or 'all' }}">
+</form>
+{% endblock %}
+
+{% block topbar_filters %}
+<form method="GET" class="topbar-filters" action="{{ url_for('customers.ledger', customer_id=customer.id) }}" data-allow-multi-submit="1">
+    {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+    <select name="filter" class="form-select form-control-custom topbar-filter-select" aria-label="Entry type" onchange="this.form.submit()">
+        <option value="all" {% if entry_filter == 'all' %}selected{% endif %}>All</option>
+        <option value="sale" {% if entry_filter == 'sale' %}selected{% endif %}>Sales</option>
+        <option value="payment" {% if entry_filter == 'payment' %}selected{% endif %}>Payments</option>
+        <option value="advance" {% if entry_filter == 'advance' %}selected{% endif %}>Advances</option>
+        <option value="loan" {% if entry_filter == 'loan' %}selected{% endif %}>Loans</option>
+        <option value="opening" {% if entry_filter == 'opening' %}selected{% endif %}>Opening</option>
+    </select>
+</form>
+{% endblock %}
+
 {% block content %}
-<header class="page-header mb-4">
-    <div class="page-header-row">
-        <div class="page-header-text d-flex align-items-start gap-3">
-            <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers">
-                <i class="bi bi-arrow-left"></i>
-            </a>
-            <div>
-                <p class="page-eyebrow">Customer Ledger</p>
-                <h1 class="page-title">{{ customer.name }}</h1>
+<div class="card card-premium ledger-name-card">
+    <div class="ledger-name-row">
+        <div class="d-flex align-items-center gap-3 min-w-0">
+            <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers"><i class="bi bi-arrow-left"></i></a>
+            <div class="min-w-0">
+                <p class="page-eyebrow mb-1">Customer Ledger</p>
+                <h1 class="ledger-name-title text-truncate">{{ customer.name }}</h1>
             </div>
         </div>
         <div class="page-header-actions">
@@ -23,64 +44,85 @@
             </button>
         </div>
     </div>
-    <div class="page-header-meta">
-        <p class="page-subtitle">Detailed accounting history, payments, and running balance for this customer.</p>
-    </div>
-</header>
-
-{% if chart_series %}
-{% with chart_id='customerLedgerPie', chart_title='Ledger mix', chart_subtitle='Sales, payments, advances & loans', chart_series=chart_series, center_title='Activity' %}
-{% include "partials/page_pie_chart.html" %}
-{% endwith %}
-{% endif %}
-
-<div class="stat-row">
-    <div class="stat-card {% if customer.current_balance_due < 0 %}stat-success{% elif customer.current_balance_due > 0 %}stat-warning{% else %}stat-info{% endif %}">
-        <div class="stat-card-label">
-            {% if customer.current_balance_due < 0 %}Advance Balance{% else %}Current Balance Due{% endif %}
-        </div>
-        <div class="stat-card-value {% if customer.current_balance_due < 0 %}text-success{% endif %}">{{ customer.current_balance_due | money }}</div>
-        {% if customer.current_balance_due < 0 %}
-        <div class="stat-card-meta">Negative = customer advance on account</div>
-        {% endif %}
-    </div>
-
-    <div class="stat-card stat-info">
-        <div class="stat-card-label">Credit Limit Available</div>
-        <div class="stat-card-value">
-            {% if customer.credit_limit %}
-                {{ customer.credit_limit | money }}
-            {% else %}
-                No Limit
-            {% endif %}
-        </div>
-        {% if customer.credit_limit %}
-        {% set remaining = customer.credit_limit - customer.current_balance_due %}
-        <div class="stat-card-meta">Remaining: {{ remaining | money }}</div>
-        {% else %}
-        <div class="stat-card-meta">Unlimited credit access</div>
-        {% endif %}
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-card-label">Contact</div>
-        <div class="stat-card-meta mb-1"><i class="bi bi-telephone me-1"></i>{{ customer.phone or 'No Phone' }}</div>
-        <div class="stat-card-meta mb-1"><i class="bi bi-journal-bookmark me-1"></i>Old Book: {{ customer.old_book_no or '—' }}</div>
-        {% if customer.previous_credit is not none %}
-        <div class="stat-card-meta mb-1">
-            <i class="bi bi-book me-1"></i>
-            Previous Balance:
-            {{ customer.previous_credit | money }}
-            {% if customer.previous_credit < 0 %}
-            <span class="text-success">(advance — we owe)</span>
-            {% elif customer.previous_credit > 0 %}
-            <span class="text-warning">(customer owes)</span>
-            {% endif %}
-        </div>
-        {% endif %}
-        <div class="stat-card-meta text-truncate"><i class="bi bi-geo-alt me-1"></i>{{ customer.address or 'No Billing Address' }}</div>
-    </div>
 </div>
+
+<section class="ledger-overview" aria-label="Customer overview">
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Ledger mix</h2>
+            <p class="chart-card-sub">Activity share</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="customerLedgerPie"></canvas></div>
+        </div>
+    </article>
+
+    <article class="card card-premium ledger-profile-card">
+        <ul class="ledger-profile-list">
+            <li>
+                <span class="ledger-profile-label">Phone</span>
+                <span class="ledger-profile-value">{{ customer.phone or '—' }}</span>
+            </li>
+            <li>
+                <span class="ledger-profile-label">Address</span>
+                <span class="ledger-profile-value">{{ customer.address or '—' }}</span>
+            </li>
+            <li>
+                <span class="ledger-profile-label">Previous book no</span>
+                <span class="ledger-profile-value">{{ customer.old_book_no or '—' }}</span>
+            </li>
+            <li>
+                <span class="ledger-profile-label">Previous balance</span>
+                <span class="ledger-profile-value">
+                    {% if customer.previous_credit is not none %}
+                        {{ customer.previous_credit | money }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+            </li>
+        </ul>
+    </article>
+
+    <article class="ledger-kpi {% if customer.current_balance_due < 0 %}stat-success{% elif customer.current_balance_due > 0 %}stat-warning{% endif %}">
+        <div class="ledger-kpi-label">{% if customer.current_balance_due < 0 %}Advance balance{% else %}Balance due{% endif %}</div>
+        <div class="ledger-kpi-value {% if customer.current_balance_due < 0 %}text-success{% elif customer.current_balance_due > 0 %}text-warning{% endif %}">{{ customer.current_balance_due | money }}</div>
+        <div class="ledger-kpi-meta">
+            {% if customer.credit_limit %}Limit {{ customer.credit_limit | money }}{% else %}No credit limit{% endif %}
+        </div>
+    </article>
+    <article class="ledger-kpi">
+        <div class="ledger-kpi-label">Total sales</div>
+        <div class="ledger-kpi-value">{{ total_sales | money }}</div>
+        <div class="ledger-kpi-meta">Debits on account</div>
+    </article>
+    <article class="ledger-kpi">
+        <div class="ledger-kpi-label">Total received</div>
+        <div class="ledger-kpi-value text-success">{{ total_received | money }}</div>
+        <div class="ledger-kpi-meta">Payments + advances</div>
+    </article>
+</section>
+
+<script type="application/json" id="customerLedgerPie-json">{{ chart_series | tojson }}</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const boot = () => {
+        if (!window.OctaneCharts || !window.Chart) return setTimeout(boot, 40);
+        const data = OctaneCharts.parseJsonScript('customerLedgerPie-json') || {};
+        const canvas = document.getElementById('customerLedgerPie');
+        if (!canvas) return;
+        const labels = data.labels || [];
+        const values = data.values || [];
+        const total = values.reduce((a, b) => a + Number(b || 0), 0);
+        OctaneCharts.doughnutChart(canvas, {
+            labels: labels.length ? labels : ['No data'],
+            values: labels.length ? values : [1],
+            centerText: { title: 'Activity', value: labels.length ? OctaneCharts.money(total) : '—' },
+        });
+    };
+    boot();
+});
+</script>
 
 <div class="row g-4">
     <div class="col-12">

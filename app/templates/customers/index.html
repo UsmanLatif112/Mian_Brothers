@@ -6,24 +6,20 @@
 <form class="topbar-search" action="{{ url_for('customers.index') }}" method="GET" role="search" data-search-mode="page">
     <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
     <input type="search" class="topbar-search-input" name="search"
-           placeholder="Search customers…" value="{{ search or '' }}" autocomplete="off" aria-label="Search customers">
+           placeholder="Search customers only…" value="{{ search or '' }}" autocomplete="off" aria-label="Search customers">
     <input type="hidden" name="filter" value="{{ filter or 'all' }}">
 </form>
 {% endblock %}
 
 {% block topbar_filters %}
-<div class="topbar-filters">
-    <div class="topbar-filter-seg" role="group" aria-label="Customer status">
-        <a href="{{ url_for('customers.index', search=search, filter='all') }}" class="topbar-seg-btn {% if filter == 'all' %}is-active{% endif %}">All</a>
-        <a href="{{ url_for('customers.index', search=search, filter='due') }}" class="topbar-seg-btn {% if filter == 'due' %}is-active{% endif %}">Due</a>
-        <a href="{{ url_for('customers.index', search=search, filter='clear') }}" class="topbar-seg-btn {% if filter == 'clear' %}is-active{% endif %}">Settled</a>
-    </div>
-    {% if search or filter != 'all' %}
-    <a href="{{ url_for('customers.index') }}" class="topbar-icon-btn" title="Clear filters" aria-label="Clear filters">
-        <i class="bi bi-x-lg"></i>
-    </a>
-    {% endif %}
-</div>
+<form method="GET" class="topbar-filters" action="{{ url_for('customers.index') }}" data-allow-multi-submit="1">
+    {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+    <select name="filter" class="form-select form-control-custom topbar-filter-select" aria-label="Customer status" onchange="this.form.submit()">
+        <option value="all" {% if filter == 'all' %}selected{% endif %}>All</option>
+        <option value="due" {% if filter == 'due' %}selected{% endif %}>Due</option>
+        <option value="clear" {% if filter == 'clear' %}selected{% endif %}>Settled</option>
+    </select>
+</form>
 {% endblock %}
 
 {% block content %}

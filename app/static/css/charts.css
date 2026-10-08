@@ -88,3 +88,131 @@
 .page-chart-strip .chart-card {
     border-radius: 14px;
 }
+
+/* Ledger overview — name card, profile, pie, KPIs */
+.ledger-name-card {
+    padding: 1.25rem 1.35rem;
+    margin-bottom: 1rem;
+}
+
+.ledger-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.ledger-name-title {
+    margin: 0;
+    font-size: clamp(1.35rem, 1.1rem + 1vw, 1.85rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.ledger-overview {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+    align-items: stretch;
+}
+
+.ledger-overview .chart-card,
+.ledger-overview .ledger-profile-card,
+.ledger-overview .ledger-kpi {
+    height: 100%;
+    margin: 0;
+}
+
+.ledger-profile-card {
+    padding: 1.1rem 1.15rem;
+}
+
+.ledger-profile-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.ledger-profile-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.ledger-profile-label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.ledger-profile-value {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.ledger-kpi {
+    padding: 1.1rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-radius: 16px;
+    border: var(--card-border);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+}
+
+.ledger-kpi-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+}
+
+.ledger-kpi-value {
+    font-size: clamp(1.05rem, 0.9rem + 0.8vw, 1.35rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.ledger-kpi-meta {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.ledger-overview .chart-canvas-wrap.is-pie {
+    height: 190px;
+}
+
+@media (max-width: 1199.98px) {
+    .ledger-overview {
+        grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) 1fr 1fr;
+    }
+
+    .ledger-overview .ledger-kpi:last-child {
+        grid-column: 3 / span 2;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .ledger-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .ledger-overview .ledger-kpi:last-child {
+        grid-column: auto;
+    }
+}

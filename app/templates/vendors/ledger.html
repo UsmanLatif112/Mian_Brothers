@@ -2,16 +2,34 @@
 
 {% block title %}Ledger: {{ vendor.name }} — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search this ledger…" value="{{ search or '' }}" autocomplete="off" aria-label="Search ledger">
+    <input type="hidden" name="filter" value="{{ entry_filter or 'all' }}">
+</form>
+{% endblock %}
+
+{% block topbar_filters %}
+<form method="GET" class="topbar-filters" action="{{ url_for('vendors.ledger', vendor_id=vendor.id) }}" data-allow-multi-submit="1">
+    {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+    <select name="filter" class="form-select form-control-custom topbar-filter-select" aria-label="Entry type" onchange="this.form.submit()">
+        <option value="all" {% if entry_filter == 'all' %}selected{% endif %}>All</option>
+        <option value="purchase" {% if entry_filter == 'purchase' %}selected{% endif %}>Purchases</option>
+        <option value="payment" {% if entry_filter == 'payment' %}selected{% endif %}>Payments</option>
+    </select>
+</form>
+{% endblock %}
+
 {% block content %}
-<header class="page-header mb-4">
-    <div class="page-header-row">
-        <div class="page-header-text d-flex align-items-start gap-3">
-            <a href="{{ url_for('vendors.index') }}" class="btn-back" title="Back to Vendors">
-                <i class="bi bi-arrow-left"></i>
-            </a>
-            <div>
-                <p class="page-eyebrow">Vendor Ledger</p>
-                <h1 class="page-title">{{ vendor.name }}</h1>
+<div class="card card-premium ledger-name-card">
+    <div class="ledger-name-row">
+        <div class="d-flex align-items-center gap-3 min-w-0">
+            <a href="{{ url_for('vendors.index') }}" class="btn-back" title="Back to Vendors"><i class="bi bi-arrow-left"></i></a>
+            <div class="min-w-0">
+                <p class="page-eyebrow mb-1">Vendor Ledger</p>
+                <h1 class="ledger-name-title text-truncate">{{ vendor.name }}</h1>
             </div>
         </div>
         <div class="page-header-actions">
@@ -20,42 +38,81 @@
             </button>
         </div>
     </div>
-    <div class="page-header-meta">
-        <p class="page-subtitle">Purchases from inventory, payments made, and remaining balance payable.</p>
-    </div>
-</header>
+</div>
 
-{% if chart_series %}
-{% with chart_id='vendorLedgerPie', chart_title='Payable mix', chart_subtitle='Paid vs still owed', chart_series=chart_series, center_title='Payable' %}
-{% include "partials/page_pie_chart.html" %}
-{% endwith %}
-{% endif %}
+<section class="ledger-overview" aria-label="Vendor overview">
+    <article class="chart-card">
+        <div class="chart-card-head">
+            <h2 class="chart-card-title">Payable mix</h2>
+            <p class="chart-card-sub">Paid vs owed</p>
+        </div>
+        <div class="chart-card-body">
+            <div class="chart-canvas-wrap is-pie"><canvas id="vendorLedgerPie"></canvas></div>
+        </div>
+    </article>
 
-<div class="stat-row cols-4">
-    <div class="stat-card {% if vendor.current_balance_payable > 0 %}stat-warning{% else %}stat-success{% endif %}">
-        <div class="stat-card-label">Balance Payable</div>
-        <div class="stat-card-value {% if vendor.current_balance_payable <= 0 %}text-success{% else %}text-warning{% endif %}">
+    <article class="card card-premium ledger-profile-card">
+        <ul class="ledger-profile-list">
+            <li>
+                <span class="ledger-profile-label">Contact</span>
+                <span class="ledger-profile-value">{{ vendor.contact_person or '—' }}</span>
+            </li>
+            <li>
+                <span class="ledger-profile-label">Phone</span>
+                <span class="ledger-profile-value">{{ vendor.phone or '—' }}</span>
+            </li>
+            <li>
+                <span class="ledger-profile-label">Address</span>
+                <span class="ledger-profile-value">{{ vendor.address or '—' }}</span>
+            </li>
+            <li>
+                <span class="ledger-profile-label">Previous payable</span>
+                <span class="ledger-profile-value">
+                    {% if vendor.previous_payable %}{{ vendor.previous_payable | money }}{% else %}—{% endif %}
+                </span>
+            </li>
+        </ul>
+    </article>
+
+    <article class="ledger-kpi {% if vendor.current_balance_payable > 0 %}stat-warning{% else %}stat-success{% endif %}">
+        <div class="ledger-kpi-label">Balance payable</div>
+        <div class="ledger-kpi-value {% if vendor.current_balance_payable <= 0 %}text-success{% else %}text-warning{% endif %}">
             {{ vendor.current_balance_payable | money }}
         </div>
-        <div class="stat-card-meta">Amount still owed to this vendor</div>
-    </div>
-    <div class="stat-card stat-info">
-        <div class="stat-card-label">Total Purchased</div>
-        <div class="stat-card-value">{{ total_purchased | money }}</div>
-        <div class="stat-card-meta">All inventory purchase batches</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-label">Total Paid</div>
-        <div class="stat-card-value text-success">{{ total_paid | money }}</div>
-        <div class="stat-card-meta">Payments recorded to vendor</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-label">Contact</div>
-        <div class="stat-card-meta mb-1"><i class="bi bi-person me-1"></i>{{ vendor.contact_person or 'No contact person' }}</div>
-        <div class="stat-card-meta mb-1"><i class="bi bi-telephone me-1"></i>{{ vendor.phone or 'No phone' }}</div>
-        <div class="stat-card-meta text-truncate"><i class="bi bi-geo-alt me-1"></i>{{ vendor.address or 'No address' }}</div>
-    </div>
-</div>
+        <div class="ledger-kpi-meta">Still owed to vendor</div>
+    </article>
+    <article class="ledger-kpi">
+        <div class="ledger-kpi-label">Total purchased</div>
+        <div class="ledger-kpi-value">{{ total_purchased | money }}</div>
+        <div class="ledger-kpi-meta">All purchase batches</div>
+    </article>
+    <article class="ledger-kpi">
+        <div class="ledger-kpi-label">Total paid</div>
+        <div class="ledger-kpi-value text-success">{{ total_paid | money }}</div>
+        <div class="ledger-kpi-meta">Payments recorded</div>
+    </article>
+</section>
+
+<script type="application/json" id="vendorLedgerPie-json">{{ chart_series | tojson }}</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const boot = () => {
+        if (!window.OctaneCharts || !window.Chart) return setTimeout(boot, 40);
+        const data = OctaneCharts.parseJsonScript('vendorLedgerPie-json') || {};
+        const canvas = document.getElementById('vendorLedgerPie');
+        if (!canvas) return;
+        const labels = data.labels || [];
+        const values = data.values || [];
+        const total = values.reduce((a, b) => a + Number(b || 0), 0);
+        OctaneCharts.doughnutChart(canvas, {
+            labels: labels.length ? labels : ['No data'],
+            values: labels.length ? values : [1],
+            centerText: { title: 'Payable', value: labels.length ? OctaneCharts.money(total) : '—' },
+        });
+    };
+    boot();
+});
+</script>
 
 <div class="row g-4">
     <div class="col-12">

@@ -254,14 +254,35 @@ def ledger(vendor_id):
         total_purchased += float(vendor.previous_payable)
     total_paid = sum(float(p.amount_paid or 0) for p in payments)
 
+    entry_filter = (request.args.get('filter') or 'all').strip().lower()
+    if entry_filter not in {'all', 'purchase', 'payment'}:
+        entry_filter = 'all'
+    search_q = (request.args.get('search') or '').strip().lower()
+
+    visible_entries = ledger_entries
+    if entry_filter != 'all':
+        visible_entries = [
+            e for e in visible_entries
+            if (e.get('type') or '').lower() == entry_filter
+        ]
+    if search_q:
+        visible_entries = [
+            e for e in visible_entries
+            if search_q in (e.get('desc') or '').lower()
+            or search_q in (e.get('ref_id') or '').lower()
+            or search_q in (e.get('pay_type') or '').lower()
+        ]
+
     from app.charts_data import vendor_ledger_pie
 
     return render_template(
         'vendors/ledger.html',
         vendor=vendor,
-        ledger_entries=ledger_entries,
+        ledger_entries=visible_entries,
         total_purchased=total_purchased,
         total_paid=total_paid,
+        entry_filter=entry_filter,
+        search=search_q,
         today=datetime.utcnow().date().isoformat(),
         chart_series=vendor_ledger_pie(
             total_purchased,
