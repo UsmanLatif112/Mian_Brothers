@@ -2,34 +2,30 @@
 
 {% block title %}Journal — OctaneFlow{% endblock %}
 
-{% block topbar_tools %}
-<form method="GET" class="topbar-page-filters journal-top-filters" id="journal-filter-form" data-allow-multi-submit="1">
+{% block topbar_filters %}
+<form method="GET" class="topbar-filters" id="journal-filter-form" data-allow-multi-submit="1">
     <div class="topbar-filter-seg" role="group" aria-label="Cash direction">
         {% for value, label in direction_choices %}
         <a href="{{ url_for('journal.index', period=period, start_date=start_date, end_date=end_date, direction=value, type=entry_type) }}"
            class="topbar-seg-btn {% if direction == value %}is-active topbar-seg-{{ value }}{% endif %}">{{ label }}</a>
         {% endfor %}
     </div>
-
     <select name="period" id="journal-period-select" class="form-select form-control-custom topbar-filter-select" aria-label="Period">
         {% for value, label in period_choices %}
         <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
     </select>
-
     <div class="topbar-filter-dates {% if period != 'custom' %}d-none{% endif %}" id="journal-custom-dates">
         <input type="date" name="start_date" class="form-control form-control-custom topbar-filter-date" value="{{ start_date }}" aria-label="From">
         <span class="topbar-date-sep">–</span>
         <input type="date" name="end_date" class="form-control form-control-custom topbar-filter-date" value="{{ end_date }}" aria-label="To">
         <button type="submit" class="btn btn-primary-custom topbar-filter-apply" title="Apply"><i class="bi bi-check-lg"></i></button>
     </div>
-
     <select name="type" class="form-select form-control-custom topbar-filter-select topbar-filter-type" aria-label="Entry type" onchange="this.form.submit()">
         {% for value, label in type_choices %}
         <option value="{{ value }}" {% if entry_type == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
     </select>
-
     <input type="hidden" name="direction" value="{{ direction }}">
 </form>
 {% endblock %}

@@ -98,20 +98,22 @@
                 <button type="button" class="topbar-icon-btn d-lg-none" id="sidebarOpen" aria-label="Open menu">
                     <i class="bi bi-list"></i>
                 </button>
-                <form class="topbar-search" id="globalSearchForm" action="{{ url_for('customers.index') }}" method="GET" role="search">
+                {% block topbar_search %}
+                <form class="topbar-search" id="globalSearchForm" action="{{ url_for('customers.index') }}" method="GET" role="search" data-search-mode="global">
                     <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
                     <input type="search" class="topbar-search-input" id="globalSearch" name="search"
-                           placeholder="Search customers, pages…" autocomplete="off" aria-label="Search">
+                           placeholder="Search the app…" autocomplete="off" aria-label="Search">
                     <kbd class="topbar-search-kbd d-none d-md-inline">/</kbd>
                     <div class="topbar-search-panel" id="searchPanel" hidden>
                         <p class="topbar-search-hint">Jump to</p>
                         <div class="topbar-search-results" id="searchResults"></div>
                     </div>
                 </form>
-                {% block topbar_tools %}{% endblock %}
+                {% endblock %}
             </div>
 
             <div class="topbar-right">
+                {% block topbar_filters %}{% endblock %}
                 <div class="dropdown">
                     <button class="topbar-icon-btn" type="button" id="notifMenu" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
                         <i class="bi bi-bell"></i>
@@ -203,7 +205,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=1"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=8"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=9"></script>
 
     {% block scripts %}{% endblock %}
 </body>

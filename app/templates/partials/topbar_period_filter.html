@@ -1,5 +1,5 @@
-{# Compact period filter for the app topbar — expects period, start_date, end_date, period_choices #}
-<form method="GET" class="topbar-page-filters" id="period-filter-form" data-allow-multi-submit="1">
+{# Compact period filter for topbar-right — expects period, start_date, end_date, period_choices #}
+<form method="GET" class="topbar-filters" id="period-filter-form" data-allow-multi-submit="1">
     <select name="period" id="period-select" class="form-select form-control-custom topbar-filter-select" aria-label="Period">
         {% for value, label in period_choices %}
         <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>

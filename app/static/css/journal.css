@@ -22,15 +22,13 @@
     --journal-accent: #22d3ee;
 }
 
-/* Topbar page filters */
-.topbar-page-filters {
+/* Journal / shared filter chip controls (on-page, not topbar) */
+.journal-filter-bar {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-left: 0.35rem;
-    min-width: 0;
-    flex: 1 1 auto;
+    gap: 0.45rem;
+    width: 100%;
 }
 
 .topbar-filter-seg {
@@ -118,59 +116,29 @@
     border-radius: 10px !important;
 }
 
-.app-topbar:has(.topbar-page-filters) .topbar-search {
-    max-width: 220px;
-}
-
-@media (max-width: 1199.98px) {
-    .app-topbar:has(.topbar-page-filters) .topbar-search {
-        display: none;
-    }
-}
-
-@media (max-width: 991.98px) {
-    .app-topbar:has(.topbar-page-filters) {
-        flex-wrap: wrap;
-        height: auto;
-        min-height: var(--topbar-height);
-        padding-bottom: 0.55rem;
-    }
-
-    .topbar-left {
-        flex-wrap: wrap;
-        width: 100%;
-    }
-
-    .topbar-page-filters {
-        margin-left: 0;
-        width: 100%;
-        order: 3;
-    }
-
-    .topbar-filter-select,
-    .topbar-filter-type {
+@media (max-width: 767.98px) {
+    .journal-filter-bar .topbar-filter-select,
+    .journal-filter-bar .topbar-filter-type {
         flex: 1 1 auto;
         max-width: none;
         min-width: 0;
     }
 
-    .topbar-filter-seg {
+    .journal-filter-bar .topbar-filter-seg {
         width: 100%;
     }
 
-    .topbar-seg-btn {
+    .journal-filter-bar .topbar-seg-btn {
         flex: 1 1 auto;
         justify-content: center;
     }
-}
 
-@media (max-width: 575.98px) {
-    .topbar-filter-dates {
+    .journal-filter-bar .topbar-filter-dates {
         width: 100%;
         flex-wrap: wrap;
     }
 
-    .topbar-filter-date {
+    .journal-filter-bar .topbar-filter-date {
         flex: 1 1 auto;
         width: auto;
         min-width: 0;

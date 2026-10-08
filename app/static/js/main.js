@@ -66,10 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.innerWidth >= 992) closeSidebar();
     });
 
-    const searchInput = document.getElementById('globalSearch');
+    const searchInput = document.getElementById('globalSearch') || document.querySelector('.topbar-search-input');
     const searchPanel = document.getElementById('searchPanel');
     const searchResults = document.getElementById('searchResults');
-    const searchForm = document.getElementById('globalSearchForm');
+    const searchForm = document.getElementById('globalSearchForm') || document.querySelector('.topbar-search');
+    const isGlobalSearch = searchForm?.dataset?.searchMode === 'global';
     const navLinks = Array.from(document.querySelectorAll('.sidebar-link[data-search-label]')).map((el) => ({
         label: el.getAttribute('data-search-label') || el.textContent.trim(),
         href: el.getAttribute('href'),
@@ -77,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
 
     function renderSearch(query) {
-        if (!searchPanel || !searchResults) return;
+        if (!isGlobalSearch || !searchPanel || !searchResults) return;
         const q = (query || '').trim().toLowerCase();
         if (!q) {
             searchPanel.hidden = true;
@@ -90,7 +91,12 @@ document.addEventListener('DOMContentLoaded', () => {
             href: `${searchForm?.action || '/customers/'}?search=${encodeURIComponent(query.trim())}`,
             icon: 'bi bi-people',
         };
-        const items = [...matches, customerJump];
+        const vendorJump = {
+            label: `Search vendors for “${query.trim()}”`,
+            href: `/vendors/?search=${encodeURIComponent(query.trim())}`,
+            icon: 'bi bi-building',
+        };
+        const items = [...matches, customerJump, vendorJump];
         searchResults.innerHTML = items
             .map(
                 (item, idx) =>
@@ -102,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.hidden = false;
     }
 
-    if (searchInput) {
+    if (searchInput && isGlobalSearch) {
         searchInput.addEventListener('input', () => renderSearch(searchInput.value));
         searchInput.addEventListener('focus', () => {
             if (searchInput.value.trim()) renderSearch(searchInput.value);

@@ -2,6 +2,30 @@
 
 {% block title %}Customers — OctaneFlow{% endblock %}
 
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('customers.index') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search customers…" value="{{ search or '' }}" autocomplete="off" aria-label="Search customers">
+    <input type="hidden" name="filter" value="{{ filter or 'all' }}">
+</form>
+{% endblock %}
+
+{% block topbar_filters %}
+<div class="topbar-filters">
+    <div class="topbar-filter-seg" role="group" aria-label="Customer status">
+        <a href="{{ url_for('customers.index', search=search, filter='all') }}" class="topbar-seg-btn {% if filter == 'all' %}is-active{% endif %}">All</a>
+        <a href="{{ url_for('customers.index', search=search, filter='due') }}" class="topbar-seg-btn {% if filter == 'due' %}is-active{% endif %}">Due</a>
+        <a href="{{ url_for('customers.index', search=search, filter='clear') }}" class="topbar-seg-btn {% if filter == 'clear' %}is-active{% endif %}">Settled</a>
+    </div>
+    {% if search or filter != 'all' %}
+    <a href="{{ url_for('customers.index') }}" class="topbar-icon-btn" title="Clear filters" aria-label="Clear filters">
+        <i class="bi bi-x-lg"></i>
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
@@ -25,41 +49,6 @@
 {% include "partials/page_line_chart.html" %}
 {% endwith %}
 {% endif %}
-
-<!-- Search & Filtering -->
-<div class="card card-premium filter-bar mb-4">
-    <div class="card-body card-body-premium py-3">
-        <form action="{{ url_for('customers.index') }}" method="GET" class="filter-form">
-            <div class="filter-search-row">
-                <div class="input-group filter-search-input">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" class="form-control form-control-custom" name="search" placeholder="Search name, phone, book no..." value="{{ search }}" aria-label="Search customers">
-                </div>
-                <div class="filter-actions">
-                    <button type="submit" class="btn btn-primary-custom" title="Apply Filter">
-                        <i class="bi bi-funnel d-md-none"></i><span class="btn-label">Apply Filter</span>
-                    </button>
-                    {% if search or filter != 'all' %}
-                    <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary border-0 filter-clear-btn" title="Clear Filters">
-                        <i class="bi bi-x-circle fs-5"></i>
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="segmented-control filter-segments" role="group">
-                <a href="{{ url_for('customers.index', search=search, filter='all') }}" class="btn {% if filter == 'all' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="All Customers">
-                    <span class="seg-label-full">All Customers</span><span class="seg-label-short">All</span>
-                </a>
-                <a href="{{ url_for('customers.index', search=search, filter='due') }}" class="btn {% if filter == 'due' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="Outstanding Dues">
-                    <span class="seg-label-full">Outstanding Dues</span><span class="seg-label-short">Due</span>
-                </a>
-                <a href="{{ url_for('customers.index', search=search, filter='clear') }}" class="btn {% if filter == 'clear' %}btn-secondary{% else %}btn-outline-secondary border-0{% endif %}" title="Settled Accounts">
-                    <span class="seg-label-full">Settled Accounts</span><span class="seg-label-short">Settled</span>
-                </a>
-            </div>
-        </form>
-    </div>
-</div>
 
 <!-- Customer List -->
 <div class="card card-premium">
