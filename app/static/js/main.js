@@ -1,9 +1,12 @@
-/* Global motion loader — orbit car / nozzle / card for CRUD & data loads */
+/* Global motion loader — orbit + nozzle fill; never hang across page loads */
 (function initOfLoader() {
-    let depth = 0;
+    let busy = 0;
+    let navActive = false;
     let shownAt = 0;
     let hideTimer = null;
-    const MIN_MS = 380;
+    let safetyTimer = null;
+    const MIN_MS = 280;
+    const MAX_MS = 10000;
     const NAV_KEY = 'ofNavLoad';
     const NAV_MSG = 'ofNavMsg';
 
@@ -26,6 +29,10 @@
         document.documentElement.classList.toggle('of-loading', on);
     }
 
+    function isVisible() {
+        return busy > 0 || navActive;
+    }
+
     function markNav(message) {
         try {
             sessionStorage.setItem(NAV_KEY, '1');
@@ -33,45 +40,79 @@
         } catch (e) {}
     }
 
-    function clearNav() {
+    function clearNavFlag() {
         try {
             sessionStorage.removeItem(NAV_KEY);
             sessionStorage.removeItem(NAV_MSG);
         } catch (e) {}
     }
 
+    function armSafety() {
+        if (safetyTimer) clearTimeout(safetyTimer);
+        safetyTimer = setTimeout(() => {
+            safetyTimer = null;
+            busy = 0;
+            navActive = false;
+            clearNavFlag();
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = null;
+            paint(false);
+        }, MAX_MS);
+    }
+
+    function reveal(message, sub) {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
+        shownAt = Date.now();
+        setCopy(message || 'Loading…', sub);
+        paint(true);
+        armSafety();
+    }
+
+    function maybeHide() {
+        if (isVisible()) return;
+        const wait = Math.max(0, MIN_MS - (Date.now() - shownAt));
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+            hideTimer = null;
+            if (!isVisible()) {
+                clearNavFlag();
+                if (safetyTimer) {
+                    clearTimeout(safetyTimer);
+                    safetyTimer = null;
+                }
+                paint(false);
+            }
+        }, wait);
+    }
+
     window.ofLoader = {
         show(message, sub) {
-            if (hideTimer) {
-                clearTimeout(hideTimer);
-                hideTimer = null;
-            }
-            depth += 1;
-            if (depth === 1) {
-                shownAt = Date.now();
-                setCopy(message || 'Working…', sub);
-                paint(true);
-            } else if (message) {
-                setCopy(message, sub);
-            }
+            busy += 1;
+            reveal(message || 'Working…', sub);
         },
         showNav(message) {
             const msg = message || 'Loading…';
+            navActive = true;
             markNav(msg);
-            this.show(msg);
+            reveal(msg);
         },
         hide(force) {
-            if (force) depth = 0;
-            else depth = Math.max(0, depth - 1);
-            if (depth > 0) return;
-            const wait = Math.max(0, MIN_MS - (Date.now() - shownAt));
-            hideTimer = setTimeout(() => {
+            if (force) {
+                busy = 0;
+                navActive = false;
+                clearNavFlag();
+                if (hideTimer) clearTimeout(hideTimer);
+                if (safetyTimer) clearTimeout(safetyTimer);
                 hideTimer = null;
-                if (depth === 0) {
-                    clearNav();
-                    paint(false);
-                }
-            }, wait);
+                safetyTimer = null;
+                paint(false);
+                return;
+            }
+            busy = Math.max(0, busy - 1);
+            maybeHide();
         },
         wrap(promise, message) {
             this.show(message);
@@ -79,16 +120,15 @@
         },
     };
 
-    // If this page was opened via in-app navigation, loader is already on — sync depth
+    // Resume from previous page navigation
     try {
         if (sessionStorage.getItem(NAV_KEY) === '1') {
-            depth = 1;
-            shownAt = Date.now();
-            paint(true);
+            navActive = true;
+            reveal(sessionStorage.getItem(NAV_MSG) || 'Loading…');
         }
     } catch (e) {}
 
-    // Patch fetch so API / data loads show the loader (opt out: { ofSilent: true })
+    // Patch fetch (opt out: { ofSilent: true })
     const nativeFetch = window.fetch.bind(window);
     window.fetch = function ofFetch(input, init) {
         const opts = init || {};
@@ -112,7 +152,6 @@
         });
     };
 
-    // Full-page navigations (sidebar / links) — persist loader into next page
     document.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -133,24 +172,27 @@
         window.ofLoader.showNav('Loading…');
     }, true);
 
-    // Hide after the new page is interactive (covers bfcache too)
-    function settlePage() {
-        clearNav();
-        depth = 0;
-        if (hideTimer) clearTimeout(hideTimer);
-        // Short beat so content paints under the veil, then lift
-        hideTimer = setTimeout(() => {
-            hideTimer = null;
-            paint(false);
-        }, 180);
+    // End navigation loader once page is ready — do NOT wipe in-flight fetch busy count
+    function settleNav() {
+        navActive = false;
+        clearNavFlag();
+        maybeHide();
+        // Absolute failsafe: never leave loader up after page is ready
+        setTimeout(() => {
+            if (!isVisible()) paint(false);
+            else if (navActive === false && busy === 0) paint(false);
+        }, 400);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', settlePage, { once: true });
-    } else {
-        settlePage();
-    }
-    window.addEventListener('pageshow', settlePage);
+    window.addEventListener('load', settleNav, { once: true });
+    window.addEventListener('pageshow', (ev) => {
+        // Back-forward cache: always clear
+        if (ev.persisted) {
+            window.ofLoader.hide(true);
+            return;
+        }
+        settleNav();
+    });
 })();
 
 /* Modern floating toasts */
