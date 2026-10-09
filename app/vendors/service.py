@@ -87,13 +87,20 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
     """
     After purchase is linked:
 
-    unpaid → leave payable increased by cost × liters/qty
-    paid   → record VendorPayment for that same batch total (payable reduced)
-    Always rebuild payable from sources of truth.
+    unpaid → payment_status=unpaid, payable increases by batch total
+    paid   → payment_status=paid + one linked VendorPayment (ledger shows ONE paid row)
+    Never leave a paid batch as unpaid with a separate “auto” payment line.
     """
     status = normalize_purchase_payment_status(payment_status)
     purchase_log.payment_status = status
     payment = None
+
+    # Drop any prior auto-payments for this log so we never get unpaid + paid duplicates
+    if getattr(purchase_log, 'id', None):
+        for old in find_auto_payments_for_log(purchase_log):
+            db.session.delete(old)
+        db.session.flush()
+
     if status == 'paid' and vendor:
         total = purchase_log_total(purchase_log)
         if total > 0:
@@ -101,14 +108,12 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
             payment = VendorPayment(
                 vendor_id=vendor.id,
                 amount_paid=total,
-                payment_date=payment_date,
+                payment_date=payment_date or purchase_log.entry_date,
                 method='Cash',
                 note=f'{AUTO_PAY_NOTE_PREFIX} {purchase_log.item_name} (batch PKR {total:,.2f})',
                 purchase_log_id=purchase_log.id,
             )
             db.session.add(payment)
-    elif status == 'unpaid':
-        purchase_log.payment_status = 'unpaid'
 
     if vendor:
         db.session.flush()

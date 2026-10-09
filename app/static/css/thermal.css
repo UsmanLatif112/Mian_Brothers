@@ -117,3 +117,20 @@
     margin-top: 8px;
     font-size: 10px;
 }
+
+/* Row receipt: hide period/statement slips while printing a single row */
+@media print {
+    body.of-print-receipt .thermal-slip:not(#ofReceiptSlip) {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    body.of-print-receipt #ofReceiptSlip,
+    body.of-print-receipt #ofReceiptSlip * {
+        visibility: visible !important;
+    }
+
+    body.of-print-receipt #ofReceiptSlip {
+        display: block !important;
+    }
+}

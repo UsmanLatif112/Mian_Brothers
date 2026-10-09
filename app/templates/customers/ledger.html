@@ -153,8 +153,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         </td>
                         <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
                         <td>
-                            {% if entry.can_edit %}
                             <div class="btn-group gap-1">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary border-0"
+                                    title="Print receipt"
+                                    data-of-receipt
+                                    data-receipt-sub="Customer Receipt"
+                                    data-receipt-title="Ledger"
+                                    data-receipt-ref="{{ entry.ref_id }}"
+                                    data-receipt-date="{{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '—' }}"
+                                    data-receipt-party-label="Customer"
+                                    data-receipt-party="{{ customer.name }}"
+                                    data-receipt-desc="{{ entry.desc }}"
+                                    data-receipt-status="{{ (entry.payment_status or entry.pay_type or '—')|upper }}"
+                                    data-receipt-amount="{% if entry.debit > 0 %}{{ entry.debit | money }}{% else %}{{ entry.credit | money }}{% endif %}"
+                                    data-receipt-total="{% if entry.debit > 0 %}{{ entry.debit | money }}{% else %}{{ entry.credit | money }}{% endif %}"
+                                    data-receipt-paid="{% if entry.credit > 0 %}{{ entry.credit | money }}{% else %}0.00{% endif %}"
+                                    data-receipt-due="{{ entry.running_balance | money }}">
+                                    <i class="bi bi-printer"></i>
+                                </button>
+                                {% if entry.can_edit %}
                                 <button
                                     type="button"
                                     class="btn btn-sm btn-outline-secondary border-0 edit-ledger-btn"
@@ -185,10 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
+                                {% endif %}
                             </div>
-                            {% else %}
-                            <span class="small text-muted-custom" title="Legacy rows cannot be edited here">—</span>
-                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

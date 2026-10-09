@@ -189,6 +189,7 @@ def index():
                 sale_price=sale_val,
                 liters=liters_val,
                 fuel_type_id=fuel_type.id,
+                payment_status=payment_status,
                 entry_date=entry_dt,
                 added_by=current_user.id
             )
@@ -274,6 +275,7 @@ def index():
                 sale_price=sale_val,
                 quantity=None,
                 liters=liters_val,
+                payment_status=payment_status,
                 entry_date=entry_dt,
                 added_by=current_user.id,
             )
@@ -378,6 +380,7 @@ def index():
                 sale_price=sale_val,
                 quantity=None,
                 liters=liters_val,
+                payment_status=payment_status,
                 entry_date=entry_dt,
                 added_by=current_user.id,
             )
@@ -455,6 +458,7 @@ def index():
             sale_price=sale_val,
             quantity=qty_val,
             liters=liters_val,
+            payment_status=payment_status,
             entry_date=entry_dt,
             added_by=current_user.id
         )

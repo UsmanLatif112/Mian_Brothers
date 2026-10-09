@@ -331,6 +331,24 @@
                                 <td class="text-end">
                                     <div class="table-actions btn-group gap-1 justify-content-end">
                                         <button type="button"
+                                                class="btn btn-sm btn-outline-secondary border-0"
+                                                data-of-receipt
+                                                data-receipt-sub="Purchase Receipt"
+                                                data-receipt-title="Purchase"
+                                                data-receipt-ref="Purchase #{{ log.id }}"
+                                                data-receipt-date="{{ log.entry_date.strftime('%Y-%m-%d %H:%M') if log.entry_date else today }}"
+                                                data-receipt-party-label="Vendor"
+                                                data-receipt-party="{{ log.vendor or '—' }}"
+                                                data-receipt-desc="{{ log.item_name }}{% if log.company %} ({{ log.company }}){% endif %} · {{ log.category }}"
+                                                data-receipt-status="{{ pay_status|upper }}"
+                                                data-receipt-amount="{{ batch | money }}"
+                                                data-receipt-total="{{ batch | money }}"
+                                                data-receipt-paid="{% if pay_status == 'paid' %}{{ batch | money }}{% else %}0.00{% endif %}"
+                                                data-receipt-due="{% if pay_status == 'paid' %}0.00{% else %}{{ batch | money }}{% endif %}"
+                                                title="Print receipt">
+                                            <i class="bi bi-printer"></i>
+                                        </button>
+                                        <button type="button"
                                                 class="btn btn-sm btn-outline-secondary border-0 edit-purchase-log-btn"
                                                 data-edit-url="{{ url_for('inventory.edit_purchase_log', log_id=log.id) }}"
                                                 data-category="{{ log.category }}"
@@ -1070,6 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     let inventoryModalMode = 'add';
     let pendingEditData = null;
+    let modalLoadSeq = 0;
 
     const setSelectValue = (el, value) => {
         if (!el) return;
@@ -1084,20 +1103,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const setNamedSelect = (selectId, otherInputId, value) => {
         const sel = document.getElementById(selectId);
-        if (!sel || !value) return;
-        const exists = Array.from(sel.options).some((o) => o.value === value);
+        if (!sel) return;
+        const v = (value == null ? '' : String(value)).trim();
+        if (!v) {
+            sel.value = '';
+            const otherEmpty = document.getElementById(otherInputId);
+            if (otherEmpty) otherEmpty.value = '';
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+        }
+        const exists = Array.from(sel.options).some((o) => o.value === v);
         if (exists) {
-            sel.value = value;
+            sel.value = v;
+            const otherClear = document.getElementById(otherInputId);
+            if (otherClear) otherClear.value = '';
         } else if (Array.from(sel.options).some((o) => o.value === 'Other')) {
             sel.value = 'Other';
             const other = document.getElementById(otherInputId);
-            if (other) other.value = value;
+            if (other) other.value = v;
         } else {
             const o = document.createElement('option');
-            o.value = value;
-            o.textContent = value;
+            o.value = v;
+            o.textContent = v;
             sel.appendChild(o);
-            sel.value = value;
+            sel.value = v;
         }
         sel.dispatchEvent(new Event('change', { bubbles: true }));
     };
@@ -1110,49 +1139,116 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const resetToAddMode = async () => {
-        inventoryModalMode = 'add';
-        pendingEditData = null;
-        form.action = form.dataset.createAction || form.getAttribute('action');
-        form.reset();
+    const clearCategorySpecificFields = () => {
+        [
+            'ft_mobile_company', 'mobile_company', 'mobile_type',
+            'filter_company', 'filter_type', 'custom_company', 'custom_type',
+        ].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        [
+            'ft_mobile_company_other', 'mobile_company_other', 'mobile_type_other',
+            'filter_company_other', 'filter_type_other',
+            'custom_company_other', 'custom_type_other',
+            'custom_item_name', 'item_name',
+        ].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        setSelectValue(document.getElementById('fuel_type_id'), '');
+        otherPairs.forEach(({ wrap, input }) => {
+            const wrapEl = document.getElementById(wrap);
+            const inputEl = document.getElementById(input);
+            if (wrapEl) wrapEl.classList.add('d-none');
+            if (inputEl) {
+                inputEl.value = '';
+                inputEl.required = false;
+            }
+        });
+    };
+
+    const clearInventoryFormFields = () => {
+        setProductFieldsLocked(false);
         categorySelect.value = '';
         companyHidden.value = '';
         typeHidden.value = '';
-        setSelectValue(document.getElementById('fuel_type_id'), '');
+        clearCategorySpecificFields();
         setSelectValue(document.getElementById('vendor_id'), '');
         const paySel = document.getElementById('payment_status');
         if (paySel) paySel.value = 'unpaid';
         const dateInput = document.getElementById('entry_date');
-        if (dateInput && !dateInput.value) {
-            dateInput.value = dateInput.getAttribute('value') || '';
+        if (dateInput) {
+            dateInput.value = dateInput.getAttribute('value') || dateInput.defaultValue || '';
         }
-        setProductFieldsLocked(false);
+        ['cost_price', 'sale_price', 'liters', 'quantity'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        syncVisibleFields();
+        updateBatchTotal();
+    };
+
+    const ensureCategoryOption = (key, label) => {
+        if (!key) return;
+        let opt = categorySelect.querySelector(`option[value="${CSS.escape(key)}"]`);
+        if (opt) return;
+        opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = label || key;
+        categorySelect.appendChild(opt);
+    };
+
+    const resetToAddMode = async () => {
+        const seq = ++modalLoadSeq;
+        inventoryModalMode = 'add';
+        pendingEditData = null;
+        form.action = form.dataset.createAction || form.getAttribute('action');
         if (modalTitle) modalTitle.textContent = 'Add Inventory (Purchase Batch)';
         if (submitBtn) {
             submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
         }
+        clearInventoryFormFields();
         await refreshCategoriesFromApi();
+        if (seq !== modalLoadSeq) return;
+        clearInventoryFormFields();
+        await refreshFuelDropdown();
+        if (seq !== modalLoadSeq) return;
         syncVisibleFields();
         updateBatchTotal();
-        await refreshFuelDropdown();
     };
 
     const applyEditData = async (d) => {
-        form.action = d.editUrl;
+        if (!d) return;
+        const seq = ++modalLoadSeq;
+        inventoryModalMode = 'edit';
+        pendingEditData = null;
+
+        form.action = d.editUrl || form.action;
         if (modalTitle) modalTitle.textContent = 'Edit Purchase Batch';
         if (submitBtn) {
             submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Changes';
         }
 
-        await refreshCategoriesFromApi();
-        await refreshFuelDropdown();
+        // Always unlock + wipe previous row before cascading this row
+        setProductFieldsLocked(false);
+        clearInventoryFormFields();
 
-        categorySelect.value = d.category || '';
+        await refreshCategoriesFromApi();
+        if (seq !== modalLoadSeq) return;
+        await refreshFuelDropdown();
+        if (seq !== modalLoadSeq) return;
+
+        const cat = (d.category || '').trim();
+        ensureCategoryOption(cat, cat);
+        categorySelect.value = cat;
+        // Force cascade for this row only
+        clearCategorySpecificFields();
         syncVisibleFields();
 
-        const cat = d.category || '';
         if (cat === 'fuel') {
             setSelectValue(document.getElementById('fuel_type_id'), d.fuelTypeId || '');
+            fillFuelSalePrice();
         } else if (cat === 'ft_mobile') {
             setNamedSelect('ft_mobile_company', 'ft_mobile_company_other', d.company);
         } else if (cat === 'mobile') {
@@ -1171,26 +1267,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (customName) customName.value = d.item || '';
         }
 
+        if (seq !== modalLoadSeq) return;
+
         companyHidden.value = d.company || '';
         typeHidden.value = d.itemType || '';
         setSelectValue(document.getElementById('vendor_id'), d.vendorId || '');
         const paySel = document.getElementById('payment_status');
         if (paySel) paySel.value = d.paymentStatus === 'paid' ? 'paid' : 'unpaid';
         const dateInput = document.getElementById('entry_date');
-        if (dateInput) dateInput.value = d.entryDate || dateInput.value;
+        if (dateInput) dateInput.value = d.entryDate || dateInput.getAttribute('value') || '';
         const costEl = document.getElementById('cost_price');
         const saleEl = document.getElementById('sale_price');
         const litersEl = document.getElementById('liters');
         const qtyEl = document.getElementById('quantity');
-        if (costEl) costEl.value = d.cost || '';
-        if (saleEl) saleEl.value = d.sale || '';
-        if (litersEl) litersEl.value = d.liters || '';
-        if (qtyEl) qtyEl.value = d.quantity || '';
+        if (costEl) costEl.value = d.cost !== '' && d.cost != null ? d.cost : '';
+        if (saleEl) saleEl.value = d.sale !== '' && d.sale != null ? d.sale : '';
+        if (litersEl) litersEl.value = d.liters !== '' && d.liters != null ? d.liters : '';
+        if (qtyEl) qtyEl.value = d.quantity !== '' && d.quantity != null ? d.quantity : '';
 
         syncOtherNameFields();
         updateBatchTotal();
         setProductFieldsLocked(true);
     };
+
+    const readPurchaseEditPayload = (btn) => ({
+        editUrl: btn.getAttribute('data-edit-url') || '',
+        category: btn.getAttribute('data-category') || '',
+        item: btn.getAttribute('data-item') || '',
+        company: btn.getAttribute('data-company') || '',
+        itemType: btn.getAttribute('data-item-type') || '',
+        fuelTypeId: btn.getAttribute('data-fuel-type-id') || '',
+        vendorId: btn.getAttribute('data-vendor-id') || '',
+        cost: btn.getAttribute('data-cost') || '',
+        sale: btn.getAttribute('data-sale') || '',
+        liters: btn.getAttribute('data-liters') || '',
+        quantity: btn.getAttribute('data-quantity') || '',
+        paymentStatus: btn.getAttribute('data-payment-status') || 'unpaid',
+        entryDate: btn.getAttribute('data-entry-date') || '',
+    });
 
     categorySelect.addEventListener('change', syncVisibleFields);
     otherPairs.forEach(({ select }) => {
@@ -1210,7 +1324,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modalEl.addEventListener('show.bs.modal', () => {
         if (inventoryModalMode === 'edit' && pendingEditData) return;
-        // Fire-and-forget reset; options finish loading on shown
         resetToAddMode();
     });
 
@@ -1221,12 +1334,15 @@ document.addEventListener('DOMContentLoaded', () => {
             await applyEditData(data);
             return;
         }
-        // Ensure Filter/Mobile company+type lists are filled after categories API
-        await refreshCategoriesFromApi();
-        syncVisibleFields();
+        if (inventoryModalMode === 'add') {
+            await refreshCategoriesFromApi();
+            if (inventoryModalMode !== 'add') return;
+            syncVisibleFields();
+        }
     });
 
     modalEl.addEventListener('hidden.bs.modal', () => {
+        modalLoadSeq += 1; // cancel any in-flight apply/reset
         inventoryModalMode = 'add';
         pendingEditData = null;
         setProductFieldsLocked(false);
@@ -1235,9 +1351,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (submitBtn) {
             submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
         }
+        clearInventoryFormFields();
     });
 
     document.getElementById('open-add-inventory-btn')?.addEventListener('click', () => {
+        modalLoadSeq += 1;
         inventoryModalMode = 'add';
         pendingEditData = null;
     });
@@ -1378,23 +1496,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.edit-purchase-log-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
+            const payload = readPurchaseEditPayload(btn);
             inventoryModalMode = 'edit';
-            pendingEditData = {
-                editUrl: btn.dataset.editUrl || '',
-                category: btn.dataset.category || '',
-                item: btn.dataset.item || '',
-                company: btn.dataset.company || '',
-                itemType: btn.dataset.itemType || '',
-                fuelTypeId: btn.dataset.fuelTypeId || '',
-                vendorId: btn.dataset.vendorId || '',
-                cost: btn.dataset.cost || '',
-                sale: btn.dataset.sale || '',
-                liters: btn.dataset.liters || '',
-                quantity: btn.dataset.quantity || '',
-                paymentStatus: btn.dataset.paymentStatus || 'unpaid',
-                entryDate: btn.dataset.entryDate || '',
-            };
+            pendingEditData = payload;
             const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            // Modal already open (switching rows): re-apply immediately, no stale fields
+            if (modalEl.classList.contains('show')) {
+                pendingEditData = null;
+                applyEditData(payload);
+                return;
+            }
             modal.show();
         });
     });

@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shell.css') }}?v=7">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/journal.css') }}?v=3">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=5">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=2">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=13">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=6">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
@@ -301,11 +301,39 @@
 
 {% block modals %}{% endblock %}
 
+    {# Single-row thermal receipt (filled by ofPrintReceipt) #}
+    <aside class="thermal-slip" id="ofReceiptSlip" aria-hidden="true">
+        <div class="thermal-slip-head">
+            <div class="thermal-brand">OctaneFlow</div>
+            <div class="thermal-sub" id="ofReceiptSub">Receipt</div>
+        </div>
+        <hr class="thermal-rule">
+        <div class="thermal-meta"><span>Ref</span><span id="ofReceiptRef">—</span></div>
+        <div class="thermal-meta"><span>Date</span><span id="ofReceiptDate">—</span></div>
+        <div class="thermal-meta" id="ofReceiptPartyRow"><span id="ofReceiptPartyLabel">Party</span><span id="ofReceiptParty">—</span></div>
+        <hr class="thermal-rule">
+        <div class="thermal-title" id="ofReceiptTitle">Receipt</div>
+        <div class="thermal-lines">
+            <div class="thermal-line">
+                <div class="thermal-line-desc" id="ofReceiptDesc">—</div>
+                <div class="thermal-row"><span id="ofReceiptStatus">—</span><span id="ofReceiptAmount">—</span></div>
+            </div>
+        </div>
+        <hr class="thermal-rule">
+        <div class="thermal-totals">
+            <div class="thermal-row"><span>Total</span><span id="ofReceiptTotal">—</span></div>
+            <div class="thermal-row" id="ofReceiptPaidRow"><span>Paid</span><span id="ofReceiptPaid">—</span></div>
+            <div class="thermal-row" id="ofReceiptDueRow"><span>Balance</span><span id="ofReceiptDue">—</span></div>
+        </div>
+        <hr class="thermal-rule">
+        <div class="thermal-foot">Thank you · OctaneFlow</div>
+    </aside>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=23"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=24"></script>
 
     {% block scripts %}{% endblock %}
 </body>

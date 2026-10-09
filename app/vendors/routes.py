@@ -382,10 +382,12 @@ def ledger(vendor_id):
         desc = _purchase_desc(log)
         status = purchase_log_payment_status(log)
         auto_pay = _match_auto_payment(log, amount) if amount > 0 else None
-        if auto_pay:
-            used_payment_ids.add(auto_pay.id)
+        # Paid at purchase time = ONE statement line (never unpaid row + separate auto-pay)
+        if status == 'paid' or auto_pay:
+            if auto_pay:
+                used_payment_ids.add(auto_pay.id)
             entry = {
-                'date': log.entry_date or auto_pay.payment_date or datetime.min,
+                'date': (auto_pay.payment_date if auto_pay else None) or log.entry_date or datetime.min,
                 'type': 'purchase',
                 'desc': desc,
                 'debit': amount,
@@ -393,21 +395,11 @@ def ledger(vendor_id):
                 'ref_id': f"Purchase #{log.id}",
                 'pay_type': 'Cash',
                 'payment_status': 'paid',
+                'purchase_log_id': log.id,
             }
-            entry.update(_pay_meta(auto_pay))
+            if auto_pay:
+                entry.update(_pay_meta(auto_pay))
             ledger_entries.append(entry)
-        elif status == 'paid':
-            # Column says paid but auto payment missing — still show as paid settle
-            ledger_entries.append({
-                'date': log.entry_date or datetime.min,
-                'type': 'purchase',
-                'desc': desc,
-                'debit': amount,
-                'credit': amount,
-                'ref_id': f"Purchase #{log.id}",
-                'pay_type': 'Cash',
-                'payment_status': 'paid',
-            })
         else:
             ledger_entries.append({
                 'date': log.entry_date or datetime.min,
@@ -418,10 +410,17 @@ def ledger(vendor_id):
                 'ref_id': f"Purchase #{log.id}",
                 'pay_type': log.category,
                 'payment_status': 'unpaid',
+                'purchase_log_id': log.id,
             })
 
     for pay in payments:
         if pay.id in used_payment_ids:
+            continue
+        # Never list inventory auto-settle as its own row (would look like unpaid then paid)
+        if getattr(pay, 'purchase_log_id', None):
+            continue
+        note = (pay.note or '').strip()
+        if note.startswith(AUTO_PAY_NOTE):
             continue
         entry = {
             'date': pay.payment_date or datetime.min,

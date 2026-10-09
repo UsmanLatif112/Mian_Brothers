@@ -1155,3 +1155,64 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fuelSelect) fuelSelect.addEventListener('change', updateCalculations);
     }
 });
+
+/* Per-row thermal receipt print */
+(function initOfReceiptPrint() {
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value == null || value === '' ? '—' : String(value);
+    }
+
+    function toggleRow(id, show) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = show ? '' : 'none';
+    }
+
+    window.ofPrintReceipt = function ofPrintReceipt(data) {
+        const d = data || {};
+        setText('ofReceiptSub', d.subtitle || 'Receipt');
+        setText('ofReceiptTitle', d.title || 'Receipt');
+        setText('ofReceiptRef', d.ref || '—');
+        setText('ofReceiptDate', d.date || '—');
+        setText('ofReceiptPartyLabel', d.partyLabel || 'Party');
+        setText('ofReceiptParty', d.party || '—');
+        setText('ofReceiptDesc', d.desc || '—');
+        setText('ofReceiptStatus', d.status || '—');
+        setText('ofReceiptAmount', d.amount || '—');
+        setText('ofReceiptTotal', d.total || d.amount || '—');
+        setText('ofReceiptPaid', d.paid || '—');
+        setText('ofReceiptDue', d.due || '—');
+        toggleRow('ofReceiptPartyRow', !!(d.party || d.partyLabel));
+        toggleRow('ofReceiptPaidRow', d.paid != null && d.paid !== '');
+        toggleRow('ofReceiptDueRow', d.due != null && d.due !== '');
+
+        document.body.classList.add('of-print-receipt');
+        const cleanup = () => {
+            document.body.classList.remove('of-print-receipt');
+            window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        window.print();
+        setTimeout(cleanup, 1000);
+    };
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('[data-of-receipt]');
+        if (!btn) return;
+        e.preventDefault();
+        window.ofPrintReceipt({
+            subtitle: btn.getAttribute('data-receipt-sub') || 'Receipt',
+            title: btn.getAttribute('data-receipt-title') || 'Receipt',
+            ref: btn.getAttribute('data-receipt-ref') || '',
+            date: btn.getAttribute('data-receipt-date') || '',
+            partyLabel: btn.getAttribute('data-receipt-party-label') || 'Party',
+            party: btn.getAttribute('data-receipt-party') || '',
+            desc: btn.getAttribute('data-receipt-desc') || '',
+            status: btn.getAttribute('data-receipt-status') || '',
+            amount: btn.getAttribute('data-receipt-amount') || '',
+            total: btn.getAttribute('data-receipt-total') || '',
+            paid: btn.getAttribute('data-receipt-paid'),
+            due: btn.getAttribute('data-receipt-due'),
+        });
+    });
+})();
