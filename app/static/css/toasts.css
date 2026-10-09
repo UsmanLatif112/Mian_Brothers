@@ -1,0 +1,184 @@
+/* Modern floating toasts — replaces inline flash alerts */
+
+.of-toast-host {
+    position: fixed;
+    top: max(0.85rem, env(safe-area-inset-top));
+    right: max(0.85rem, env(safe-area-inset-right));
+    z-index: 21000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    width: min(360px, calc(100vw - 1.5rem));
+    pointer-events: none;
+}
+
+.of-toast {
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.75rem;
+    align-items: start;
+    padding: 0.85rem 0.9rem;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--card-bg, #fff) 94%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color, #e2e8f0) 85%, transparent);
+    box-shadow:
+        0 10px 28px rgba(15, 23, 42, 0.12),
+        0 1px 0 rgba(255, 255, 255, 0.4) inset;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--text-primary, #0f172a);
+    animation: ofToastIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+    overflow: hidden;
+}
+
+.of-toast::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-blue, #0d9488);
+}
+
+.of-toast {
+    position: relative;
+}
+
+.of-toast-success::before { background: #059669; }
+.of-toast-danger::before { background: #e11d48; }
+.of-toast-warning::before { background: #d97706; }
+.of-toast-info::before,
+.of-toast-message::before { background: #0284c7; }
+
+.of-toast-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.of-toast-success .of-toast-icon {
+    background: rgba(5, 150, 105, 0.12);
+    color: #059669;
+}
+
+.of-toast-danger .of-toast-icon {
+    background: rgba(225, 29, 72, 0.12);
+    color: #e11d48;
+}
+
+.of-toast-warning .of-toast-icon {
+    background: rgba(217, 119, 6, 0.14);
+    color: #d97706;
+}
+
+.of-toast-info .of-toast-icon,
+.of-toast-message .of-toast-icon {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0284c7;
+}
+
+.of-toast-copy {
+    min-width: 0;
+    padding-top: 0.1rem;
+}
+
+.of-toast-title {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted, #64748b);
+}
+
+.of-toast-text {
+    margin: 0.15rem 0 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    font-weight: 550;
+}
+
+.of-toast-close {
+    border: 0;
+    background: transparent;
+    color: var(--text-muted, #64748b);
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.of-toast-close:hover {
+    background: var(--surface-tint, rgba(13, 148, 136, 0.1));
+    color: var(--text-primary, #0f172a);
+}
+
+.of-toast.is-leaving {
+    animation: ofToastOut 0.28s ease forwards;
+}
+
+.of-toast-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: color-mix(in srgb, var(--accent-blue, #0d9488) 35%, transparent);
+    transform-origin: left center;
+    animation: ofToastProgress linear forwards;
+}
+
+.of-toast-success .of-toast-progress { background: rgba(5, 150, 105, 0.45); }
+.of-toast-danger .of-toast-progress { background: rgba(225, 29, 72, 0.45); }
+.of-toast-warning .of-toast-progress { background: rgba(217, 119, 6, 0.45); }
+
+@keyframes ofToastIn {
+    from {
+        opacity: 0;
+        transform: translate3d(18px, -8px, 0) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+}
+
+@keyframes ofToastOut {
+    to {
+        opacity: 0;
+        transform: translate3d(16px, -6px, 0) scale(0.96);
+    }
+}
+
+@keyframes ofToastProgress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+[data-theme="dark"] .of-toast {
+    background: color-mix(in srgb, var(--card-bg, #0f172a) 92%, #000);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+}
+
+/* Hide legacy inline flash stack if any remain */
+.flash-stack {
+    display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .of-toast,
+    .of-toast.is-leaving,
+    .of-toast-progress {
+        animation: none !important;
+    }
+}

@@ -17,8 +17,73 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=5">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
+    <script>
+    /* Resume loader across full page navigations (no blank white wait) */
+    (function () {
+        try {
+            if (sessionStorage.getItem('ofNavLoad') === '1') {
+                document.documentElement.classList.add('of-loading');
+            }
+        } catch (e) {}
+    })();
+    </script>
 </head>
 <body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
+
+    {# Global CRUD / data-load motion loader #}
+    <div class="of-loader" id="ofLoader" aria-hidden="true" role="status">
+        <div class="of-loader-veil"></div>
+        <div class="of-loader-panel">
+            <div class="of-loader-stage" aria-hidden="true">
+                <div class="of-loader-orbit"></div>
+                <div class="of-loader-arm">
+                    <div class="of-loader-car">
+                        <svg viewBox="0 0 28 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="3" y="5" width="20" height="6" rx="2" fill="#0f766e"/>
+                            <path d="M8 5 L11 2 H17 L20 5" fill="#14b8a6"/>
+                            <circle cx="8.5" cy="11" r="2" fill="#1e293b"/>
+                            <circle cx="19.5" cy="11" r="2" fill="#1e293b"/>
+                            <rect x="12" y="3.2" width="5" height="2.2" rx="0.6" fill="#ccfbf1"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="of-loader-core">
+                    <div class="of-loader-pump">
+                        <div class="of-loader-tank">
+                            <div class="of-loader-fuel"></div>
+                        </div>
+                        <div class="of-loader-nozzle">
+                            <div class="of-loader-hose"></div>
+                            <div class="of-loader-nozzle-body"></div>
+                            <div class="of-loader-drip"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="of-loader-card-track">
+                    <div class="of-loader-card"></div>
+                </div>
+            </div>
+            <p class="of-loader-label" id="ofLoaderLabel">Working…</p>
+            <p class="of-loader-sub" id="ofLoaderSub">OctaneFlow</p>
+        </div>
+    </div>
+    <script>
+    (function () {
+        try {
+            if (sessionStorage.getItem('ofNavLoad') === '1') {
+                var node = document.getElementById('ofLoader');
+                if (node) {
+                    node.classList.add('is-on');
+                    node.setAttribute('aria-hidden', 'false');
+                    var label = document.getElementById('ofLoaderLabel');
+                    if (label) label.textContent = sessionStorage.getItem('ofNavMsg') || 'Loading…';
+                }
+            }
+        } catch (e) {}
+    })();
+    </script>
 
     {% if current_user.is_authenticated %}
     <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
@@ -148,20 +213,6 @@
     <div class="container-fluid app-shell app-main py-3 py-md-4">
     {% endif %}
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    <div class="flash-stack mb-3">
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category if category != 'danger' else 'danger' }} alert-dismissible fade show alert-app border-0" role="alert">
-                                <i class="bi {% if category == 'success' %}bi-check-circle-fill{% elif category == 'danger' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endwith %}
-
             <main class="animate-fade-in">
                 {% block content %}{% endblock %}
             </main>
@@ -172,6 +223,35 @@
     {% else %}
     </div>
     {% endif %}
+
+    {# Modern floating toasts (flash messages) #}
+    <div class="of-toast-host" id="ofToastHost" aria-live="polite" aria-relevant="additions">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                {% set kind = category if category in ['success', 'danger', 'warning', 'info'] else 'info' %}
+                <div class="of-toast of-toast-{{ kind }}" data-of-toast data-toast-kind="{{ kind }}" role="status">
+                    <span class="of-toast-icon" aria-hidden="true">
+                        <i class="bi {% if kind == 'success' %}bi-check-lg{% elif kind == 'danger' %}bi-exclamation-lg{% elif kind == 'warning' %}bi-exclamation-triangle{% else %}bi-info-lg{% endif %}"></i>
+                    </span>
+                    <div class="of-toast-copy">
+                        <p class="of-toast-title">
+                            {% if kind == 'success' %}Saved
+                            {% elif kind == 'danger' %}Attention
+                            {% elif kind == 'warning' %}Notice
+                            {% else %}Update{% endif %}
+                        </p>
+                        <p class="of-toast-text">{{ message }}</p>
+                    </div>
+                    <button type="button" class="of-toast-close" data-toast-dismiss aria-label="Dismiss">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                    <span class="of-toast-progress" style="animation-duration: 4.8s;"></span>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
 
         {# Global in-app confirm (replaces browser confirm()) #}
     <div class="modal fade" id="ofConfirmModal" tabindex="-1" aria-labelledby="ofConfirmTitle" aria-hidden="true">
@@ -198,7 +278,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=14"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=16"></script>
 
     {% block scripts %}{% endblock %}
 </body>

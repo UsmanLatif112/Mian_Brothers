@@ -1,3 +1,227 @@
+/* Global motion loader — orbit car / nozzle / card for CRUD & data loads */
+(function initOfLoader() {
+    let depth = 0;
+    let shownAt = 0;
+    let hideTimer = null;
+    const MIN_MS = 380;
+    const NAV_KEY = 'ofNavLoad';
+    const NAV_MSG = 'ofNavMsg';
+
+    function el() {
+        return document.getElementById('ofLoader');
+    }
+
+    function setCopy(message, sub) {
+        const label = document.getElementById('ofLoaderLabel');
+        const subEl = document.getElementById('ofLoaderSub');
+        if (label && message) label.textContent = message;
+        if (subEl) subEl.textContent = sub || 'OctaneFlow';
+    }
+
+    function paint(on) {
+        const node = el();
+        if (!node) return;
+        node.classList.toggle('is-on', on);
+        node.setAttribute('aria-hidden', on ? 'false' : 'true');
+        document.documentElement.classList.toggle('of-loading', on);
+    }
+
+    function markNav(message) {
+        try {
+            sessionStorage.setItem(NAV_KEY, '1');
+            sessionStorage.setItem(NAV_MSG, message || 'Loading…');
+        } catch (e) {}
+    }
+
+    function clearNav() {
+        try {
+            sessionStorage.removeItem(NAV_KEY);
+            sessionStorage.removeItem(NAV_MSG);
+        } catch (e) {}
+    }
+
+    window.ofLoader = {
+        show(message, sub) {
+            if (hideTimer) {
+                clearTimeout(hideTimer);
+                hideTimer = null;
+            }
+            depth += 1;
+            if (depth === 1) {
+                shownAt = Date.now();
+                setCopy(message || 'Working…', sub);
+                paint(true);
+            } else if (message) {
+                setCopy(message, sub);
+            }
+        },
+        showNav(message) {
+            const msg = message || 'Loading…';
+            markNav(msg);
+            this.show(msg);
+        },
+        hide(force) {
+            if (force) depth = 0;
+            else depth = Math.max(0, depth - 1);
+            if (depth > 0) return;
+            const wait = Math.max(0, MIN_MS - (Date.now() - shownAt));
+            hideTimer = setTimeout(() => {
+                hideTimer = null;
+                if (depth === 0) {
+                    clearNav();
+                    paint(false);
+                }
+            }, wait);
+        },
+        wrap(promise, message) {
+            this.show(message);
+            return Promise.resolve(promise).finally(() => this.hide());
+        },
+    };
+
+    // If this page was opened via in-app navigation, loader is already on — sync depth
+    try {
+        if (sessionStorage.getItem(NAV_KEY) === '1') {
+            depth = 1;
+            shownAt = Date.now();
+            paint(true);
+        }
+    } catch (e) {}
+
+    // Patch fetch so API / data loads show the loader (opt out: { ofSilent: true })
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = function ofFetch(input, init) {
+        const opts = init || {};
+        const silent = !!(opts && opts.ofSilent);
+        if (!silent) {
+            const method = String((opts && opts.method) || 'GET').toUpperCase();
+            const msg =
+                method === 'GET' ? 'Loading…'
+                    : method === 'DELETE' ? 'Deleting…'
+                        : 'Saving…';
+            window.ofLoader.show(msg);
+        }
+        const nextInit = opts && opts.ofSilent != null
+            ? Object.assign({}, opts)
+            : opts;
+        if (nextInit && Object.prototype.hasOwnProperty.call(nextInit, 'ofSilent')) {
+            delete nextInit.ofSilent;
+        }
+        return nativeFetch(input, nextInit).finally(() => {
+            if (!silent) window.ofLoader.hide();
+        });
+    };
+
+    // Full-page navigations (sidebar / links) — persist loader into next page
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a[href]');
+        if (!a || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (a.target && a.target !== '_self') return;
+        if (a.hasAttribute('download')) return;
+        if (a.dataset.noLoader === '1') return;
+        const href = a.getAttribute('href') || '';
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+        try {
+            const url = new URL(href, window.location.href);
+            if (url.origin !== window.location.origin) return;
+            if (url.pathname === window.location.pathname
+                && url.search === window.location.search
+                && url.hash) return;
+        } catch (_) {
+            return;
+        }
+        window.ofLoader.showNav('Loading…');
+    }, true);
+
+    // Hide after the new page is interactive (covers bfcache too)
+    function settlePage() {
+        clearNav();
+        depth = 0;
+        if (hideTimer) clearTimeout(hideTimer);
+        // Short beat so content paints under the veil, then lift
+        hideTimer = setTimeout(() => {
+            hideTimer = null;
+            paint(false);
+        }, 180);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', settlePage, { once: true });
+    } else {
+        settlePage();
+    }
+    window.addEventListener('pageshow', settlePage);
+})();
+
+/* Modern floating toasts */
+(function initOfToasts() {
+    const TITLES = {
+        success: 'Saved',
+        danger: 'Attention',
+        warning: 'Notice',
+        info: 'Update',
+    };
+    const ICONS = {
+        success: 'bi-check-lg',
+        danger: 'bi-exclamation-lg',
+        warning: 'bi-exclamation-triangle',
+        info: 'bi-info-lg',
+    };
+
+    function host() {
+        return document.getElementById('ofToastHost');
+    }
+
+    function dismissToast(node) {
+        if (!node || node.classList.contains('is-leaving')) return;
+        node.classList.add('is-leaving');
+        setTimeout(() => node.remove(), 280);
+    }
+
+    function armToast(node) {
+        const closeBtn = node.querySelector('[data-toast-dismiss]');
+        closeBtn?.addEventListener('click', () => dismissToast(node));
+        const ms = Number(node.dataset.toastMs || 4800);
+        const bar = node.querySelector('.of-toast-progress');
+        if (bar) bar.style.animationDuration = `${ms}ms`;
+        setTimeout(() => dismissToast(node), ms);
+    }
+
+    window.ofToast = function ofToast(message, kind, opts) {
+        const k = (kind || 'info');
+        const options = opts || {};
+        const root = host();
+        if (!root) return null;
+        const node = document.createElement('div');
+        node.className = `of-toast of-toast-${k}`;
+        node.setAttribute('role', 'status');
+        node.dataset.ofToast = '1';
+        node.dataset.toastKind = k;
+        if (options.ms) node.dataset.toastMs = String(options.ms);
+        node.innerHTML = `
+            <span class="of-toast-icon" aria-hidden="true"><i class="bi ${ICONS[k] || ICONS.info}"></i></span>
+            <div class="of-toast-copy">
+                <p class="of-toast-title">${options.title || TITLES[k] || TITLES.info}</p>
+                <p class="of-toast-text"></p>
+            </div>
+            <button type="button" class="of-toast-close" data-toast-dismiss aria-label="Dismiss"><i class="bi bi-x-lg"></i></button>
+            <span class="of-toast-progress"></span>`;
+        node.querySelector('.of-toast-text').textContent = message || '';
+        root.appendChild(node);
+        armToast(node);
+        return node;
+    };
+
+    function boot() {
+        document.querySelectorAll('[data-of-toast]').forEach(armToast);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
+    }
+})();
+
 /* In-app confirm modal — replaces window.confirm() */
 (function initOfConfirm() {
     let resolvePromise = null;
@@ -133,8 +357,8 @@
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Surface "Cannot delete…" flashes as an in-app alert popup
-    const blockFlash = document.querySelector('.flash-stack .alert-danger');
+    // Surface "Cannot delete…" toasts as an in-app alert popup
+    const blockFlash = document.querySelector('.of-toast-danger .of-toast-text');
     if (blockFlash && /cannot delete/i.test(blockFlash.textContent || '')) {
         const text = (blockFlash.textContent || '').replace(/\s+/g, ' ').trim();
         window.ofAlert({ title: 'Cannot delete', message: text });
@@ -337,10 +561,30 @@ document.addEventListener('DOMContentLoaded', () => {
     window.unlockSubmitButton = unlockSubmitButton;
     window.unlockFormSubmit = unlockForm;
 
+    function showFormLoader(form) {
+        if (!form || form.dataset.noLoader === '1' || !window.ofLoader) return;
+        const action = (form.getAttribute('action') || '').toLowerCase();
+        const method = (form.getAttribute('method') || 'post').toLowerCase();
+        const actionField = form.querySelector('[name="action"]');
+        const actionVal = actionField ? String(actionField.value || '') : '';
+        let msg = 'Saving…';
+        if (method === 'get' || form.dataset.allowMultiSubmit === '1') msg = 'Loading…';
+        if (/delete|remove/.test(action) || actionVal === 'delete') msg = 'Deleting…';
+        if (form.dataset.busyLabel) msg = form.dataset.busyLabel;
+        // Full POST/GET navigations keep the loader on the next page
+        if (method !== 'dialog') window.ofLoader.showNav(msg);
+        else window.ofLoader.show(msg);
+    }
+
     document.addEventListener('submit', (e) => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement)) return;
-        if (form.dataset.allowMultiSubmit === '1') return;
+
+        // Filter / multi-submit forms: still show loader, allow resubmit
+        if (form.dataset.allowMultiSubmit === '1') {
+            if (!e.defaultPrevented) showFormLoader(form);
+            return;
+        }
         // Already cancelled (e.g. in-app confirm dismissed)
         if (e.defaultPrevented) return;
 
@@ -360,6 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             lockFormButtons(form);
+            showFormLoader(form);
         }, 0);
     });
 
@@ -372,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (this.dataset.submitting === '1') return;
         this.dataset.submitting = '1';
         lockFormButtons(this);
+        showFormLoader(this);
         return nativeFormSubmit.call(this);
     };
 

@@ -275,7 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         start_date: '{{ start_date }}',
         end_date: '{{ end_date }}',
     });
-    fetch(`{{ url_for('dashboard.chart_data') }}?${params}`)
+    fetch(`{{ url_for('dashboard.chart_data') }}?${params}`, { ofSilent: true })
         .then((r) => {
             if (!r.ok) throw new Error('Chart data failed');
             return r.json();

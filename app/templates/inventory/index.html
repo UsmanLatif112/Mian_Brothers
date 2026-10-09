@@ -738,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch(fuelSel.dataset.listUrl, {
                 headers: { Accept: 'application/json' },
+                ofSilent: true,
             });
             const data = await res.json();
             if (!data.ok || !Array.isArray(data.fuels)) return;
@@ -840,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = categorySelect.dataset.categoriesUrl;
         if (!url) return categoriesCache;
         try {
-            const res = await fetch(url, { headers: { Accept: 'application/json' } });
+            const res = await fetch(url, { headers: { Accept: 'application/json' }, ofSilent: true });
             const data = await res.json();
             if (!data.ok || !Array.isArray(data.categories)) return categoriesCache;
             categoriesCache = data.categories;
