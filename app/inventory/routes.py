@@ -757,11 +757,19 @@ def categories():
     fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
     existing_fuel_names = {(ft.name or '').strip().lower() for ft in fuel_types}
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
+    company_count = sum(len(c.get('company_options') or []) for c in cats)
+    type_count = sum(len(c.get('type_options') or []) for c in cats)
     return render_template(
         'inventory/categories.html',
         categories=cats,
         fuel_types=fuel_types,
         needs_default_fuels=needs_default_fuels,
+        stats={
+            'categories': len(cats),
+            'fuels': len(fuel_types),
+            'companies': company_count,
+            'types': type_count,
+        },
     )
 
 

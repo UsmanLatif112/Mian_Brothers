@@ -8,9 +8,6 @@
         <div class="page-header-text">
             <p class="page-eyebrow">Stock</p>
             <h1 class="page-title">Categories</h1>
-            <p class="text-muted-custom mb-0 mt-1" style="font-size:0.95rem;">
-                Manage product groups and their subcategories. These appear in Inventory and Sales dropdowns.
-            </p>
         </div>
         <div class="page-header-actions">
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="Add category">
@@ -20,186 +17,235 @@
     </div>
 </header>
 
-<div class="d-flex flex-column gap-4">
+<div class="row g-3 mb-4 cat-kpi-row">
+    <div class="col-6 col-lg-3">
+        <div class="card card-premium kpi-card h-100">
+            <div class="kpi-label">Categories</div>
+            <div class="kpi-value">{{ stats.categories }}</div>
+            <div class="kpi-hint">Product groups</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-premium kpi-card h-100">
+            <div class="kpi-label">Fuel types</div>
+            <div class="kpi-value">{{ stats.fuels }}</div>
+            <div class="kpi-hint">Petrol, Diesel…</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-premium kpi-card h-100">
+            <div class="kpi-label">Companies</div>
+            <div class="kpi-value">{{ stats.companies }}</div>
+            <div class="kpi-hint">Brands in lists</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card card-premium kpi-card h-100">
+            <div class="kpi-label">Types</div>
+            <div class="kpi-value">{{ stats.types }}</div>
+            <div class="kpi-hint">Grades &amp; subtypes</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 cat-grid">
     {% for cat in categories %}
-    <div class="card card-premium">
-        <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-2">
-            <div>
-                <h2 class="panel-title mb-0">{{ cat.name }}</h2>
-                <p class="panel-subtitle mb-0">
-                    {% if cat.key == 'fuel' %}
-                    Fuel types (Petrol, Diesel…) used in inventory purchases and sales meters
-                    {% elif cat.key == 'mobile' %}
-                    Oil companies and grades for Mobile stock
-                    {% elif cat.key == 'ft_mobile' %}
-                    Companies for FT Mobile oil (liter stock)
-                    {% elif cat.key == 'filter' %}
-                    Filter brands and types
-                    {% elif cat.key == 'other' %}
-                    Free-form shop items — no fixed subcategories
-                    {% elif cat.unit_mode == 'liters' %}
-                    Custom category · stock in liters
-                    {% else %}
-                    Custom category · stock by quantity
-                    {% endif %}
-                </p>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-                {% if cat.is_system %}
-                <span class="badge bg-secondary-subtle text-secondary">System</span>
-                {% else %}
+    {% if cat.key == 'fuel' %}
+        {% set cat_icon = 'bi-fuel-pump' %}
+        {% set cat_tone = 'fuel' %}
+        {% set cat_blurb = 'Fuel types used in inventory purchases and sales meters' %}
+        {% set unit_label = 'Tank · liters' %}
+    {% elif cat.key == 'mobile' %}
+        {% set cat_icon = 'bi-droplet-half' %}
+        {% set cat_tone = 'mobile' %}
+        {% set cat_blurb = 'Oil companies and grades for bottled mobile stock' %}
+        {% set unit_label = 'Quantity' %}
+    {% elif cat.key == 'ft_mobile' %}
+        {% set cat_icon = 'bi-moisture' %}
+        {% set cat_tone = 'ft' %}
+        {% set cat_blurb = 'Companies for FT mobile oil sold by the liter' %}
+        {% set unit_label = 'Liters' %}
+    {% elif cat.key == 'filter' %}
+        {% set cat_icon = 'bi-funnel' %}
+        {% set cat_tone = 'filter' %}
+        {% set cat_blurb = 'Filter brands and replacement types' %}
+        {% set unit_label = 'Quantity' %}
+    {% elif cat.key == 'other' %}
+        {% set cat_icon = 'bi-box' %}
+        {% set cat_tone = 'other' %}
+        {% set cat_blurb = 'Free-form shop items — named when you add inventory' %}
+        {% set unit_label = 'Quantity' %}
+    {% elif cat.unit_mode == 'liters' %}
+        {% set cat_icon = 'bi-grid-3x3-gap' %}
+        {% set cat_tone = 'custom' %}
+        {% set cat_blurb = 'Custom category · stock tracked in liters' %}
+        {% set unit_label = 'Liters' %}
+    {% else %}
+        {% set cat_icon = 'bi-grid-3x3-gap' %}
+        {% set cat_tone = 'custom' %}
+        {% set cat_blurb = 'Custom category · stock by quantity' %}
+        {% set unit_label = 'Quantity' %}
+    {% endif %}
+
+    <div class="col-12 {% if cat.key == 'fuel' %}col-xl-12{% else %}col-xl-6{% endif %}">
+        <article class="card card-premium cat-card cat-tone-{{ cat_tone }} h-100">
+            <div class="cat-card-head">
+                <div class="cat-card-identity">
+                    <span class="cat-card-icon" aria-hidden="true"><i class="bi {{ cat_icon }}"></i></span>
+                    <div class="min-w-0">
+                        <div class="d-flex align-items-center flex-wrap gap-2">
+                            <h2 class="cat-card-title mb-0">{{ cat.name }}</h2>
+                            {% if cat.is_system %}
+                            <span class="badge badge-custom cat-badge-system">System</span>
+                            {% endif %}
+                            <span class="badge badge-custom cat-badge-unit">{{ unit_label }}</span>
+                        </div>
+                        <p class="cat-card-blurb mb-0">{{ cat_blurb }}</p>
+                    </div>
+                </div>
+                {% if not cat.is_system %}
                 <form method="POST" action="{{ url_for('inventory.categories_delete', category_id=cat.id) }}"
                       data-confirm="Delete category {{ cat.name }}? Only unused custom categories can be removed."
                       data-confirm-title="Delete category">
-                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete category">
+                    <button type="submit" class="btn btn-sm btn-outline-danger border-0 cat-card-delete" title="Delete category">
                         <i class="bi bi-trash"></i>
                     </button>
                 </form>
                 {% endif %}
             </div>
-        </div>
-        <div class="card-body card-body-premium">
 
-            {% if cat.key == 'fuel' %}
-            <div class="mb-3">
-                <div class="text-muted-custom text-uppercase small fw-semibold mb-2">Subcategories</div>
-                {% if fuel_types %}
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    {% for ft in fuel_types %}
-                    <div class="d-inline-flex align-items-center gap-2 border rounded-3 px-3 py-2"
-                         style="border-color: var(--border-color) !important; background: var(--bg-elevated, transparent);">
-                        <i class="bi bi-fuel-pump text-muted-custom"></i>
-                        <span class="fw-medium">{{ ft.name }}</span>
-                        <form method="POST" action="{{ url_for('inventory.delete_fuel', fuel_type_id=ft.id) }}" class="d-inline"
-                              data-confirm="Delete {{ ft.name }}? Related stock and meters will be removed."
-                              data-confirm-title="Delete fuel">
-                            <input type="hidden" name="next" value="categories">
-                            <button type="submit" class="btn btn-sm btn-link text-danger p-0 ms-1" title="Delete">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                        </form>
+            <div class="cat-card-body">
+                {% if cat.key == 'fuel' %}
+                <div class="cat-section">
+                    <div class="cat-section-label">
+                        <span>Subcategories</span>
+                        <span class="cat-section-count">{{ fuel_types|length }}</span>
                     </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted-custom small mb-3">No fuel types yet. Add Petrol &amp; Diesel or create your own.</p>
-                {% endif %}
-                <div class="row g-2 align-items-end">
-                    <div class="col-12 col-md-5">
-                        <form method="POST" action="{{ url_for('inventory.categories_add_fuel') }}" class="row g-2 align-items-end">
-                            <div class="col">
-                                <label class="form-label form-label-custom mb-1">Add fuel type</label>
-                                <input type="text" name="name" class="form-control form-control-custom" placeholder="e.g. Petrol, Diesel, CNG" required>
-                            </div>
-                            <div class="col-auto">
-                                <button type="submit" class="btn btn-outline-secondary">Add</button>
-                            </div>
-                        </form>
+                    {% if fuel_types %}
+                    <div class="cat-chip-row">
+                        {% for ft in fuel_types %}
+                        <div class="cat-chip">
+                            <i class="bi bi-fuel-pump" aria-hidden="true"></i>
+                            <span>{{ ft.name }}</span>
+                            <form method="POST" action="{{ url_for('inventory.delete_fuel', fuel_type_id=ft.id) }}"
+                                  data-confirm="Delete {{ ft.name }}? Related stock and meters will be removed."
+                                  data-confirm-title="Delete fuel">
+                                <input type="hidden" name="next" value="categories">
+                                <button type="submit" class="cat-chip-remove" title="Delete {{ ft.name }}" aria-label="Delete {{ ft.name }}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% if needs_default_fuels %}
-                    <div class="col-auto">
+                    {% else %}
+                    <p class="cat-empty">No fuel types yet. Add Petrol &amp; Diesel or create your own.</p>
+                    {% endif %}
+
+                    <div class="cat-add-bar">
+                        <form method="POST" action="{{ url_for('inventory.categories_add_fuel') }}" class="cat-add-form">
+                            <input type="text" name="name" class="form-control form-control-custom" placeholder="New fuel type…" required autocomplete="off">
+                            <button type="submit" class="btn btn-outline-secondary">Add</button>
+                        </form>
+                        {% if needs_default_fuels %}
                         <form method="POST" action="{{ url_for('inventory.seed_default_fuels') }}">
                             <input type="hidden" name="next" value="categories">
                             <button type="submit" class="btn btn-primary-custom">
-                                <i class="bi bi-fuel-pump me-1"></i> Add Petrol &amp; Diesel
+                                <i class="bi bi-fuel-pump me-1"></i><span class="btn-label"> Petrol &amp; Diesel</span>
                             </button>
                         </form>
+                        {% endif %}
                     </div>
+                </div>
+
+                {% elif cat.key == 'other' %}
+                <div class="cat-other-note">
+                    <i class="bi bi-info-circle"></i>
+                    <span>Items are named when you add inventory. No company or type lists for this group.</span>
+                </div>
+
+                {% else %}
+                <div class="cat-section">
+                    <div class="cat-section-label">
+                        <span>{% if cat.key == 'filter' %}Companies / brands{% else %}Companies{% endif %}</span>
+                        <span class="cat-section-count">{{ (cat.company_options or [])|length }}</span>
+                    </div>
+                    {% if cat.company_options %}
+                    <div class="cat-chip-row">
+                        {% for opt in cat.company_options %}
+                        <div class="cat-chip">
+                            <span>{{ opt.name }}</span>
+                            <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}"
+                                  data-confirm="Remove {{ opt.name }}?"
+                                  data-confirm-title="Remove"
+                                  data-confirm-btn="Remove">
+                                <button type="submit" class="cat-chip-remove" title="Remove {{ opt.name }}" aria-label="Remove {{ opt.name }}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="cat-empty">No companies yet</p>
                     {% endif %}
-                </div>
-            </div>
-
-            {% elif cat.key == 'other' %}
-            <p class="text-muted-custom mb-0 small">
-                Items are named when you add inventory. No company/type lists for this group.
-            </p>
-
-            {% else %}
-            {# Companies #}
-            <div class="mb-4">
-                <div class="text-muted-custom text-uppercase small fw-semibold mb-2">
-                    {% if cat.key == 'filter' %}Companies / brands{% else %}Companies{% endif %}
-                </div>
-                {% set companies = cat.company_options %}
-                {% if companies %}
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    {% for opt in companies %}
-                    <div class="d-inline-flex align-items-center gap-2 border rounded-3 px-3 py-2"
-                         style="border-color: var(--border-color) !important;">
-                        <span class="fw-medium">{{ opt.name }}</span>
-                        <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}" class="d-inline"
-                              data-confirm="Remove {{ opt.name }}?"
-                              data-confirm-title="Remove"
-                              data-confirm-btn="Remove">
-                            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Remove">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                        </form>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted-custom small mb-3">None yet</p>
-                {% endif %}
-                <form method="POST" action="{{ url_for('inventory.categories_add_option', category_id=cat.id) }}" class="row g-2 align-items-end">
-                    <input type="hidden" name="kind" value="company">
-                    <div class="col-12 col-md-5">
-                        <label class="form-label form-label-custom mb-1">Add company</label>
-                        <input type="text" name="name" class="form-control form-control-custom" placeholder="Company / brand name" required>
-                    </div>
-                    <div class="col-auto">
+                    <form method="POST" action="{{ url_for('inventory.categories_add_option', category_id=cat.id) }}" class="cat-add-form">
+                        <input type="hidden" name="kind" value="company">
+                        <input type="text" name="name" class="form-control form-control-custom" placeholder="Add company…" required autocomplete="off">
                         <button type="submit" class="btn btn-outline-secondary">Add</button>
-                    </div>
-                </form>
-            </div>
+                    </form>
+                </div>
 
-            {% if cat.key != 'ft_mobile' %}
-            {# Types / subcategories #}
-            <div>
-                <div class="text-muted-custom text-uppercase small fw-semibold mb-2">
-                    {% if cat.key == 'mobile' %}Oil types / grades{% elif cat.key == 'filter' %}Filter types{% else %}Types / subcategories{% endif %}
-                </div>
-                {% set types = cat.type_options %}
-                {% if types %}
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    {% for opt in types %}
-                    <div class="d-inline-flex align-items-center gap-2 border rounded-3 px-3 py-2"
-                         style="border-color: var(--border-color) !important;">
-                        <span class="fw-medium">{{ opt.name }}</span>
-                        <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}" class="d-inline"
-                              data-confirm="Remove {{ opt.name }}?"
-                              data-confirm-title="Remove"
-                              data-confirm-btn="Remove">
-                            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Remove">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
-                        </form>
+                {% if cat.key != 'ft_mobile' %}
+                <div class="cat-section">
+                    <div class="cat-section-label">
+                        <span>
+                            {% if cat.key == 'mobile' %}Oil types / grades
+                            {% elif cat.key == 'filter' %}Filter types
+                            {% else %}Types / subcategories{% endif %}
+                        </span>
+                        <span class="cat-section-count">{{ (cat.type_options or [])|length }}</span>
                     </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-muted-custom small mb-3">None yet</p>
-                {% endif %}
-                <form method="POST" action="{{ url_for('inventory.categories_add_option', category_id=cat.id) }}" class="row g-2 align-items-end">
-                    <input type="hidden" name="kind" value="type">
-                    <div class="col-12 col-md-5">
-                        <label class="form-label form-label-custom mb-1">Add type</label>
-                        <input type="text" name="name" class="form-control form-control-custom" placeholder="Type / subcategory name" required>
+                    {% if cat.type_options %}
+                    <div class="cat-chip-row">
+                        {% for opt in cat.type_options %}
+                        <div class="cat-chip">
+                            <span>{{ opt.name }}</span>
+                            <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}"
+                                  data-confirm="Remove {{ opt.name }}?"
+                                  data-confirm-title="Remove"
+                                  data-confirm-btn="Remove">
+                                <button type="submit" class="cat-chip-remove" title="Remove {{ opt.name }}" aria-label="Remove {{ opt.name }}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="col-auto">
+                    {% else %}
+                    <p class="cat-empty">No types yet</p>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('inventory.categories_add_option', category_id=cat.id) }}" class="cat-add-form">
+                        <input type="hidden" name="kind" value="type">
+                        <input type="text" name="name" class="form-control form-control-custom" placeholder="Add type…" required autocomplete="off">
                         <button type="submit" class="btn btn-outline-secondary">Add</button>
-                    </div>
-                </form>
+                    </form>
+                </div>
+                {% endif %}
+                {% endif %}
             </div>
-            {% endif %}
-            {% endif %}
-
-        </div>
+        </article>
     </div>
     {% else %}
-    <div class="card card-premium">
-        <div class="card-body card-body-premium text-muted-custom">
-            No categories yet. Add one to get started.
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-body card-body-premium text-center py-5">
+                <div class="empty-state-icon mb-2"><i class="bi bi-collection"></i></div>
+                <p class="text-muted-custom mb-3">No categories yet. Add one to get started.</p>
+                <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                    <i class="bi bi-plus-circle me-1"></i> Add Category
+                </button>
+            </div>
         </div>
     </div>
     {% endfor %}
