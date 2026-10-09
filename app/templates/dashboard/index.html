@@ -137,6 +137,44 @@
     </div>
 </section>
 
+<section class="kpi-grid kpi-grid-main mt-3" aria-label="Till cash">
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-wallet2"></i></span>
+            <span class="kpi-label">Previous Balance</span>
+        </div>
+        <div class="kpi-value">{{ stats.previous_balance | money }}</div>
+        <div class="kpi-meta">Opening from prior remaining</div>
+    </div>
+
+    <div class="kpi-card kpi-cash">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-cash-stack"></i></span>
+            <span class="kpi-label">Cash In Hand</span>
+        </div>
+        <div class="kpi-value">{{ stats.cash_in_hand | money }}</div>
+        <div class="kpi-meta">Includes previous balance</div>
+    </div>
+
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-cash-coin"></i></span>
+            <span class="kpi-label">Amount Taken</span>
+        </div>
+        <div class="kpi-value text-danger">{{ stats.cash_taken_total | money }}</div>
+        <div class="kpi-meta">Total cash taken in period</div>
+    </div>
+
+    <div class="kpi-card kpi-profit">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-piggy-bank"></i></span>
+            <span class="kpi-label">Final Cash In Hand</span>
+        </div>
+        <div class="kpi-value {% if stats.remaining_balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ stats.remaining_balance | money }}</div>
+        <div class="kpi-meta">After amount taken · next opening</div>
+    </div>
+</section>
+
 <section class="chart-line-panel mt-4">
     <article class="chart-card">
         <div class="chart-card-head d-flex flex-wrap justify-content-between align-items-start gap-2">
