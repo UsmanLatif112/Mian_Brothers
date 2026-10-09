@@ -155,6 +155,15 @@
         <div class="kpi-value text-danger">{{ stats.cash_taken_total | money }}</div>
         <div class="kpi-meta">Total cash taken in period</div>
     </div>
+
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-boxes"></i></span>
+            <span class="kpi-label">Total Stock Value</span>
+        </div>
+        <div class="kpi-value">{{ total_stock_value | money }}</div>
+        <div class="kpi-meta">Fuel + shop at cost</div>
+    </div>
 </section>
 
 <section class="chart-line-panel mt-4">

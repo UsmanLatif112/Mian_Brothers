@@ -4,7 +4,7 @@ from app.dashboard import dashboard_bp
 from app.models import (
     db, Sale, StockEntry, Customer, Inventory, FuelType, FuelPrice,
     OtherItem, MeterReading, CreditSale, Expense, Payment, DailyCashCount,
-    ItemPurchaseLog, Vendor,
+    ItemPurchaseLog, Vendor, ShopCategory,
 )
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
@@ -335,6 +335,27 @@ def index():
     recent_deliveries = StockEntry.query.order_by(StockEntry.entry_date.desc()).limit(5).all()
     other_items = OtherItem.query.order_by(OtherItem.name.asc()).all()
 
+    today = datetime.utcnow().date()
+    unit_by_key = {c.key: (c.unit_mode or 'qty') for c in ShopCategory.query.all()}
+    total_stock_value = 0.0
+    for inv in inventory_items:
+        liters = float(inv.current_stock_liters or 0)
+        if liters <= 0:
+            continue
+        cost = get_cost_for_sale(inv.fuel_type_id, datetime.combine(today, datetime.min.time()))
+        total_stock_value += liters * float(cost or 0)
+    for item in other_items:
+        cost = float(item.cost_price or 0)
+        cat_key = item.category or 'other'
+        unit_mode = unit_by_key.get(cat_key) or ('liters' if cat_key == 'ft_mobile' else 'qty')
+        if unit_mode == 'liters' or cat_key == 'ft_mobile':
+            qty = float(item.liters or 0)
+        else:
+            qty = float(item.quantity or 0)
+        if qty > 0:
+            total_stock_value += qty * cost
+    total_stock_value = round(total_stock_value, 2)
+
     insights = _dashboard_insights(start, end, stock_summary, other_items)
 
     return render_template(
@@ -344,6 +365,7 @@ def index():
         total_gross=total_gross,
         total_cogs=total_cogs,
         total_expenses_profit=total_expenses_profit,
+        total_stock_value=total_stock_value,
         stock_summary=stock_summary,
         dry_message=dry_message,
         petrol_stock=petrol_stock,
