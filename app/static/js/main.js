@@ -1,3 +1,104 @@
+/* In-app confirm modal — replaces window.confirm() */
+(function initOfConfirm() {
+    let resolvePromise = null;
+    let modalInstance = null;
+
+    function getModal() {
+        const el = document.getElementById('ofConfirmModal');
+        if (!el || typeof bootstrap === 'undefined') return null;
+        if (!modalInstance) modalInstance = bootstrap.Modal.getOrCreateInstance(el);
+        return { el, modal: modalInstance };
+    }
+
+    /**
+     * @param {object|string} opts message string, or { title, message, confirmLabel, cancelLabel, danger }
+     * @returns {Promise<boolean>}
+     */
+    window.ofConfirm = function ofConfirm(opts) {
+        const options = typeof opts === 'string' ? { message: opts } : (opts || {});
+        const title = options.title || 'Confirm';
+        const message = options.message || 'Are you sure?';
+        const confirmLabel = options.confirmLabel || (options.danger === false ? 'Confirm' : 'Delete');
+        const cancelLabel = options.cancelLabel || 'Cancel';
+        const danger = options.danger !== false;
+
+        const ctx = getModal();
+        if (!ctx) {
+            return Promise.resolve(window.confirm(message));
+        }
+
+        const { el, modal } = ctx;
+        const titleEl = el.querySelector('#ofConfirmTitle');
+        const msgEl = el.querySelector('#ofConfirmMessage');
+        const okBtn = el.querySelector('#ofConfirmOk');
+        const cancelBtn = el.querySelector('#ofConfirmCancel');
+
+        if (titleEl) titleEl.textContent = title;
+        if (msgEl) msgEl.textContent = message;
+        if (okBtn) {
+            okBtn.textContent = confirmLabel;
+            okBtn.className = danger
+                ? 'btn btn-danger px-3'
+                : 'btn btn-primary-custom px-3';
+        }
+        if (cancelBtn) cancelBtn.textContent = cancelLabel;
+
+        return new Promise((resolve) => {
+            resolvePromise = resolve;
+            modal.show();
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const el = document.getElementById('ofConfirmModal');
+        if (!el) return;
+        const okBtn = el.querySelector('#ofConfirmOk');
+        okBtn?.addEventListener('click', () => {
+            const ctx = getModal();
+            const done = resolvePromise;
+            resolvePromise = null;
+            ctx?.modal.hide();
+            if (done) done(true);
+        });
+        el.addEventListener('hidden.bs.modal', () => {
+            if (resolvePromise) {
+                const done = resolvePromise;
+                resolvePromise = null;
+                done(false);
+            }
+        });
+    });
+
+    // Forms: data-confirm="…"  optional data-confirm-title / data-confirm-btn / data-confirm-danger="0"
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        const message = form.getAttribute('data-confirm');
+        if (!message) return;
+        if (form.dataset.ofConfirmed === '1') {
+            delete form.dataset.ofConfirmed;
+            return;
+        }
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const title = form.getAttribute('data-confirm-title') || 'Confirm';
+        const confirmLabel = form.getAttribute('data-confirm-btn') || 'Delete';
+        const danger = form.getAttribute('data-confirm-danger') !== '0';
+
+        window.ofConfirm({ title, message, confirmLabel, danger }).then((ok) => {
+            if (!ok) return;
+            form.dataset.ofConfirmed = '1';
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+            } else {
+                HTMLFormElement.prototype.submit.call(form);
+            }
+        });
+    }, true);
+})();
+
 document.addEventListener('DOMContentLoaded', () => {
     // Theme Management
     const themeToggleBtn = document.getElementById('theme-toggle');
@@ -200,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement)) return;
         if (form.dataset.allowMultiSubmit === '1') return;
-        // Already cancelled (e.g. onsubmit="return confirm(...)" → false)
+        // Already cancelled (e.g. in-app confirm dismissed)
         if (e.defaultPrevented) return;
 
         // Block immediate double-submit

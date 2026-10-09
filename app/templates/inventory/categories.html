@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Categories — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Stock</p>
+            <h1 class="page-title">Categories</h1>
+            <p class="text-muted-custom mb-0 mt-1" style="font-size:0.95rem;">
+                Manage product groups and their subcategories. These appear in Inventory and Sales dropdowns.
+            </p>
+        </div>
+        <div class="page-header-actions">
+            <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="Add category">
+                <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Category</span>
+            </button>
+        </div>
+    </div>
+</header>
+
+<div class="d-flex flex-column gap-4">
+    {% for cat in categories %}
+    <div class="card card-premium">
+        <div class="card-header-premium d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <h2 class="panel-title mb-0">{{ cat.name }}</h2>
+                <p class="panel-subtitle mb-0">
+                    {% if cat.key == 'fuel' %}
+                    Fuel types (Petrol, Diesel…) used in inventory purchases and sales meters
+                    {% elif cat.key == 'mobile' %}
+                    Oil companies and grades for Mobile stock
+                    {% elif cat.key == 'ft_mobile' %}
+                    Companies for FT Mobile oil (liter stock)
+                    {% elif cat.key == 'filter' %}
+                    Filter brands and types
+                    {% elif cat.key == 'other' %}
+                    Free-form shop items — no fixed subcategories
+                    {% elif cat.unit_mode == 'liters' %}
+                    Custom category · stock in liters
+                    {% else %}
+                    Custom category · stock by quantity
+                    {% endif %}
+                </p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                {% if cat.is_system %}
+                <span class="badge bg-secondary-subtle text-secondary">System</span>
+                {% else %}
+                <form method="POST" action="{{ url_for('inventory.categories_delete', category_id=cat.id) }}"
+                      data-confirm="Delete category {{ cat.name }}? Only unused custom categories can be removed."
+                      data-confirm-title="Delete category">
+                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete category">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body card-body-premium">
+
+            {% if cat.key == 'fuel' %}
+            <div class="mb-3">
+                <div class="text-muted-custom text-uppercase small fw-semibold mb-2">Subcategories</div>
+                {% if fuel_types %}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for ft in fuel_types %}
+                    <div class="d-inline-flex align-items-center gap-2 border rounded-3 px-3 py-2"
+                         style="border-color: var(--border-color) !important; background: var(--bg-elevated, transparent);">
+                        <i class="bi bi-fuel-pump text-muted-custom"></i>
+                        <span class="fw-medium">{{ ft.name }}</span>
+                        <form method="POST" action="{{ url_for('inventory.delete_fuel', fuel_type_id=ft.id) }}" class="d-inline"
+                              data-confirm="Delete {{ ft.name }}? Related stock and meters will be removed."
+                              data-confirm-title="Delete fuel">
+                            <input type="hidden" name="next" value="categories">
+                            <button type="submit" class="btn btn-sm btn-link text-danger p-0 ms-1" title="Delete">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted-custom small mb-3">No fuel types yet. Add Petrol &amp; Diesel or create your own.</p>
+                {% endif %}
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-5">
+                        <form method="POST" action="{{ url_for('inventory.categories_add_fuel') }}" class="row g-2 align-items-end">
+                            <div class="col">
+                                <label class="form-label form-label-custom mb-1">Add fuel type</label>
+                                <input type="text" name="name" class="form-control form-control-custom" placeholder="e.g. Petrol, Diesel, CNG" required>
+                            </div>
+                            <div class="col-auto">
+                                <button type="submit" class="btn btn-outline-secondary">Add</button>
+                            </div>
+                        </form>
+                    </div>
+                    {% if needs_default_fuels %}
+                    <div class="col-auto">
+                        <form method="POST" action="{{ url_for('inventory.seed_default_fuels') }}">
+                            <input type="hidden" name="next" value="categories">
+                            <button type="submit" class="btn btn-primary-custom">
+                                <i class="bi bi-fuel-pump me-1"></i> Add Petrol &amp; Diesel
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% elif cat.key == 'other' %}
+            <p class="text-muted-custom mb-0 small">
+                Items are named when you add inventory. No company/type lists for this group.
+            </p>
+
+            {% else %}
+            {# Companies #}
+            <div class="mb-4">
+                <div class="text-muted-custom text-uppercase small fw-semibold mb-2">
+                    {% if cat.key == 'filter' %}Companies / brands{% else %}Companies{% endif %}
+                </div>
+                {% set companies = cat.company_options %}
+                {% if companies %}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for opt in companies %}
+                    <div class="d-inline-flex align-items-center gap-2 border rounded-3 px-3 py-2"
+                         style="border-color: var(--border-color) !important;">
+                        <span class="fw-medium">{{ opt.name }}</span>
+                        <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}" class="d-inline"
+                              data-confirm="Remove {{ opt.name }}?"
+                              data-confirm-title="Remove"
+                              data-confirm-btn="Remove">
+                            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Remove">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted-custom small mb-3">None yet</p>
+                {% endif %}
+                <form method="POST" action="{{ url_for('inventory.categories_add_option', category_id=cat.id) }}" class="row g-2 align-items-end">
+                    <input type="hidden" name="kind" value="company">
+                    <div class="col-12 col-md-5">
+                        <label class="form-label form-label-custom mb-1">Add company</label>
+                        <input type="text" name="name" class="form-control form-control-custom" placeholder="Company / brand name" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-outline-secondary">Add</button>
+                    </div>
+                </form>
+            </div>
+
+            {% if cat.key != 'ft_mobile' %}
+            {# Types / subcategories #}
+            <div>
+                <div class="text-muted-custom text-uppercase small fw-semibold mb-2">
+                    {% if cat.key == 'mobile' %}Oil types / grades{% elif cat.key == 'filter' %}Filter types{% else %}Types / subcategories{% endif %}
+                </div>
+                {% set types = cat.type_options %}
+                {% if types %}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for opt in types %}
+                    <div class="d-inline-flex align-items-center gap-2 border rounded-3 px-3 py-2"
+                         style="border-color: var(--border-color) !important;">
+                        <span class="fw-medium">{{ opt.name }}</span>
+                        <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}" class="d-inline"
+                              data-confirm="Remove {{ opt.name }}?"
+                              data-confirm-title="Remove"
+                              data-confirm-btn="Remove">
+                            <button type="submit" class="btn btn-sm btn-link text-danger p-0" title="Remove">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted-custom small mb-3">None yet</p>
+                {% endif %}
+                <form method="POST" action="{{ url_for('inventory.categories_add_option', category_id=cat.id) }}" class="row g-2 align-items-end">
+                    <input type="hidden" name="kind" value="type">
+                    <div class="col-12 col-md-5">
+                        <label class="form-label form-label-custom mb-1">Add type</label>
+                        <input type="text" name="name" class="form-control form-control-custom" placeholder="Type / subcategory name" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-outline-secondary">Add</button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+            {% endif %}
+
+        </div>
+    </div>
+    {% else %}
+    <div class="card card-premium">
+        <div class="card-body card-body-premium text-muted-custom">
+            No categories yet. Add one to get started.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="addCategoryModal" tabindex="-1" aria-labelledby="addCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
+            <form method="POST" action="{{ url_for('inventory.categories_create') }}">
+                <div class="modal-header border-0 pb-2">
+                    <h5 class="modal-title fw-bold" id="addCategoryModalLabel">Add Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <div class="mb-3">
+                        <label for="new_cat_name" class="form-label form-label-custom">Name</label>
+                        <input type="text" class="form-control form-control-custom" id="new_cat_name" name="name"
+                               placeholder="e.g. Grease, Batteries, Coolant" required>
+                    </div>
+                    <div class="mb-0">
+                        <label for="new_cat_unit" class="form-label form-label-custom">Stock unit</label>
+                        <select class="form-select form-control-custom" id="new_cat_unit" name="unit_mode">
+                            <option value="qty" selected>Quantity (pieces)</option>
+                            <option value="liters">Liters</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-2 pb-3 gap-2 justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

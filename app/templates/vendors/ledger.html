@@ -168,7 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                         data-entry-date="{{ entry.entry_date }}">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
-                                <form method="POST" class="d-inline" onsubmit="return confirm('Delete this payment? Payable will be recalculated.');">
+                                <form method="POST" class="d-inline"
+                                      data-confirm="Delete this payment? Payable will be recalculated."
+                                      data-confirm-title="Delete payment">
                                     <input type="hidden" name="action" value="delete_payment">
                                     <input type="hidden" name="payment_id" value="{{ entry.payment_id }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete payment">

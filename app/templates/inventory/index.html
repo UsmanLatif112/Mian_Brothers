@@ -18,16 +18,6 @@
             <h1 class="page-title">Inventory Control</h1>
         </div>
         <div class="page-header-actions">
-            {% if needs_default_fuels %}
-            <form method="POST" action="{{ url_for('inventory.seed_default_fuels') }}" class="d-inline">
-                <button type="submit" class="btn btn-outline-secondary" title="Create Petrol & Diesel">
-                    <i class="bi bi-fuel-pump me-1"></i><span class="btn-label"> Add Petrol &amp; Diesel</span>
-                </button>
-            </form>
-            {% endif %}
-            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal" title="Categories">
-                <i class="bi bi-tags me-1"></i><span class="btn-label"> Categories</span>
-            </button>
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn" title="Add Inventory">
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Inventory</span>
             </button>
@@ -116,7 +106,8 @@
                             <i class="bi bi-pencil-square"></i>
                         </button>
                         <form action="{{ url_for('inventory.delete_fuel', fuel_type_id=ft.id) }}" method="POST" class="d-inline"
-                              onsubmit="return confirm('Delete fuel type {{ ft.name }}? This cannot be undone.');">
+                              data-confirm="Delete fuel type {{ ft.name }}? This cannot be undone."
+                              data-confirm-title="Delete fuel">
                             <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete fuel">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -195,7 +186,8 @@
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
                                 <form action="{{ url_for('inventory.delete_item', item_id=item.id) }}" method="POST" class="d-inline"
-                                      onsubmit="return confirm('Delete {{ item.name }} from inventory?');">
+                                      data-confirm="Delete {{ item.name }} from inventory?"
+                                      data-confirm-title="Delete item">
                                     <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete item">
                                         <i class="bi bi-trash"></i>
                                     </button>
@@ -260,7 +252,8 @@
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
                                         <form action="{{ url_for('inventory.delete_item', item_id=item.id) }}" method="POST" class="d-inline"
-                                              onsubmit="return confirm('Delete {{ item.name }} from inventory?');">
+                                              data-confirm="Delete {{ item.name }} from inventory?"
+                                              data-confirm-title="Delete item">
                                             <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete item">
                                                 <i class="bi bi-trash"></i>
                                             </button>
@@ -628,49 +621,6 @@
     </div>
 </div>
 
-<!-- MANAGE CATEGORIES -->
-<div class="modal fade" id="manageCategoriesModal" tabindex="-1" aria-labelledby="manageCategoriesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
-            <div class="modal-header border-0 pb-2">
-                <h5 class="modal-title fw-bold" id="manageCategoriesModalLabel">Categories &amp; Subcategories</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body pt-2">
-                <p class="text-muted-custom small mb-3">
-                    Add new product categories, or companies / types under an existing one. System categories (Fuel, Mobile, Filter…) stay fixed but you can extend their lists.
-                </p>
-
-                <div class="border rounded-3 p-3 mb-4" style="border-color: var(--border-color) !important;">
-                    <div class="fw-semibold mb-2">New category</div>
-                    <div class="row g-2 align-items-end">
-                        <div class="col-12 col-md-5">
-                            <label for="new_cat_name" class="form-label form-label-custom">Name</label>
-                            <input type="text" class="form-control form-control-custom" id="new_cat_name" placeholder="e.g. Grease, Batteries">
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label for="new_cat_unit" class="form-label form-label-custom">Stock unit</label>
-                            <select class="form-select form-control-custom" id="new_cat_unit">
-                                <option value="qty" selected>Quantity (pcs)</option>
-                                <option value="liters">Liters</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <button type="button" class="btn btn-primary-custom w-100" id="btn-create-category">Add</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="categories-manage-list" class="d-flex flex-column gap-3">
-                    {# Filled by JS #}
-                </div>
-            </div>
-            <div class="modal-footer border-0 pt-2 pb-3">
-                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Done</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -1062,223 +1012,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* —— Manage categories —— */
-    const catsListUrl = {{ url_for('inventory.api_categories') | tojson }};
-    const catsCreateUrl = {{ url_for('inventory.api_categories') | tojson }};
-    const catOptionUrlTpl = {{ url_for('inventory.api_add_category_option', category_id=999001) | tojson }}.replace('999001', '{id}');
-    const catDeleteUrlTpl = {{ url_for('inventory.api_delete_category', category_id=999001) | tojson }}.replace('999001', '{id}');
-    const catOptDeleteUrlTpl = {{ url_for('inventory.api_delete_category_option', option_id=999001) | tojson }}.replace('999001', '{id}');
-    const manageListEl = document.getElementById('categories-manage-list');
-    let categoriesCache = [];
-
-    const applyCategoriesToPurchaseSelect = (categories) => {
-        if (!categorySelect) return;
-        const current = categorySelect.value;
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.disabled = true;
-        placeholder.textContent = 'Select category...';
-        if (!current) placeholder.selected = true;
-        categorySelect.innerHTML = '';
-        categorySelect.appendChild(placeholder);
-        (categories || []).forEach((c) => {
-            const o = document.createElement('option');
-            o.value = c.key;
-            o.textContent = c.name;
-            o.dataset.id = c.id;
-            o.dataset.unit = c.unit_mode || 'qty';
-            o.dataset.companies = JSON.stringify(c.companies || []);
-            o.dataset.types = JSON.stringify(c.types || []);
-            o.dataset.system = c.is_system ? '1' : '0';
-            if (c.key === current) o.selected = true;
-            categorySelect.appendChild(o);
-        });
-        if (categorySelect.tomselect) {
-            categorySelect.tomselect.destroy();
-        }
-        syncVisibleFields();
-    };
-
-    const chipHtml = (opt, kind) => `
-        <span class="badge rounded-pill text-bg-light border d-inline-flex align-items-center gap-1 me-1 mb-1 py-2 px-2"
-              style="font-weight:500; color: var(--text-primary); border-color: var(--border-color) !important;">
-            ${opt.name}
-            <button type="button" class="btn-close btn-close-sm ms-1 cat-opt-delete"
-                    style="font-size:0.55rem;" title="Remove"
-                    data-option-id="${opt.id}" data-kind="${kind}" aria-label="Remove"></button>
-        </span>`;
-
-    const renderManageList = () => {
-        if (!manageListEl) return;
-        if (!categoriesCache.length) {
-            manageListEl.innerHTML = '<p class="text-muted-custom mb-0">No categories yet.</p>';
-            return;
-        }
-        manageListEl.innerHTML = categoriesCache.map((c) => {
-            const unitLabel = c.unit_mode === 'liters' ? 'Liters' : (c.unit_mode === 'fuel' ? 'Fuel tank' : 'Quantity');
-            const companies = c.company_options || [];
-            const types = c.type_options || [];
-            const showCompanies = c.key !== 'fuel' && c.key !== 'other';
-            const showTypes = showCompanies && c.key !== 'ft_mobile';
-            return `
-            <div class="border rounded-3 p-3" data-cat-id="${c.id}" style="border-color: var(--border-color) !important;">
-                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                    <div>
-                        <div class="fw-semibold">${c.name}
-                            ${c.is_system ? '<span class="badge bg-secondary-subtle text-secondary ms-1">System</span>' : ''}
-                        </div>
-                        <div class="text-muted-custom small">${unitLabel} · key: ${c.key}</div>
-                    </div>
-                    ${!c.is_system ? `<button type="button" class="btn btn-sm btn-outline-danger cat-delete" data-cat-id="${c.id}" title="Delete category"><i class="bi bi-trash"></i></button>` : ''}
-                </div>
-                ${showCompanies ? `
-                <div class="${showTypes ? 'mb-2' : ''}">
-                    <div class="small text-muted-custom mb-1">Companies / brands</div>
-                    <div class="mb-2">${companies.map((o) => chipHtml(o, 'company')).join('') || '<span class="text-muted-custom small">None yet</span>'}</div>
-                    <div class="input-group input-group-sm">
-                        <input type="text" class="form-control form-control-custom cat-opt-input" data-cat-id="${c.id}" data-kind="company" placeholder="Add company…">
-                        <button type="button" class="btn btn-outline-secondary cat-opt-add" data-cat-id="${c.id}" data-kind="company">Add</button>
-                    </div>
-                </div>
-                ${showTypes ? `
-                <div>
-                    <div class="small text-muted-custom mb-1">Types / subcategories</div>
-                    <div class="mb-2">${types.map((o) => chipHtml(o, 'type')).join('') || '<span class="text-muted-custom small">None yet</span>'}</div>
-                    <div class="input-group input-group-sm">
-                        <input type="text" class="form-control form-control-custom cat-opt-input" data-cat-id="${c.id}" data-kind="type" placeholder="Add type…">
-                        <button type="button" class="btn btn-outline-secondary cat-opt-add" data-cat-id="${c.id}" data-kind="type">Add</button>
-                    </div>
-                </div>` : ''}` : '<p class="text-muted-custom small mb-0">No company/type lists for this category.</p>'}
-            </div>`;
-        }).join('');
-    };
-
-    const loadCategories = async ({ syncPurchase = false } = {}) => {
-        try {
-            const res = await fetch(catsListUrl, { headers: { Accept: 'application/json' } });
-            const data = await res.json();
-            if (!data.ok) return;
-            categoriesCache = data.categories || [];
-            renderManageList();
-            if (syncPurchase) applyCategoriesToPurchaseSelect(categoriesCache);
-        } catch (err) {
-            console.warn('Could not load categories', err);
-        }
-    };
-
-    const manageModal = document.getElementById('manageCategoriesModal');
-    if (manageModal) {
-        manageModal.addEventListener('show.bs.modal', () => { loadCategories(); });
-    }
-
-    document.getElementById('btn-create-category')?.addEventListener('click', async () => {
-        const name = (document.getElementById('new_cat_name')?.value || '').trim();
-        const unit_mode = document.getElementById('new_cat_unit')?.value || 'qty';
-        if (!name) {
-            alert('Enter a category name.');
-            return;
-        }
-        try {
-            const res = await fetch(catsCreateUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                body: JSON.stringify({ name, unit_mode }),
-            });
-            const data = await res.json();
-            if (!data.ok) {
-                alert(data.error || 'Could not create category.');
-                return;
-            }
-            document.getElementById('new_cat_name').value = '';
-            await loadCategories({ syncPurchase: true });
-        } catch (err) {
-            alert('Could not create category.');
-        }
-    });
-
-    manageListEl?.addEventListener('click', async (e) => {
-        const addBtn = e.target.closest('.cat-opt-add');
-        const delOpt = e.target.closest('.cat-opt-delete');
-        const delCat = e.target.closest('.cat-delete');
-
-        if (addBtn) {
-            const catId = addBtn.dataset.catId;
-            const kind = addBtn.dataset.kind;
-            const input = manageListEl.querySelector(`.cat-opt-input[data-cat-id="${catId}"][data-kind="${kind}"]`);
-            const name = (input?.value || '').trim();
-            if (!name) {
-                alert(kind === 'company' ? 'Enter a company name.' : 'Enter a type name.');
-                return;
-            }
-            try {
-                const res = await fetch(catOptionUrlTpl.replace('{id}', catId), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ kind, name }),
-                });
-                const data = await res.json();
-                if (!data.ok) {
-                    alert(data.error || 'Could not add.');
-                    return;
-                }
-                if (input) input.value = '';
-                await loadCategories({ syncPurchase: true });
-            } catch (err) {
-                alert('Could not add option.');
-            }
-            return;
-        }
-
-        if (delOpt) {
-            const optionId = delOpt.dataset.optionId;
-            if (!confirm('Remove this option from the list?')) return;
-            try {
-                const res = await fetch(catOptDeleteUrlTpl.replace('{id}', optionId), {
-                    method: 'POST',
-                    headers: { Accept: 'application/json' },
-                });
-                const data = await res.json();
-                if (!data.ok) {
-                    alert(data.error || 'Could not remove.');
-                    return;
-                }
-                await loadCategories({ syncPurchase: true });
-            } catch (err) {
-                alert('Could not remove option.');
-            }
-            return;
-        }
-
-        if (delCat) {
-            const catId = delCat.dataset.catId;
-            if (!confirm('Delete this category? Only unused custom categories can be removed.')) return;
-            try {
-                const res = await fetch(catDeleteUrlTpl.replace('{id}', catId), {
-                    method: 'POST',
-                    headers: { Accept: 'application/json' },
-                });
-                const data = await res.json();
-                if (!data.ok) {
-                    alert(data.error || 'Could not delete.');
-                    return;
-                }
-                await loadCategories({ syncPurchase: true });
-            } catch (err) {
-                alert('Could not delete category.');
-            }
-        }
-    });
-
-    manageListEl?.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        const input = e.target.closest('.cat-opt-input');
-        if (!input) return;
-        e.preventDefault();
-        const btn = manageListEl.querySelector(
-            `.cat-opt-add[data-cat-id="${input.dataset.catId}"][data-kind="${input.dataset.kind}"]`
-        );
-        btn?.click();
-    });
 });
 </script>
 {% endblock %}

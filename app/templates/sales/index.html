@@ -194,7 +194,9 @@
                                             data-is-fuel="{{ '1' if cs.is_fuel else '0' }}">
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
-                                        <form method="POST" class="d-inline" onsubmit="return confirm('Delete this entry? Stock and customer balance will be recalculated.');">
+                                        <form method="POST" class="d-inline"
+                                              data-confirm="Delete this entry? Stock and customer balance will be recalculated."
+                                              data-confirm-title="Delete entry">
                                             <input type="hidden" name="action" value="delete_entry">
                                             <input type="hidden" name="entry_id" value="{{ cs.id }}">
                                             <button class="btn btn-sm btn-outline-danger border-0" type="submit" title="Delete">

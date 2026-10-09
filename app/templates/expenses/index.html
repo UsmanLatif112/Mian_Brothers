@@ -128,7 +128,11 @@
                                             <i class="bi bi-check2-circle"></i>
                                         </button>
                                         {% else %}
-                                        <form method="POST" class="d-inline" onsubmit="return confirm('Unsettle this expense? Cash in hand will decrease again.');">
+                                        <form method="POST" class="d-inline"
+                                              data-confirm="Unsettle this expense? Cash in hand will decrease again."
+                                              data-confirm-title="Unsettle expense"
+                                              data-confirm-btn="Unsettle"
+                                              data-confirm-danger="0">
                                             <input type="hidden" name="action" value="unsettle">
                                             <input type="hidden" name="expense_id" value="{{ e.id }}">
                                             <button class="btn btn-sm btn-outline-secondary border-0" type="submit" title="Mark open again">
@@ -136,7 +140,9 @@
                                             </button>
                                         </form>
                                         {% endif %}
-                                        <form method="POST" class="d-inline" onsubmit="return confirm('Delete this expense?');">
+                                        <form method="POST" class="d-inline"
+                                              data-confirm="Delete this expense?"
+                                              data-confirm-title="Delete expense">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="expense_id" value="{{ e.id }}">
                                             <button class="btn btn-sm btn-outline-danger border-0" type="submit" title="Delete">

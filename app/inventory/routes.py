@@ -693,6 +693,9 @@ def seed_default_fuels():
         flash(f'Created fuel categories: {", ".join(created)}.', 'success')
     else:
         flash('Petrol and Diesel already exist.', 'info')
+    next_page = (request.form.get('next') or '').strip()
+    if next_page == 'categories':
+        return redirect(url_for('inventory.categories'))
     return redirect(url_for('inventory.index'))
 
 
@@ -740,7 +743,137 @@ def delete_fuel(fuel_type_id):
 
     db.session.commit()
     flash(f'Deleted fuel “{name}” with stock, meters, machines, and purchase batches. Vendor balances recalculated.', 'success')
+    next_page = (request.form.get('next') or '').strip()
+    if next_page == 'categories':
+        return redirect(url_for('inventory.categories'))
     return redirect(url_for('inventory.index'))
+
+
+@inventory_bp.route('/categories')
+@login_required
+def categories():
+    """Dedicated page to manage inventory categories and subcategories."""
+    cats = [category_payload(c) for c in list_active_categories()]
+    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+    existing_fuel_names = {(ft.name or '').strip().lower() for ft in fuel_types}
+    needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
+    return render_template(
+        'inventory/categories.html',
+        categories=cats,
+        fuel_types=fuel_types,
+        needs_default_fuels=needs_default_fuels,
+    )
+
+
+@inventory_bp.route('/categories/create', methods=['POST'])
+@login_required
+def categories_create():
+    name = (request.form.get('name') or '').strip()
+    unit_mode = (request.form.get('unit_mode') or 'qty').strip().lower()
+    if unit_mode not in ('qty', 'liters'):
+        unit_mode = 'qty'
+    if not name:
+        flash('Category name is required.', 'danger')
+        return redirect(url_for('inventory.categories'))
+
+    key = unique_category_key(name)
+    if key in ('fuel', 'mobile', 'ft_mobile', 'filter', 'other'):
+        key = unique_category_key(f'{name}_custom')
+
+    cat = ShopCategory(
+        key=key,
+        name=name,
+        unit_mode=unit_mode,
+        is_system=False,
+        is_active=True,
+        sort_order=200,
+    )
+    db.session.add(cat)
+    db.session.commit()
+    flash(f'Category “{name}” created. Add companies or types below.', 'success')
+    return redirect(url_for('inventory.categories'))
+
+
+@inventory_bp.route('/categories/<int:category_id>/delete', methods=['POST'])
+@login_required
+def categories_delete(category_id):
+    cat = ShopCategory.query.get_or_404(category_id)
+    if cat.is_system:
+        flash('System categories cannot be deleted.', 'danger')
+        return redirect(url_for('inventory.categories'))
+    in_use = OtherItem.query.filter_by(category=cat.key).first()
+    if in_use:
+        flash('Category is used by stock items and cannot be deleted.', 'danger')
+        return redirect(url_for('inventory.categories'))
+    name = cat.name
+    db.session.delete(cat)
+    db.session.commit()
+    flash(f'Deleted category “{name}”.', 'success')
+    return redirect(url_for('inventory.categories'))
+
+
+@inventory_bp.route('/categories/<int:category_id>/options', methods=['POST'])
+@login_required
+def categories_add_option(category_id):
+    cat = ShopCategory.query.get_or_404(category_id)
+    kind = (request.form.get('kind') or '').strip().lower()
+    name = (request.form.get('name') or '').strip()
+    if kind not in ('company', 'type'):
+        flash('Invalid option kind.', 'danger')
+        return redirect(url_for('inventory.categories'))
+    if not name:
+        flash('Name is required.', 'danger')
+        return redirect(url_for('inventory.categories'))
+
+    existing = ShopCategoryOption.query.filter_by(
+        category_id=cat.id, kind=kind, name=name
+    ).first()
+    if existing:
+        flash(f'“{name}” already exists under {cat.name}.', 'info')
+        return redirect(url_for('inventory.categories'))
+
+    db.session.add(ShopCategoryOption(category_id=cat.id, kind=kind, name=name))
+    db.session.commit()
+    label = 'Company' if kind == 'company' else 'Type'
+    flash(f'{label} “{name}” added to {cat.name}.', 'success')
+    return redirect(url_for('inventory.categories'))
+
+
+@inventory_bp.route('/categories/options/<int:option_id>/delete', methods=['POST'])
+@login_required
+def categories_delete_option(option_id):
+    opt = ShopCategoryOption.query.get_or_404(option_id)
+    name = opt.name
+    db.session.delete(opt)
+    db.session.commit()
+    flash(f'Removed “{name}”.', 'success')
+    return redirect(url_for('inventory.categories'))
+
+
+@inventory_bp.route('/categories/fuel', methods=['POST'])
+@login_required
+def categories_add_fuel():
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('Fuel type name is required.', 'danger')
+        return redirect(url_for('inventory.categories'))
+
+    fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
+    if fuel:
+        flash(f'Fuel type “{fuel.name}” already exists.', 'info')
+        return redirect(url_for('inventory.categories'))
+
+    fuel = FuelType(name=name, unit='Liter')
+    db.session.add(fuel)
+    db.session.flush()
+    db.session.add(Inventory(
+        fuel_type_id=fuel.id,
+        current_stock_liters=0,
+        reorder_threshold=0,
+    ))
+    db.session.commit()
+    flash(f'Fuel type “{name}” added. It will show in Inventory and Sales.', 'success')
+    return redirect(url_for('inventory.categories'))
 
 
 @inventory_bp.route('/api/fuels', methods=['GET'])

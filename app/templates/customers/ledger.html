@@ -175,7 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                     data-method="{{ entry.method }}">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
-                                <form method="POST" class="d-inline" onsubmit="return confirm('Delete this ledger entry? Customer balance will be recalculated.');">
+                                <form method="POST" class="d-inline"
+                                      data-confirm="Delete this ledger entry? Customer balance will be recalculated."
+                                      data-confirm-title="Delete entry">
                                     <input type="hidden" name="action" value="delete_entry">
                                     <input type="hidden" name="source_type" value="{{ entry.source_type }}">
                                     <input type="hidden" name="source_id" value="{{ entry.source_id }}">
