@@ -52,9 +52,14 @@
                 <p class="page-eyebrow">Cash flow</p>
                 <h1 class="page-title">Journal</h1>
             </div>
-            <div class="journal-range-chip">
-                <i class="bi bi-calendar3"></i>
-                <span>{{ start_date }} → {{ end_date }}</span>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <div class="journal-range-chip">
+                    <i class="bi bi-calendar3"></i>
+                    <span>{{ start_date }} → {{ end_date }}</span>
+                </div>
+                <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+                    <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
+                </button>
             </div>
         </div>
     </header>
@@ -170,6 +175,40 @@
         {% endwith %}
     </div>
 </div>
+
+<aside class="thermal-slip" aria-hidden="true">
+    <div class="thermal-slip-head">
+        <div class="thermal-brand">OctaneFlow</div>
+        <div class="thermal-sub">Cash Journal</div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-meta"><span>Period</span><span>{{ start_date }} → {{ end_date }}</span></div>
+    <div class="thermal-meta"><span>Filter</span><span>{{ direction }} / {{ entry_type }}</span></div>
+    <hr class="thermal-rule">
+    <div class="thermal-title">Movements</div>
+    <div class="thermal-lines">
+        {% for row in rows %}
+        <div class="thermal-line">
+            <div class="thermal-line-desc">{{ row.sale_date }} · {{ row.type_label }}</div>
+            <div class="thermal-line-desc">{{ row.party }} · {{ row.item_name }}</div>
+            <div class="thermal-row">
+                <span>{% if row.cash_direction == 'out' %}OUT{% else %}IN{% endif %}</span>
+                <span>{% if row.cash_direction == 'out' %}−{% endif %}{{ '%.2f'|format(row.amount) }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="thermal-line-desc">No movements</div>
+        {% endfor %}
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-totals">
+        <div class="thermal-row"><span>Cash In</span><span>{{ '%.2f'|format(total_in) }}</span></div>
+        <div class="thermal-row"><span>Cash Out</span><span>{{ '%.2f'|format(total_out) }}</span></div>
+        <div class="thermal-row"><span>Net</span><span>{{ '%.2f'|format(net) }}</span></div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-foot">Thank you · OctaneFlow</div>
+</aside>
 {% endblock %}
 
 {% block scripts %}

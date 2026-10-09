@@ -1,6 +1,11 @@
 """Vendor helpers — link inventory purchases to vendor ledgers."""
 
-from app.models import db, Vendor, VendorPayment, ItemPurchaseLog
+from app.models import (
+    db, Vendor, VendorPayment, ItemPurchaseLog, OtherItem, Inventory, StockEntry,
+)
+
+
+AUTO_PAY_NOTE_PREFIX = 'Paid with inventory purchase:'
 
 
 def normalize_vendor_name(name):
@@ -56,8 +61,6 @@ def link_purchase_to_vendor(vendor_name, purchase_log, stock_entry=None, increme
         stock_entry.vendor_id = vendor.id
         stock_entry.supplier = vendor.name
 
-    # Payable is always rebuilt via recalculate_vendor_balance after payment handling.
-    # Keep increment_balance for callers that skip apply_purchase_vendor_payment.
     if increment_balance:
         db.session.flush()
         recalculate_vendor_balance(vendor)
@@ -67,10 +70,10 @@ def link_purchase_to_vendor(vendor_name, purchase_log, stock_entry=None, increme
 
 def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid', payment_date=None):
     """
-    After purchase is linked (payable already increased by batch total):
+    After purchase is linked:
 
     unpaid → leave payable increased by cost × liters/qty
-    paid   → record VendorPayment for that same batch total (payable reduced by same amount)
+    paid   → record VendorPayment for that same batch total (payable reduced)
     Always rebuild payable from sources of truth.
     """
     status = (payment_status or 'unpaid').strip().lower()
@@ -78,12 +81,14 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
     if status == 'paid' and vendor:
         total = purchase_log_total(purchase_log)
         if total > 0:
+            db.session.flush()  # need purchase_log.id for FK
             payment = VendorPayment(
                 vendor_id=vendor.id,
                 amount_paid=total,
                 payment_date=payment_date,
                 method='Cash',
-                note=f'Paid with inventory purchase: {purchase_log.item_name} (batch PKR {total:,.2f})',
+                note=f'{AUTO_PAY_NOTE_PREFIX} {purchase_log.item_name} (batch PKR {total:,.2f})',
+                purchase_log_id=purchase_log.id,
             )
             db.session.add(payment)
 
@@ -91,6 +96,131 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
         db.session.flush()
         recalculate_vendor_balance(vendor)
     return payment
+
+
+def find_auto_payments_for_log(log):
+    """VendorPayments created automatically for a paid inventory batch."""
+    if not log or not log.id:
+        return []
+    linked = VendorPayment.query.filter_by(purchase_log_id=log.id).all()
+    if linked:
+        return linked
+
+    if not log.vendor_id:
+        return []
+    item = (log.item_name or '').strip()
+    amount = purchase_log_total(log)
+    found = []
+    for pay in VendorPayment.query.filter_by(vendor_id=log.vendor_id).all():
+        note = (pay.note or '').strip()
+        if not note.startswith(AUTO_PAY_NOTE_PREFIX):
+            continue
+        if abs(float(pay.amount_paid or 0) - amount) > 0.02:
+            continue
+        if item and item.lower() not in note.lower():
+            continue
+        found.append(pay)
+    return found
+
+
+def reverse_purchase_stock(log):
+    """Undo stock added by this purchase batch (floor at 0)."""
+    liters = float(log.liters or 0) if log.liters is not None else 0.0
+    qty = int(log.quantity or 0) if log.quantity is not None else 0
+
+    if log.category == 'fuel' and log.fuel_type_id:
+        inv = Inventory.query.filter_by(fuel_type_id=log.fuel_type_id).first()
+        if inv and liters > 0:
+            inv.current_stock_liters = max(0.0, float(inv.current_stock_liters or 0) - liters)
+        # Best-effort remove matching stock entry
+        if liters > 0:
+            se = (
+                StockEntry.query
+                .filter_by(fuel_type_id=log.fuel_type_id, vendor_id=log.vendor_id)
+                .filter(StockEntry.liters_added == liters)
+                .order_by(StockEntry.entry_date.desc(), StockEntry.id.desc())
+                .first()
+            )
+            if se and abs(float(se.cost_per_liter or 0) - float(log.cost_price or 0)) < 0.02:
+                db.session.delete(se)
+        return
+
+    item = _shop_item_for_log(log)
+    if not item:
+        return
+    if log.category == 'ft_mobile' or (liters > 0 and qty <= 0):
+        item.liters = max(0.0, float(item.liters or 0) - liters)
+    else:
+        item.quantity = max(0, int(item.quantity or 0) - qty)
+
+
+def apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty):
+    """Adjust live stock when a purchase log quantity/liters changes."""
+    d_liters = float(new_liters or 0) - float(old_liters or 0)
+    d_qty = int(new_qty or 0) - int(old_qty or 0)
+
+    if log.category == 'fuel' and log.fuel_type_id:
+        if abs(d_liters) < 1e-9:
+            return
+        inv = Inventory.query.filter_by(fuel_type_id=log.fuel_type_id).first()
+        if not inv:
+            inv = Inventory(fuel_type_id=log.fuel_type_id, current_stock_liters=0, reorder_threshold=0)
+            db.session.add(inv)
+        inv.current_stock_liters = max(0.0, float(inv.current_stock_liters or 0) + d_liters)
+        return
+
+    item = _shop_item_for_log(log)
+    if not item:
+        return
+    if log.category == 'ft_mobile' or (float(new_liters or 0) > 0 and int(new_qty or 0) <= 0):
+        item.liters = max(0.0, float(item.liters or 0) + d_liters)
+    else:
+        item.quantity = max(0, int(item.quantity or 0) + d_qty)
+
+
+def _shop_item_for_log(log):
+    if log.category == 'fuel':
+        return None
+    q = OtherItem.query.filter_by(category=log.category or 'other', name=log.item_name)
+    if log.company is not None:
+        q = q.filter_by(company=log.company)
+    if log.item_type is not None:
+        q = q.filter_by(item_type=log.item_type)
+    return q.first()
+
+
+def delete_purchase_log_cascade(log):
+    """
+    Delete a purchase batch everywhere it touches:
+    auto vendor payments, stock, purchase log, vendor payable.
+    """
+    vendor_id = log.vendor_id
+    for pay in find_auto_payments_for_log(log):
+        db.session.delete(pay)
+    reverse_purchase_stock(log)
+    db.session.delete(log)
+    db.session.flush()
+    if vendor_id:
+        vendor = Vendor.query.get(vendor_id)
+        if vendor:
+            recalculate_vendor_balance(vendor)
+    return vendor_id
+
+
+def sync_auto_payment_for_log(log):
+    """Keep linked auto-payment amount/note in sync after log edit."""
+    total = purchase_log_total(log)
+    pays = find_auto_payments_for_log(log)
+    if not pays:
+        return
+    pay = pays[0]
+    for extra in pays[1:]:
+        db.session.delete(extra)
+    pay.amount_paid = total
+    pay.note = f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})'
+    pay.purchase_log_id = log.id
+    if log.vendor_id:
+        pay.vendor_id = log.vendor_id
 
 
 def recalculate_vendor_balance(vendor):
@@ -140,3 +270,18 @@ def delete_vendor_payment(payment):
     if vendor:
         recalculate_vendor_balance(vendor)
     return vendor
+
+
+def vendor_has_linked_activity(vendor):
+    """True if vendor has purchases or payments — block hard delete."""
+    if ItemPurchaseLog.query.filter_by(vendor_id=vendor.id).first():
+        return True
+    if VendorPayment.query.filter_by(vendor_id=vendor.id).first():
+        return True
+    if StockEntry.query.filter_by(vendor_id=vendor.id).first():
+        return True
+    if float(vendor.current_balance_payable or 0) != 0:
+        return True
+    if vendor.previous_payable is not None and float(vendor.previous_payable or 0) != 0:
+        return True
+    return False

@@ -3,6 +3,21 @@
 from app.models import CreditSale, Payment, Sale
 
 
+def customer_has_linked_activity(customer):
+    """True if customer has sales, payments, or balance — block hard delete."""
+    if CreditSale.query.filter_by(customer_id=customer.id).first():
+        return True
+    if Payment.query.filter_by(customer_id=customer.id).first():
+        return True
+    if Sale.query.filter_by(customer_id=customer.id).first():
+        return True
+    if float(customer.current_balance_due or 0) != 0:
+        return True
+    if customer.previous_credit is not None and float(customer.previous_credit or 0) != 0:
+        return True
+    return False
+
+
 def recalculate_customer_balance(customer):
     """
     Rebuild current_balance_due from CreditSale + Payment + legacy Sale.

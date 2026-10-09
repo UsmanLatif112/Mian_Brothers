@@ -43,6 +43,9 @@
             <h1 class="page-title">Sales</h1>
         </div>
         <div class="page-header-actions">
+            <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+                <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
+            </button>
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#meterSaleModal" title="Meter Sale">
                 <i class="bi bi-speedometer2 me-1"></i><span class="btn-label"> Meter Sale</span>
             </button>
@@ -219,6 +222,42 @@
         </div>
     </div>
 </div>
+
+<aside class="thermal-slip" aria-hidden="true">
+    <div class="thermal-slip-head">
+        <div class="thermal-brand">OctaneFlow</div>
+        <div class="thermal-sub">Sales Invoice</div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-meta"><span>Period</span><span>{{ start_date }} → {{ end_date }}</span></div>
+    <div class="thermal-meta"><span>Printed</span><span>{{ start_date }}</span></div>
+    <hr class="thermal-rule">
+    <div class="thermal-title">Period Entries</div>
+    <div class="thermal-lines">
+        {% for cs in period_entries %}
+        {% set over_val = (sale_overs.get(cs.id, (cs.overpayment or 0)|float) if sale_overs is defined else (cs.overpayment or 0)|float) %}
+        <div class="thermal-line">
+            <div class="thermal-line-desc">#{{ cs.id }} · {{ cs.sale_date }} · {{ cs.entry_type }}</div>
+            <div class="thermal-line-desc">{{ cs.customer.name if cs.customer else 'Walk-in' }} · {{ cs.item_name }}</div>
+            <div class="thermal-row">
+                <span>{{ '%.2f'|format(cs.amount|float) }}</span>
+                <span>{% if over_val > 0 %}OVER{% else %}{{ (cs.payment_status or '')|upper }}{% endif %}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="thermal-line-desc">No entries</div>
+        {% endfor %}
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-totals">
+        <div class="thermal-row"><span>Cash sale</span><span>{{ '%.2f'|format(stats.total_cash_sale) }}</span></div>
+        <div class="thermal-row"><span>Credit sale</span><span>{{ '%.2f'|format(stats.activity_credit) }}</span></div>
+        <div class="thermal-row"><span>Receiving</span><span>{{ '%.2f'|format(stats.total_receiving) }}</span></div>
+        <div class="thermal-row"><span>Remaining</span><span>{{ '%.2f'|format(stats.remaining_balance) }}</span></div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-foot">Thank you · OctaneFlow</div>
+</aside>
 {% endblock %}
 
 {% block modals %}

@@ -165,6 +165,27 @@
                                         title="Edit Vendor">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
+                                {% if vendor_linked.get(vendor.id) %}
+                                <form method="POST" class="d-inline"
+                                      data-block-delete="“{{ vendor.name }}” already has purchases or payments. Clear linked ledger activity before deleting."
+                                      data-block-title="Cannot delete vendor">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="vendor_id" value="{{ vendor.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete Vendor">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form method="POST" class="d-inline"
+                                      data-confirm="Delete vendor “{{ vendor.name }}”? This cannot be undone."
+                                      data-confirm-title="Delete vendor">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="vendor_id" value="{{ vendor.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete Vendor">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

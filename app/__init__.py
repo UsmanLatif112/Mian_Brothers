@@ -495,6 +495,10 @@ def ensure_vendors_schema():
         existing = {col['name'] for col in inspector.get_columns('stock_entries')}
         if 'vendor_id' not in existing:
             alters.append('ALTER TABLE stock_entries ADD COLUMN vendor_id INTEGER')
+    if 'vendor_payments' in tables:
+        existing = {col['name'] for col in inspector.get_columns('vendor_payments')}
+        if 'purchase_log_id' not in existing:
+            alters.append('ALTER TABLE vendor_payments ADD COLUMN purchase_log_id INTEGER')
 
     if not alters:
         return
@@ -505,7 +509,7 @@ def ensure_vendors_schema():
                 conn.execute(text('SET SESSION lock_wait_timeout = 3'))
             for stmt in alters:
                 conn.execute(text(stmt))
-        print('Upgraded purchase tables for vendor_id.')
+        print('Upgraded vendor purchase schema.')
     except Exception as e:
         print(f'vendor schema upgrade skipped: {e}')
 

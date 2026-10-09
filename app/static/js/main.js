@@ -11,19 +11,25 @@
     }
 
     /**
-     * @param {object|string} opts message string, or { title, message, confirmLabel, cancelLabel, danger }
+     * @param {object|string} opts message string, or { title, message, confirmLabel, cancelLabel, danger, alertOnly }
      * @returns {Promise<boolean>}
      */
     window.ofConfirm = function ofConfirm(opts) {
         const options = typeof opts === 'string' ? { message: opts } : (opts || {});
         const title = options.title || 'Confirm';
         const message = options.message || 'Are you sure?';
-        const confirmLabel = options.confirmLabel || (options.danger === false ? 'Confirm' : 'Delete');
+        const alertOnly = !!options.alertOnly;
+        const confirmLabel = options.confirmLabel
+            || (alertOnly ? 'OK' : (options.danger === false ? 'Confirm' : 'Delete'));
         const cancelLabel = options.cancelLabel || 'Cancel';
-        const danger = options.danger !== false;
+        const danger = alertOnly ? false : options.danger !== false;
 
         const ctx = getModal();
         if (!ctx) {
+            if (alertOnly) {
+                window.alert(message);
+                return Promise.resolve(true);
+            }
             return Promise.resolve(window.confirm(message));
         }
 
@@ -41,11 +47,26 @@
                 ? 'btn btn-danger px-3'
                 : 'btn btn-primary-custom px-3';
         }
-        if (cancelBtn) cancelBtn.textContent = cancelLabel;
+        if (cancelBtn) {
+            cancelBtn.textContent = cancelLabel;
+            cancelBtn.classList.toggle('d-none', alertOnly);
+        }
 
         return new Promise((resolve) => {
             resolvePromise = resolve;
             modal.show();
+        });
+    };
+
+    /** Info / block alert (single OK). */
+    window.ofAlert = function ofAlert(opts) {
+        const options = typeof opts === 'string' ? { message: opts } : (opts || {});
+        return window.ofConfirm({
+            title: options.title || 'Notice',
+            message: options.message || '',
+            confirmLabel: options.confirmLabel || 'OK',
+            alertOnly: true,
+            danger: false,
         });
     };
 
@@ -69,10 +90,22 @@
         });
     });
 
-    // Forms: data-confirm="…"  optional data-confirm-title / data-confirm-btn / data-confirm-danger="0"
+    // Forms: data-block-delete="…" blocks submit with alert; data-confirm="…" asks first
     document.addEventListener('submit', (e) => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement)) return;
+
+        const blockMsg = form.getAttribute('data-block-delete');
+        if (blockMsg) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            window.ofAlert({
+                title: form.getAttribute('data-block-title') || 'Cannot delete',
+                message: blockMsg,
+            });
+            return;
+        }
+
         const message = form.getAttribute('data-confirm');
         if (!message) return;
         if (form.dataset.ofConfirmed === '1') {
@@ -100,6 +133,13 @@
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Surface "Cannot delete…" flashes as an in-app alert popup
+    const blockFlash = document.querySelector('.flash-stack .alert-danger');
+    if (blockFlash && /cannot delete/i.test(blockFlash.textContent || '')) {
+        const text = (blockFlash.textContent || '').replace(/\s+/g, ' ').trim();
+        window.ofAlert({ title: 'Cannot delete', message: text });
+    }
+
     // Theme Management
     const themeToggleBtn = document.getElementById('theme-toggle');
     const htmlElement = document.documentElement;

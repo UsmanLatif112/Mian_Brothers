@@ -178,6 +178,27 @@
                                         title="Edit Customer">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
+                                {% if customer_linked.get(cust.id) %}
+                                <form method="POST" class="d-inline"
+                                      data-block-delete="“{{ cust.name }}” already has sales or payments. Clear linked ledger activity before deleting."
+                                      data-block-title="Cannot delete customer">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="customer_id" value="{{ cust.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete Customer">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form method="POST" class="d-inline"
+                                      data-confirm="Delete customer “{{ cust.name }}”? This cannot be undone."
+                                      data-confirm-title="Delete customer">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="customer_id" value="{{ cust.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete Customer">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>

@@ -6,7 +6,7 @@ from app.utils import paginate, parse_form_date, datetime_from_date
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
 )
-from app.customers.service import recalculate_customer_balance
+from app.customers.service import recalculate_customer_balance, customer_has_linked_activity
 from datetime import datetime
 
 PER_PAGE = 15
@@ -139,6 +139,23 @@ def index():
             else:
                 flash(f"Customer details updated for '{customer.name}'.", 'success')
 
+        elif action == 'delete':
+            customer = Customer.query.get(request.form.get('customer_id'))
+            if not customer:
+                flash('Customer not found.', 'danger')
+                return redirect(url_for('customers.index'))
+            if customer_has_linked_activity(customer):
+                flash(
+                    f'Cannot delete “{customer.name}”. This customer already has sales or payments. '
+                    f'Clear linked ledger activity first.',
+                    'danger',
+                )
+                return redirect(url_for('customers.index'))
+            name = customer.name
+            db.session.delete(customer)
+            db.session.commit()
+            flash(f'Deleted customer “{name}”.', 'success')
+
         return redirect(url_for('customers.index'))
 
     # GET request
@@ -194,12 +211,15 @@ def index():
             if row.customer_id not in opening_dates and row.sale_date:
                 opening_dates[row.customer_id] = row.sale_date.isoformat()
 
+    customer_linked = {c.id: customer_has_linked_activity(c) for c in customers}
+
     from app.charts_data import customers_listing_series
 
     return render_template(
         'customers/index.html',
         customers=customers,
         customers_pagination=customers_pagination,
+        customer_linked=customer_linked,
         search=search_query,
         filter=status_filter,
         today=datetime.utcnow().date().isoformat(),

@@ -12,6 +12,11 @@ from app.vendors.service import (
     resolve_vendor,
     apply_purchase_vendor_payment,
     purchase_log_total,
+    delete_purchase_log_cascade,
+    apply_purchase_stock_delta,
+    sync_auto_payment_for_log,
+    recalculate_vendor_balance,
+    find_auto_payments_for_log,
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
@@ -510,6 +515,22 @@ def index():
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
     shop_categories = [category_payload(c) for c in list_active_categories()]
 
+    purchase_logs_q = ItemPurchaseLog.query.order_by(
+        ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc()
+    )
+    if search_q:
+        like = f'%{search_q}%'
+        purchase_logs_q = purchase_logs_q.filter(
+            db.or_(
+                ItemPurchaseLog.item_name.ilike(like),
+                ItemPurchaseLog.vendor.ilike(like),
+                ItemPurchaseLog.category.ilike(like),
+                ItemPurchaseLog.company.ilike(like),
+            )
+        )
+    logs_page = request.args.get('logs_page', 1)
+    purchase_logs, purchase_logs_pagination = paginate(purchase_logs_q, logs_page, PER_PAGE)
+
     from app.charts_data import inventory_listing_series
 
     return render_template(
@@ -520,6 +541,8 @@ def index():
         fuel_last_costs=fuel_last_costs,
         shop_items=shop_items,
         shop_pagination=shop_pagination,
+        purchase_logs=purchase_logs,
+        purchase_logs_pagination=purchase_logs_pagination,
         vendors=vendors,
         today=datetime.utcnow().date().isoformat(),
         chart_series=inventory_listing_series(),
@@ -527,6 +550,80 @@ def index():
         needs_default_fuels=needs_default_fuels,
         shop_categories=shop_categories,
     )
+
+
+@inventory_bp.route('/purchase-log/<int:log_id>/edit', methods=['POST'])
+@login_required
+def edit_purchase_log(log_id):
+    """Edit a purchase batch — updates stock, vendor payment, and payable."""
+    log = ItemPurchaseLog.query.get_or_404(log_id)
+    try:
+        cost_val = float(request.form.get('cost_price') or 0)
+        sale_val = float(request.form.get('sale_price') or log.sale_price or 0)
+        if cost_val < 0 or sale_val < 0:
+            raise ValueError('Prices cannot be negative.')
+    except (TypeError, ValueError) as e:
+        flash(f'Invalid values: {e}', 'danger')
+        return redirect(url_for('inventory.index'))
+
+    old_liters = float(log.liters or 0) if log.liters is not None else 0.0
+    old_qty = int(log.quantity or 0) if log.quantity is not None else 0
+    new_liters = old_liters
+    new_qty = old_qty
+
+    liters_raw = request.form.get('liters')
+    qty_raw = request.form.get('quantity')
+    if liters_raw not in (None, ''):
+        try:
+            new_liters = float(liters_raw)
+            if new_liters < 0:
+                raise ValueError('Liters cannot be negative.')
+        except (TypeError, ValueError) as e:
+            flash(f'Invalid liters: {e}', 'danger')
+            return redirect(url_for('inventory.index'))
+    if qty_raw not in (None, ''):
+        try:
+            new_qty = int(qty_raw)
+            if new_qty < 0:
+                raise ValueError('Quantity cannot be negative.')
+        except (TypeError, ValueError) as e:
+            flash(f'Invalid quantity: {e}', 'danger')
+            return redirect(url_for('inventory.index'))
+
+    vendor_name = (request.form.get('vendor') or log.vendor or '').strip() or None
+    apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty)
+
+    log.cost_price = cost_val
+    log.sale_price = sale_val
+    log.liters = new_liters if (log.category in ('fuel', 'ft_mobile') or new_liters > 0) else log.liters
+    if log.category not in ('fuel', 'ft_mobile'):
+        log.quantity = new_qty
+    if vendor_name:
+        log.vendor = vendor_name
+        vendor = resolve_vendor(vendor_name=vendor_name)
+        if vendor:
+            log.vendor_id = vendor.id
+
+    sync_auto_payment_for_log(log)
+    db.session.flush()
+    if log.vendor_id:
+        vendor = Vendor.query.get(log.vendor_id)
+        if vendor:
+            recalculate_vendor_balance(vendor)
+    db.session.commit()
+    flash(f'Purchase log #{log.id} updated. Stock and vendor ledger recalculated.', 'success')
+    return redirect(url_for('inventory.index'))
+
+
+@inventory_bp.route('/purchase-log/<int:log_id>/delete', methods=['POST'])
+@login_required
+def delete_purchase_log(log_id):
+    log = ItemPurchaseLog.query.get_or_404(log_id)
+    label = f'{log.item_name} (#{log.id})'
+    delete_purchase_log_cascade(log)
+    db.session.commit()
+    flash(f'Deleted purchase {label}. Stock and vendor ledger updated.', 'success')
+    return redirect(url_for('inventory.index'))
 
 
 @inventory_bp.route('/item/<int:item_id>/edit', methods=['POST'])
@@ -598,8 +695,6 @@ def edit_item(item_id):
 @inventory_bp.route('/item/<int:item_id>/delete', methods=['POST'])
 @login_required
 def delete_item(item_id):
-    from app.vendors.service import recalculate_vendor_balance
-
     item = OtherItem.query.get_or_404(item_id)
     name = item.name
     # Detach sales history; keep ledger rows but clear item FK
@@ -608,16 +703,21 @@ def delete_item(item_id):
     )
     ItemPriceLog.query.filter_by(other_item_id=item.id).delete(synchronize_session=False)
 
-    purchase_q = ItemPurchaseLog.query.filter(
+    purchase_logs = ItemPurchaseLog.query.filter(
         ItemPurchaseLog.category == (item.category or 'other'),
         ItemPurchaseLog.item_name == item.name,
         ItemPurchaseLog.company == item.company,
         ItemPurchaseLog.item_type == item.item_type,
-    )
-    vendor_ids = {
-        log.vendor_id for log in purchase_q.all() if log.vendor_id
-    }
-    purchase_q.delete(synchronize_session=False)
+    ).all()
+    vendor_ids = set()
+    for log in purchase_logs:
+        # Stock lives on the item row we're deleting — skip reverse_purchase_stock
+        for pay in find_auto_payments_for_log(log):
+            db.session.delete(pay)
+        if log.vendor_id:
+            vendor_ids.add(log.vendor_id)
+        db.session.delete(log)
+
     db.session.delete(item)
     db.session.flush()
 
@@ -627,7 +727,7 @@ def delete_item(item_id):
             recalculate_vendor_balance(vendor)
 
     db.session.commit()
-    flash(f'Deleted “{name}” and linked purchase / price logs. Vendor balances recalculated.', 'success')
+    flash(f'Deleted “{name}” with purchase logs and vendor payments. Balances recalculated.', 'success')
     return redirect(url_for('inventory.index'))
 
 
@@ -703,8 +803,6 @@ def seed_default_fuels():
 @login_required
 def delete_fuel(fuel_type_id):
     """Delete fuel type and cascade related stock / meter / machine / purchase rows."""
-    from app.vendors.service import recalculate_vendor_balance
-
     fuel = FuelType.query.get_or_404(fuel_type_id)
     name = fuel.name
 
@@ -723,10 +821,14 @@ def delete_fuel(fuel_type_id):
     MeterReading.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
     Machine.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
 
-    # Remove fuel purchase batches and rebuild vendor payables
+    # Remove fuel purchase batches + auto vendor payments, then rebuild payables
     fuel_purchases = ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).all()
     vendor_ids = {log.vendor_id for log in fuel_purchases if log.vendor_id}
-    ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+    for log in fuel_purchases:
+        for pay in find_auto_payments_for_log(log):
+            db.session.delete(pay)
+        db.session.delete(log)
+    db.session.flush()
 
     DailyFuelStock.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
     StockEntry.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)

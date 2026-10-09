@@ -13,6 +13,7 @@ from app.vendors.service import (
     get_or_create_vendor,
     edit_vendor_payment,
     delete_vendor_payment,
+    vendor_has_linked_activity,
 )
 
 PER_PAGE = 15
@@ -122,6 +123,23 @@ def index():
                 db.session.commit()
                 flash(f"Vendor details updated for '{vendor.name}'. Payable recalculated.", 'success')
 
+        elif action == 'delete':
+            vendor = Vendor.query.get(request.form.get('vendor_id'))
+            if not vendor:
+                flash('Vendor not found.', 'danger')
+                return redirect(url_for('vendors.index'))
+            if vendor_has_linked_activity(vendor):
+                flash(
+                    f'Cannot delete “{vendor.name}”. This vendor already has purchases or payments. '
+                    f'Clear linked ledger activity first.',
+                    'danger',
+                )
+                return redirect(url_for('vendors.index'))
+            name = vendor.name
+            db.session.delete(vendor)
+            db.session.commit()
+            flash(f'Deleted vendor “{name}”.', 'success')
+
         return redirect(url_for('vendors.index'))
 
     search_query = request.args.get('search', '').strip()
@@ -146,12 +164,15 @@ def index():
         PER_PAGE,
     )
 
+    vendor_linked = {v.id: vendor_has_linked_activity(v) for v in vendors}
+
     from app.charts_data import vendors_listing_series
 
     return render_template(
         'vendors/index.html',
         vendors=vendors,
         vendors_pagination=vendors_pagination,
+        vendor_linked=vendor_linked,
         search=search_query,
         filter=status_filter,
         today=datetime.utcnow().date().isoformat(),
@@ -273,6 +294,11 @@ def ledger(vendor_id):
         return desc
 
     def _match_auto_payment(log, amount):
+        for pay in payments:
+            if pay.id in used_payment_ids:
+                continue
+            if getattr(pay, 'purchase_log_id', None) == log.id:
+                return pay
         item = (log.item_name or '').strip()
         candidates = []
         for pay in payments:

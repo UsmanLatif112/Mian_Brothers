@@ -380,6 +380,10 @@ class VendorPayment(db.Model):
     payment_date = db.Column(db.DateTime, default=datetime.utcnow)
     method = db.Column(db.String(50), nullable=False, default='Cash')
     note = db.Column(db.String(200), nullable=True)
+    # Links auto "paid with purchase" rows to the inventory batch (nullable for manual pays)
+    purchase_log_id = db.Column(db.Integer, db.ForeignKey('item_purchase_logs.id'), nullable=True)
+
+    purchase_log = db.relationship('ItemPurchaseLog', foreign_keys=[purchase_log_id], lazy=True)
 
     def __repr__(self):
         return f"<VendorPayment {self.id}: {self.amount_paid} to vendor {self.vendor_id}>"
