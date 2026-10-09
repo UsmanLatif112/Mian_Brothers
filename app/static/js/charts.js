@@ -3,7 +3,7 @@
  */
 (function (global) {
     const PALETTE = [
-        '#e85d04', '#0ea5e9', '#e11d48', '#f59e0b', '#6366f1',
+        '#2563eb', '#0ea5e9', '#e11d48', '#f59e0b', '#6366f1',
         '#10b981', '#ec4899', '#38bdf8', '#84cc16', '#a855f7',
     ];
 
@@ -189,7 +189,7 @@
     }
 
     function hexToRgba(hex, alpha) {
-        if (!hex) return `rgba(232,93,4,${alpha})`;
+        if (!hex) return `rgba(37,99,235,${alpha})`;
         let h = String(hex).trim();
         if (h.startsWith('rgba') || h.startsWith('rgb')) {
             return h.replace(/rgba?\(([^)]+)\)/, (_, inner) => {

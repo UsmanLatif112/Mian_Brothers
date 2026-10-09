@@ -12,15 +12,15 @@
     /* Signal — ink + amber energy (not green Shopify) */
     --bg-color: #e8ecf2;
     --bg-accent:
-        radial-gradient(ellipse 90% 55% at 8% -8%, rgba(232, 93, 4, 0.11), transparent 52%),
+        radial-gradient(ellipse 90% 55% at 8% -8%, rgba(37, 99, 235, 0.11), transparent 52%),
         radial-gradient(ellipse 70% 45% at 100% 0%, rgba(14, 165, 233, 0.1), transparent 48%),
         linear-gradient(160deg, #eef2f7 0%, #e8ecf2 42%, #f3f5f8 100%);
     --card-bg: #ffffff;
     --card-bg-solid: #ffffff;
     --text-primary: #0b1220;
     --text-secondary: #5b6577;
-    --accent-blue: #e85d04;
-    --accent-blue-hover: #c44d03;
+    --accent-blue: #2563eb;
+    --accent-blue-hover: #1d4ed8;
     --accent-amber: #f59e0b;
     --accent-teal: #0ea5e9;
     --accent-rose: #e11d48;
@@ -42,19 +42,19 @@
     --danger-soft: #fff1f2;
     --danger-text: #e11d48;
     --table-head-bg: linear-gradient(180deg, #f5f7fb 0%, #eef2f7 100%);
-    --table-row-hover: rgba(232, 93, 4, 0.05);
+    --table-row-hover: rgba(37, 99, 235, 0.05);
     --table-stripe: rgba(11, 18, 32, 0.02);
-    --chart-sales: #e85d04;
+    --chart-sales: #2563eb;
     --chart-profit: #0ea5e9;
     --sidebar-bg: #0b1220;
     --sidebar-border: rgba(255, 255, 255, 0.06);
     --sidebar-link: #a8b0c0;
     --sidebar-link-hover: rgba(255, 255, 255, 0.06);
-    --sidebar-link-active-bg: linear-gradient(135deg, rgba(232, 93, 4, 0.22), rgba(14, 165, 233, 0.1));
+    --sidebar-link-active-bg: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(14, 165, 233, 0.1));
     --sidebar-link-active: #ffffff;
     --topbar-bg: rgba(255, 255, 255, 0.82);
-    --surface-tint: rgba(232, 93, 4, 0.07);
-    --ring: 0 0 0 3px rgba(232, 93, 4, 0.22);
+    --surface-tint: rgba(37, 99, 235, 0.07);
+    --ring: 0 0 0 3px rgba(37, 99, 235, 0.22);
     --ink: #0b1220;
     --sky: #0ea5e9;
 }
@@ -62,15 +62,15 @@
 [data-theme="dark"] {
     --bg-color: #070a12;
     --bg-accent:
-        radial-gradient(ellipse 80% 50% at 0% -5%, rgba(232, 93, 4, 0.16), transparent 50%),
+        radial-gradient(ellipse 80% 50% at 0% -5%, rgba(37, 99, 235, 0.16), transparent 50%),
         radial-gradient(ellipse 55% 40% at 100% 5%, rgba(14, 165, 233, 0.12), transparent 48%),
         linear-gradient(165deg, #0d121c 0%, #070a12 55%, #0a0f18 100%);
     --card-bg: #121826;
     --card-bg-solid: #121826;
     --text-primary: #f1f5f9;
     --text-secondary: #94a3b8;
-    --accent-blue: #ff7a2f;
-    --accent-blue-hover: #ff9459;
+    --accent-blue: #3b82f6;
+    --accent-blue-hover: #60a5fa;
     --accent-amber: #fbbf24;
     --accent-teal: #38bdf8;
     --accent-rose: #fb7185;
@@ -84,7 +84,7 @@
     --table-head-bg: linear-gradient(180deg, rgba(255, 122, 47, 0.12) 0%, rgba(255, 122, 47, 0.04) 100%);
     --table-row-hover: rgba(255, 122, 47, 0.08);
     --table-stripe: rgba(255, 255, 255, 0.02);
-    --chart-sales: #ff7a2f;
+    --chart-sales: #3b82f6;
     --chart-profit: #38bdf8;
     --sidebar-bg: #05080f;
     --sidebar-border: rgba(255, 255, 255, 0.06);
@@ -162,7 +162,7 @@ h1, h2, h3, h4, h5, h6,
 .sidebar-brand {
     padding: 1.25rem 1.15rem 1.1rem;
     border-bottom: 1px solid var(--sidebar-border);
-    background: linear-gradient(180deg, rgba(232, 93, 4, 0.12), transparent);
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0.12), transparent);
 }
 
 .sidebar-brand-link,
@@ -174,7 +174,7 @@ h1, h2, h3, h4, h5, h6,
     width: 42px;
     height: 42px;
     border-radius: 13px;
-    box-shadow: 0 8px 20px rgba(232, 93, 4, 0.35);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
     outline: 2px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -234,8 +234,8 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .sidebar-link:hover i {
-    background: rgba(232, 93, 4, 0.18);
-    color: #ff7a2f;
+    background: rgba(37, 99, 235, 0.18);
+    color: #3b82f6;
 }
 
 .sidebar-link.active {
@@ -253,12 +253,12 @@ h1, h2, h3, h4, h5, h6,
     bottom: 18%;
     width: 3px;
     border-radius: 0 4px 4px 0;
-    background: linear-gradient(180deg, #ff7a2f, #0ea5e9);
+    background: linear-gradient(180deg, #3b82f6, #0ea5e9);
 }
 
 .sidebar-link.active i {
-    background: rgba(232, 93, 4, 0.28);
-    color: #ff9459;
+    background: rgba(37, 99, 235, 0.28);
+    color: #60a5fa;
 }
 
 .sidebar-footer {
@@ -272,9 +272,9 @@ h1, h2, h3, h4, h5, h6,
 
 .sidebar-credit strong,
 .sidebar-credit-link:hover strong {
-    color: #ff7a2f !important;
+    color: #3b82f6 !important;
     background: none !important;
-    -webkit-text-fill-color: #ff7a2f;
+    -webkit-text-fill-color: #3b82f6;
 }
 
 /* ---------- Topbar ---------- */
@@ -332,8 +332,8 @@ h1, h2, h3, h4, h5, h6,
     width: 38px;
     height: 38px;
     border-radius: 12px;
-    background: linear-gradient(145deg, #e85d04, #f59e0b 55%, #0ea5e9);
-    box-shadow: 0 6px 16px rgba(232, 93, 4, 0.35);
+    background: linear-gradient(145deg, #2563eb, #3b82f6 55%, #0ea5e9);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
 }
 
 /* ---------- Page headers ---------- */
@@ -590,21 +590,21 @@ h1, h2, h3, h4, h5, h6,
 
 /* ---------- Buttons ---------- */
 .btn-primary-custom {
-    background: linear-gradient(145deg, #ff7a2f 0%, #e85d04 48%, #c44d03 100%);
+    background: linear-gradient(145deg, #3b82f6 0%, #2563eb 48%, #1d4ed8 100%);
     border: none;
     color: #fff;
     font-family: var(--font-ui);
     font-weight: 700;
     padding: 0.68rem 1.4rem;
     border-radius: 13px;
-    box-shadow: 0 8px 22px rgba(232, 93, 4, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 22px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
     transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
 .btn-primary-custom:hover {
-    background: linear-gradient(145deg, #ff8b45 0%, #e85d04 50%, #b84602 100%);
+    background: linear-gradient(145deg, #60a5fa 0%, #2563eb 50%, #1e40af 100%);
     transform: translateY(-2px);
-    box-shadow: 0 12px 28px rgba(232, 93, 4, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.25);
     color: #fff;
     filter: brightness(1.03);
 }
@@ -806,7 +806,7 @@ h1, h2, h3, h4, h5, h6,
     margin: 0 auto 0.9rem;
     border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 12px 32px rgba(232, 93, 4, 0.32);
+    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.32);
 }
 
 .auth-title {
