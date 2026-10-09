@@ -2120,19 +2120,10 @@ a.kpi-card:focus-visible {
     padding-right: 2.35rem;
 }
 
-.input-group-text {
-    background: color-mix(in srgb, var(--card-bg) 90%, var(--accent-blue) 10%) !important;
-    border-color: var(--border-color) !important;
-    color: var(--text-secondary) !important;
-    font-weight: 600;
-}
-
-.input-group .form-control-custom {
+/* Prefix/suffix money fields — seamless (no breaker boxes); full rules in ui.css */
+.input-group .form-control-custom,
+.input-group .form-control {
     box-shadow: none;
-}
-
-.input-group .form-control-custom:focus {
-    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
 }
 
 .form-check-input:checked {
@@ -3146,7 +3137,7 @@ body.has-app-shell {
     }
 
     .input-group {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
 
     .kpi-grid,

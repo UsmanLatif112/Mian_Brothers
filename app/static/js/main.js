@@ -262,6 +262,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const dropdownParentFor = (el) => (el.closest('.modal') ? 'body' : undefined);
 
+        /** Visible › chevron: points down closed, up when open */
+        const attachSelectCaret = (wrapper) => {
+            if (!wrapper || wrapper.querySelector('.of-select-caret')) return;
+            wrapper.classList.add('of-select');
+            const caret = document.createElement('span');
+            caret.className = 'of-select-caret';
+            caret.setAttribute('aria-hidden', 'true');
+            wrapper.appendChild(caret);
+        };
+
         document.querySelectorAll('select.js-search-customer').forEach((el) => {
             if (el.tomselect) return;
             const createUrl = el.dataset.createUrl;
@@ -295,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : false,
                 onInitialize() {
                     this.wrapper.classList.add('of-select', 'of-select-search');
+                    attachSelectCaret(this.wrapper);
                 },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
@@ -338,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 onInitialize() {
                     this.wrapper.classList.add('of-select', 'of-select-search');
+                    attachSelectCaret(this.wrapper);
                 },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
@@ -416,6 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 onInitialize() {
                     this.wrapper.classList.add('of-select', 'of-select-search');
+                    attachSelectCaret(this.wrapper);
                 },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
@@ -452,6 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.wrapper.classList.add('of-select');
                     if (isFilter) this.wrapper.classList.add('of-select-filter');
                     if (inModal) this.wrapper.classList.add('of-select-modal');
+                    attachSelectCaret(this.wrapper);
                 },
             });
         });

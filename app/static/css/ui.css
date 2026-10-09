@@ -848,10 +848,7 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .auth-page .input-group-text {
-    border-radius: 13px 0 0 13px !important;
-    border-color: var(--border-color);
-    background: var(--surface-tint);
-    color: var(--accent-blue);
+    color: var(--accent-blue) !important;
 }
 
 .alert-dry {
@@ -944,13 +941,18 @@ h1, h2, h3, h4, h5, h6,
    OctaneFlow selects — no native OS chrome
    ============================================ */
 :root {
-    --of-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%230d9488' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
-    --of-select-arrow-muted: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%234a5d73' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    /* Stroke › chevron (greater-than rotated) for native <select> fallback */
+    --of-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6.2 L8 10.2 L12 6.2' stroke='%230d9488' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --of-select-arrow-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 9.8 L8 5.8 L12 9.8' stroke='%230d9488' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --of-select-arrow-muted: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6.2 L8 10.2 L12 6.2' stroke='%234a5d73' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --of-caret-color: #0d9488;
 }
 
 [data-theme="dark"] {
-    --of-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%232dd4bf' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
-    --of-select-arrow-muted: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%239db0c7' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+    --of-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6.2 L8 10.2 L12 6.2' stroke='%232dd4bf' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --of-select-arrow-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 9.8 L8 5.8 L12 9.8' stroke='%232dd4bf' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --of-select-arrow-muted: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6.2 L8 10.2 L12 6.2' stroke='%239db0c7' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --of-caret-color: #2dd4bf;
 }
 
 /* Native fallback (before / if Tom Select not applied) */
@@ -983,7 +985,7 @@ select.form-control-custom:focus {
     border-color: color-mix(in srgb, var(--accent-blue) 55%, var(--border-color)) !important;
     box-shadow: var(--ring) !important;
     outline: none !important;
-    background-image: var(--of-select-arrow) !important;
+    background-image: var(--of-select-arrow-up) !important;
 }
 
 select.form-select:disabled,
@@ -1009,18 +1011,20 @@ select.form-control-custom:disabled {
     min-height: 0 !important;
 }
 
+.ts-wrapper.of-select,
+.ts-wrapper.form-control-custom {
+    position: relative !important;
+}
+
 .ts-wrapper.of-select .ts-control,
 .ts-wrapper.form-control-custom .ts-control,
 .ts-wrapper.single .ts-control {
     min-height: 2.7rem !important;
-    padding: 0.55rem 2.45rem 0.55rem 1rem !important;
+    padding: 0.55rem 2.6rem 0.55rem 1rem !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 13px !important;
     background-color: color-mix(in srgb, var(--bg-color) 42%, #fff) !important;
-    background-image: var(--of-select-arrow) !important;
-    background-repeat: no-repeat !important;
-    background-position: right 0.85rem center !important;
-    background-size: 0.85rem 0.85rem !important;
+    background-image: none !important;
     color: var(--text-primary) !important;
     box-shadow: var(--shadow-sm) !important;
     font-family: var(--font-ui) !important;
@@ -1029,6 +1033,35 @@ select.form-control-custom:disabled {
     line-height: 1.35 !important;
     cursor: pointer !important;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+/* › style caret — down when closed, up when open */
+.ts-wrapper.of-select > .of-select-caret {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-right: 2.4px solid var(--of-caret-color);
+    border-bottom: 2.4px solid var(--of-caret-color);
+    border-radius: 1px;
+    transform: translateY(-65%) rotate(45deg);
+    transform-origin: center;
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    z-index: 6;
+}
+
+.ts-wrapper.of-select.dropdown-active > .of-select-caret {
+    transform: translateY(-20%) rotate(225deg);
+}
+
+.ts-wrapper.of-select-filter > .of-select-caret {
+    right: 0.7rem;
+    width: 0.42rem;
+    height: 0.42rem;
+    border-right-width: 2.1px;
+    border-bottom-width: 2.1px;
 }
 
 .ts-wrapper.of-select:hover .ts-control,
@@ -1056,21 +1089,7 @@ select.form-control-custom:disabled {
     background-color: var(--card-bg-solid) !important;
 }
 
-/* Rotate chevron when open */
-.ts-wrapper.dropdown-active .ts-control {
-    background-image: var(--of-select-arrow) !important;
-    transform: none;
-}
-
-.ts-wrapper.dropdown-active .ts-control {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%230d9488' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M14.354 11.354a.5.5 0 0 1-.708 0L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708z'/%3E%3C/svg%3E") !important;
-}
-
-[data-theme="dark"] .ts-wrapper.dropdown-active .ts-control {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%232dd4bf' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M14.354 11.354a.5.5 0 0 1-.708 0L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708z'/%3E%3C/svg%3E") !important;
-}
-
-/* Kill Bootstrap / Tom Select default carets */
+/* Kill Bootstrap / Tom Select default carets (we use .of-select-caret) */
 .ts-wrapper.single .ts-control::after,
 .ts-wrapper.plugin-dropdown_input .ts-control::after,
 .ts-wrapper.form-select .ts-control::after {
@@ -1097,7 +1116,12 @@ select.form-control-custom:disabled {
 .ts-wrapper.disabled .ts-control {
     opacity: 0.55;
     cursor: not-allowed !important;
-    background-image: var(--of-select-arrow-muted) !important;
+    background-image: none !important;
+}
+
+.ts-wrapper.disabled > .of-select-caret {
+    opacity: 0.45;
+    border-color: var(--text-secondary);
 }
 
 /* Compact topbar / period filters */
@@ -1110,12 +1134,11 @@ select.form-control-custom:disabled {
 .ts-wrapper.of-select-filter .ts-control {
     min-height: 36px !important;
     height: 36px !important;
-    padding: 0.2rem 1.9rem 0.2rem 0.65rem !important;
+    padding: 0.2rem 1.85rem 0.2rem 0.65rem !important;
     border-radius: 10px !important;
     font-size: 0.78rem !important;
     font-weight: 600 !important;
-    background-position: right 0.55rem center !important;
-    background-size: 0.72rem 0.72rem !important;
+    background-image: none !important;
 }
 
 .topbar-filters .ts-wrapper.of-select-filter {
@@ -1212,4 +1235,130 @@ body > .ts-dropdown {
 
 [data-theme="dark"] .ts-dropdown .dropdown-input {
     background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* ============================================
+   Seamless input groups (PKR / L / icons)
+   One field — no breaker boxes
+   ============================================ */
+.input-group:not(.has-validation) {
+    position: relative;
+    display: flex;
+    flex-wrap: nowrap !important;
+    align-items: stretch;
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--bg-color) 42%, #fff);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.input-group:not(.has-validation):hover {
+    border-color: color-mix(in srgb, var(--accent-blue) 40%, var(--border-color));
+}
+
+.input-group:not(.has-validation):focus-within {
+    border-color: color-mix(in srgb, var(--accent-blue) 55%, var(--border-color));
+    box-shadow: var(--ring);
+    background: #fff;
+}
+
+[data-theme="dark"] .input-group:not(.has-validation) {
+    background: var(--card-bg-solid);
+}
+
+[data-theme="dark"] .input-group:not(.has-validation):focus-within {
+    background: var(--card-bg-solid);
+}
+
+/* Kill Bootstrap’s overlapping-border “breaker” join */
+.input-group:not(.has-validation) > :not(:first-child) {
+    margin-left: 0 !important;
+    border-left: 0 !important;
+}
+
+.input-group:not(.has-validation) > .input-group-text,
+.input-group:not(.has-validation) > .input-group-text.bg-transparent {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    color: var(--accent-blue) !important;
+    font-family: var(--font-ui);
+    font-weight: 750;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.55rem 0.45rem 0.55rem 1rem !important;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.input-group:not(.has-validation) > .form-control + .input-group-text,
+.input-group:not(.has-validation) > .form-control-custom + .input-group-text {
+    padding: 0.55rem 1rem 0.55rem 0.4rem !important;
+    color: var(--text-secondary) !important;
+    letter-spacing: 0.04em;
+}
+
+.input-group:not(.has-validation) > .form-control,
+.input-group:not(.has-validation) > .form-control-custom,
+.input-group:not(.has-validation) > .form-select,
+.input-group:not(.has-validation) > .ts-wrapper {
+    flex: 1 1 auto;
+    width: 1%;
+    min-width: 0;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    min-height: 2.7rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+
+.input-group:not(.has-validation) > .input-group-text:first-child + .form-control,
+.input-group:not(.has-validation) > .input-group-text:first-child + .form-control-custom {
+    padding-left: 0.35rem !important;
+    padding-right: 1rem !important;
+}
+
+.input-group:not(.has-validation) > .form-control:first-child,
+.input-group:not(.has-validation) > .form-control-custom:first-child {
+    padding-left: 1rem !important;
+    padding-right: 0.45rem !important;
+}
+
+.input-group:not(.has-validation) > .form-control:focus,
+.input-group:not(.has-validation) > .form-control-custom:focus,
+.input-group:not(.has-validation) > .form-select:focus {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: transparent !important;
+}
+
+.modal .input-group:not(.has-validation) {
+    border-radius: 12px;
+}
+
+.modal .input-group:not(.has-validation) > .form-control,
+.modal .input-group:not(.has-validation) > .form-control-custom {
+    min-height: 2.55rem;
+}
+
+/* Space for › caret on all Tom Select controls */
+.ts-wrapper.of-select .ts-control,
+.ts-wrapper.form-control-custom .ts-control,
+.ts-wrapper.single .ts-control {
+    background-image: none !important;
+    padding-right: 2.6rem !important;
 }

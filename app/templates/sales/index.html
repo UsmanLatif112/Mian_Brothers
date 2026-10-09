@@ -278,7 +278,7 @@
                                                        data-machine="{{ machine.id }}"
                                                        value="{{ '%.3f'|format(open_val) if open_val is not none else '' }}"
                                                        disabled>
-                                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                                                <span class="input-group-text">L</span>
                                             </div>
                                         </div>
                                         <div class="col-12 col-md-6">
@@ -290,7 +290,7 @@
                                                        data-machine="{{ machine.id }}"
                                                        value="{{ '%.3f'|format(close_val) if close_val is not none else '' }}"
                                                        disabled>
-                                                <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                                                <span class="input-group-text">L</span>
                                             </div>
                                         </div>
                                     </div>
@@ -391,7 +391,7 @@
                     <div class="mb-3 d-none" id="discount_wrap">
                         <label class="form-label form-label-custom" for="credit_discount">Discount (PKR)</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <span class="input-group-text">PKR</span>
                             <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="credit_discount" value="0" placeholder="0.00">
                         </div>
                         <small class="text-muted-custom">Optional — subtracted from the full sale total (qty × rate), not per item.</small>
@@ -399,7 +399,7 @@
                     <div class="mb-3 d-none" id="amount_wrap">
                         <label class="form-label form-label-custom" for="credit_amount_input">Total Amount (PKR)</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <span class="input-group-text">PKR</span>
                             <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="amount" id="credit_amount_input" placeholder="0.00">
                         </div>
                         <small class="text-muted-custom">Auto from qty × rate − discount. Edit if the billed total differs (e.g. rounding).</small>
@@ -493,14 +493,14 @@
                         <label class="form-label form-label-custom" for="ft_liters">Liters</label>
                         <div class="input-group">
                             <input type="number" step="0.001" min="0.001" class="form-control form-control-custom" name="liters" id="ft_liters" required>
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                            <span class="input-group-text">L</span>
                         </div>
                         <small class="text-muted-custom" id="ft_stock_hint"></small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_discount">Discount (PKR)</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <span class="input-group-text">PKR</span>
                             <input type="number" step="0.01" min="0" class="form-control form-control-custom" name="discount" id="ft_discount" value="0" placeholder="0.00">
                         </div>
                         <small class="text-muted-custom">Optional — subtracted from the full sale total (liters × rate), not per item.</small>
@@ -508,7 +508,7 @@
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_amount_input">Total Amount (PKR)</label>
                         <div class="input-group">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
+                            <span class="input-group-text">PKR</span>
                             <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" name="amount" id="ft_amount_input" placeholder="0.00">
                         </div>
                         <small class="text-muted-custom">Auto from liters × rate − discount. Edit if the billed total differs.</small>
@@ -722,7 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                    class="form-control form-control-custom meter-open"
                                    name="opening_${machineId}"
                                    data-machine="${machineId}" value="">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                            <span class="input-group-text">L</span>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
@@ -732,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                    class="form-control form-control-custom meter-close"
                                    name="closing_${machineId}"
                                    data-machine="${machineId}" value="">
-                            <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">L</span>
+                            <span class="input-group-text">L</span>
                         </div>
                     </div>
                 </div>
