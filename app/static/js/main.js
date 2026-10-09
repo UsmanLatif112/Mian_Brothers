@@ -20,11 +20,23 @@
         if (subEl) subEl.textContent = sub || 'OctaneFlow';
     }
 
+    function kickMotion(node) {
+        /* Restart CSS keyframes so car/tank never resume from a paused hidden timeline */
+        node.classList.remove('is-on');
+        void node.offsetWidth;
+        node.classList.add('is-on');
+    }
+
     function paint(on) {
         const node = el();
         if (!node) return;
-        node.classList.toggle('is-on', !!on);
-        node.setAttribute('aria-hidden', on ? 'false' : 'true');
+        if (on) {
+            kickMotion(node);
+            node.setAttribute('aria-hidden', 'false');
+        } else {
+            node.classList.remove('is-on');
+            node.setAttribute('aria-hidden', 'true');
+        }
         document.documentElement.classList.toggle('of-loading', !!on);
     }
 

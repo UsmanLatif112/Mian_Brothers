@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=5">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=10">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=6">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
     <script>
     /* Resume nav loader across full-page navigations; clear ASAP (do not wait for main.js) */
@@ -58,13 +58,12 @@
 </head>
 <body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
 
-    {# Global loader — orbit + modern nozzle filling tank #}
+    {# Global loader — spinning car orbit + tank fill (motion only while .is-on) #}
     <div class="of-loader" id="ofLoader" aria-hidden="true" role="status">
         <div class="of-loader-veil"></div>
         <div class="of-loader-panel">
             <div class="of-loader-stage" aria-hidden="true">
-                <div class="of-loader-orbit"></div>
-                <div class="of-loader-arm">
+                <div class="of-loader-spin">
                     <div class="of-loader-car">
                         <svg viewBox="0 0 28 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <rect x="3" y="5" width="20" height="6" rx="2" fill="#0f766e"/>
@@ -76,10 +75,10 @@
                     </div>
                 </div>
                 <div class="of-loader-fill">
+                    <div class="of-loader-nozzle" aria-hidden="true"></div>
+                    <div class="of-loader-drop" aria-hidden="true"></div>
                     <div class="of-loader-tank">
                         <div class="of-loader-fuel"></div>
-                        <div class="of-loader-nozzle" aria-hidden="true"></div>
-                        <div class="of-loader-drop" aria-hidden="true"></div>
                     </div>
                 </div>
             </div>
@@ -91,19 +90,24 @@
     (function () {
         var node = document.getElementById('ofLoader');
         var fromNav = !!window.__ofNavPending;
+        function kick(n) {
+            if (!n) return;
+            n.classList.remove('is-on');
+            void n.offsetWidth;
+            n.classList.add('is-on');
+            n.setAttribute('aria-hidden', 'false');
+        }
         if (fromNav && node) {
-            node.classList.add('is-on');
-            node.setAttribute('aria-hidden', 'false');
             var label = document.getElementById('ofLoaderLabel');
             if (label) label.textContent = window.__ofNavMsg || 'Loading…';
-            /* Clear right after first paint — never wait on Chart.js / main.js */
+            kick(node);
+            /* Clear after first paint — never wait on Chart.js / main.js */
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
-                    setTimeout(function () { window.__ofClearLoader(true); }, 220);
+                    setTimeout(function () { window.__ofClearLoader(true); }, 320);
                 });
             });
-            /* Absolute nav failsafe only */
-            setTimeout(function () { window.__ofClearLoader(true); }, 900);
+            setTimeout(function () { window.__ofClearLoader(true); }, 1000);
         }
     })();
     </script>
@@ -301,7 +305,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=19"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=20"></script>
 
     {% block scripts %}{% endblock %}
 </body>
