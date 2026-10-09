@@ -106,7 +106,7 @@ body.sidebar-open .sidebar-backdrop {
     justify-content: center;
     overflow: hidden;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.28);
     background: transparent;
 }
 
@@ -583,7 +583,7 @@ body.sidebar-open .sidebar-backdrop {
     font-weight: 700;
     font-size: 0.9rem;
     color: #fff;
-    background: linear-gradient(145deg, #2563eb, #3b82f6 55%, #0ea5e9);
+    background: linear-gradient(145deg, #0d9488, #14b8a6 55%, #0284c7);
     flex-shrink: 0;
 }
 

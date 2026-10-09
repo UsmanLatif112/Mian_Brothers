@@ -18,6 +18,13 @@
             <h1 class="page-title">Inventory Control</h1>
         </div>
         <div class="page-header-actions">
+            {% if needs_default_fuels %}
+            <form method="POST" action="{{ url_for('inventory.seed_default_fuels') }}" class="d-inline">
+                <button type="submit" class="btn btn-outline-secondary" title="Create Petrol & Diesel">
+                    <i class="bi bi-fuel-pump me-1"></i><span class="btn-label"> Add Petrol &amp; Diesel</span>
+                </button>
+            </form>
+            {% endif %}
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn" title="Add Inventory">
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Inventory</span>
             </button>
@@ -120,7 +127,12 @@
     <div class="col-12">
         <div class="card card-premium">
             <div class="card-body text-center py-4">
-                <p class="text-muted-custom mb-0">No fuel types yet. Use <strong>Add Inventory</strong> to add fuel and stock.</p>
+                <p class="text-muted-custom mb-3">No fuel types yet.</p>
+                <form method="POST" action="{{ url_for('inventory.seed_default_fuels') }}" class="d-inline">
+                    <button type="submit" class="btn btn-primary-custom btn-sm">
+                        <i class="bi bi-fuel-pump me-1"></i> Create Petrol &amp; Diesel
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -310,9 +322,6 @@
                                 </option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text text-muted-custom">
-                                List loads from inventory fuel types. Type a new name and choose <strong>Add …</strong> if it is not listed.
-                            </div>
                         </div>
 
                         <div class="col-12 field-group d-none" data-show="ft_mobile">
@@ -426,18 +435,14 @@
                                 </option>
                                 {% endfor %}
                             </select>
-                            <div class="form-text text-muted-custom">Purchase posts to this vendor account.</div>
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
                             <label for="payment_status" class="form-label form-label-custom">Payment to Vendor</label>
                             <select class="form-select form-control-custom" id="payment_status" name="payment_status">
-                                <option value="unpaid" selected>Unpaid — add batch total to vendor payable</option>
-                                <option value="paid">Paid — settle batch total against vendor payable</option>
+                                <option value="unpaid" selected>Unpaid</option>
+                                <option value="paid">Paid</option>
                             </select>
-                            <div class="form-text text-muted-custom" id="payment_status_hint">
-                                Uses batch total (cost × liters/qty). Unpaid increases payable; Paid records payment for the same amount.
-                            </div>
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
@@ -446,21 +451,19 @@
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
-                            <label for="cost_price" class="form-label form-label-custom">Cost Price <span class="text-muted-custom fw-normal">(this purchase only)</span></label>
+                            <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
                                 <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="cost_price" name="cost_price" placeholder="e.g. 200">
                             </div>
-                            <div class="form-text text-muted-custom" id="cost_price_hint">Per liter for this batch — kept in Purchasing even if next buy is different.</div>
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
-                            <label for="sale_price" class="form-label form-label-custom">Sale Price <span class="text-muted-custom fw-normal">(all live stock)</span></label>
+                            <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent" style="border-color: var(--border-color); color: var(--text-secondary);">PKR</span>
                                 <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="sale_price" name="sale_price" placeholder="Current selling price">
                             </div>
-                            <div class="form-text text-muted-custom" id="sale_price_hint">Updates selling rate for the whole stock of this item.</div>
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile">
@@ -706,22 +709,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const litersLabel = document.querySelector('.liters-label');
         if (litersLabel) {
             litersLabel.textContent = cat === 'mobile' ? 'Liters (per unit)' : 'Liters';
-        }
-        const costHint = document.getElementById('cost_price_hint');
-        const saleHint = document.getElementById('sale_price_hint');
-        if (costHint) {
-            if (cat === 'fuel' || cat === 'ft_mobile') {
-                costHint.textContent = 'Per liter for this batch only — each save becomes its own Purchasing line.';
-            } else if (cat === 'mobile' || cat === 'filter' || cat === 'other') {
-                costHint.textContent = 'Cost per unit for this batch — logged in Purchasing separately from older buys.';
-            }
-        }
-        if (saleHint) {
-            if (cat === 'fuel' || cat === 'ft_mobile') {
-                saleHint.textContent = 'Selling price per liter for all live stock of this fuel / FT oil.';
-            } else {
-                saleHint.textContent = 'Selling price for this product (all units in stock).';
-            }
         }
         updateBatchTotal();
         syncOtherNameFields();

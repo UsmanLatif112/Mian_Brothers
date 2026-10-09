@@ -68,42 +68,36 @@
                 <h2 class="panel-title mb-0">Expense Ledger</h2>
             </div>
             <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0 list-table">
+                <table class="table table-custom table-hover mb-0 list-table expense-table">
                     <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>By</th>
-                            <th></th>
+                            <th class="exp-col-date">Date</th>
+                            <th class="exp-col-name">Name</th>
+                            <th class="exp-col-desc">Description</th>
+                            <th class="text-end exp-col-amount">Amount</th>
+                            <th class="exp-col-status">Status</th>
+                            <th class="exp-col-by">By</th>
+                            <th class="text-end exp-col-actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if expenses %}
                             {% for e in expenses %}
                             <tr>
-                                <td>{{ e.expense_date }}</td>
-                                <td class="fw-semibold">{{ e.name }}</td>
-                                <td class="text-muted-custom">{{ e.description or '—' }}</td>
-                                <td>{{ e.amount | money }}</td>
-                                <td>
+                                <td class="text-nowrap list-cell-muted exp-col-date">{{ e.expense_date }}</td>
+                                <td class="fw-semibold exp-col-name">{{ e.name }}</td>
+                                <td class="text-muted-custom exp-col-desc" title="{{ e.description or '' }}">{{ e.description or '—' }}</td>
+                                <td class="text-end text-nowrap fw-semibold exp-col-amount">{{ e.amount | money }}</td>
+                                <td class="exp-col-status">
                                     {% if e.is_settled %}
-                                        <span class="badge badge-custom badge-success-custom">Settled</span>
-                                        {% if e.settled_date %}
-                                            <div class="small text-muted-custom mt-1">{{ e.settled_date }}</div>
-                                        {% endif %}
-                                        {% if e.settle_note %}
-                                            <div class="small text-muted-custom">{{ e.settle_note }}</div>
-                                        {% endif %}
+                                        <span class="badge badge-custom badge-success-custom" {% if e.settled_date %}title="Settled {{ e.settled_date }}"{% endif %}>Settled</span>
                                     {% else %}
                                         <span class="badge badge-custom badge-danger-custom">Open</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ e.recorder.name if e.recorder else '—' }}</td>
-                                <td>
-                                    <div class="table-actions btn-group gap-1">
+                                <td class="text-nowrap exp-col-by">{{ e.recorder.name if e.recorder else '—' }}</td>
+                                <td class="text-end exp-col-actions">
+                                    <div class="table-actions justify-content-end">
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-secondary border-0"
@@ -130,11 +124,11 @@
                                             data-expense-name="{{ e.name }}"
                                             data-expense-amount="{{ '%.2f'|format(e.amount|float) }}"
                                             data-expense-date="{{ e.expense_date }}"
-                                            title="Settle — return cash to till">
-                                            <i class="bi bi-check2-circle"></i><span class="btn-label"> Settle</span>
+                                            title="Settle">
+                                            <i class="bi bi-check2-circle"></i>
                                         </button>
                                         {% else %}
-                                        <form method="POST" onsubmit="return confirm('Unsettle this expense? Cash in hand will decrease again.');">
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Unsettle this expense? Cash in hand will decrease again.');">
                                             <input type="hidden" name="action" value="unsettle">
                                             <input type="hidden" name="expense_id" value="{{ e.id }}">
                                             <button class="btn btn-sm btn-outline-secondary border-0" type="submit" title="Mark open again">
@@ -142,7 +136,7 @@
                                             </button>
                                         </form>
                                         {% endif %}
-                                        <form method="POST" onsubmit="return confirm('Delete this expense?');">
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Delete this expense?');">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="expense_id" value="{{ e.id }}">
                                             <button class="btn btn-sm btn-outline-danger border-0" type="submit" title="Delete">

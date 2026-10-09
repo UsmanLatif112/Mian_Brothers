@@ -38,9 +38,6 @@
         <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="payment" title="Record Payment">
             <i class="bi bi-wallet2 me-1"></i><span class="btn-label"> Record Payment</span>
         </button>
-        <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="advance" title="Advance / Loan">
-            <i class="bi bi-cash-coin me-1"></i><span class="btn-label"> Advance / Loan</span>
-        </button>
         <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
             <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
         </button>
@@ -255,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="hidden" name="amount" id="ledger_amount" value="">
 
                 <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold" id="ledgerModalLabel">Settlement / Advance / Loan</h5>
+                    <h5 class="modal-title fw-bold" id="ledgerModalLabel">Record Payment</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
@@ -439,10 +436,12 @@ document.addEventListener('DOMContentLoaded', () => {
             amountInput.addEventListener('input', () => applyType(typeSel ? typeSel.value : 'payment'));
         }
 
+        const titleEl = document.getElementById('ledgerModalLabel');
         document.querySelectorAll('[data-ledger-mode]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const mode = btn.getAttribute('data-ledger-mode') || 'payment';
                 if (typeSel) typeSel.value = mode;
+                if (titleEl) titleEl.textContent = 'Record Payment';
                 applyType(mode);
             });
         });

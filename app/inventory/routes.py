@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.inventory import inventory_bp
 from app.models import (
     db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog,
-    Sale, Machine, CreditSale, DailyFuelStock, Vendor,
+    Sale, Machine, MeterReading, CreditSale, DailyFuelStock, Vendor,
 )
 from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for
 from app.vendors.service import (
@@ -431,6 +431,8 @@ def index():
     shop_items, shop_pagination = paginate(items_q, stock_page, PER_PAGE)
 
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+    existing_fuel_names = {ft.name.lower() for ft in fuel_types}
+    needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
 
     from app.charts_data import inventory_listing_series
 
@@ -446,6 +448,7 @@ def index():
         today=datetime.utcnow().date().isoformat(),
         chart_series=inventory_listing_series(),
         search=search_q,
+        needs_default_fuels=needs_default_fuels,
     )
 
 
@@ -520,13 +523,21 @@ def edit_item(item_id):
 def delete_item(item_id):
     item = OtherItem.query.get_or_404(item_id)
     name = item.name
+    # Detach sales history; keep ledger rows but clear item FK
     CreditSale.query.filter_by(other_item_id=item.id).update(
         {CreditSale.other_item_id: None}, synchronize_session=False
     )
     ItemPriceLog.query.filter_by(other_item_id=item.id).delete(synchronize_session=False)
+    # Cascade matching purchase logs for this shop item
+    ItemPurchaseLog.query.filter(
+        ItemPurchaseLog.category == (item.category or 'other'),
+        ItemPurchaseLog.item_name == item.name,
+        ItemPurchaseLog.company == item.company,
+        ItemPurchaseLog.item_type == item.item_type,
+    ).delete(synchronize_session=False)
     db.session.delete(item)
     db.session.commit()
-    flash(f'Deleted “{name}” from inventory.', 'success')
+    flash(f'Deleted “{name}” and linked purchase / price logs.', 'success')
     return redirect(url_for('inventory.index'))
 
 
@@ -568,36 +579,66 @@ def edit_fuel(fuel_type_id):
     return redirect(url_for('inventory.index'))
 
 
+@inventory_bp.route('/fuel/seed-defaults', methods=['POST'])
+@login_required
+def seed_default_fuels():
+    """Create default Petrol and Diesel fuel categories from the UI."""
+    created = []
+    for name in ('Petrol', 'Diesel'):
+        fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
+        if fuel:
+            continue
+        fuel = FuelType(name=name, unit='Liter')
+        db.session.add(fuel)
+        db.session.flush()
+        db.session.add(Inventory(
+            fuel_type_id=fuel.id,
+            current_stock_liters=0,
+            reorder_threshold=0,
+        ))
+        created.append(name)
+
+    db.session.commit()
+    if created:
+        flash(f'Created fuel categories: {", ".join(created)}.', 'success')
+    else:
+        flash('Petrol and Diesel already exist.', 'info')
+    return redirect(url_for('inventory.index'))
+
+
 @inventory_bp.route('/fuel/<int:fuel_type_id>/delete', methods=['POST'])
 @login_required
 def delete_fuel(fuel_type_id):
+    """Delete fuel type and cascade related stock / meter / machine rows."""
     fuel = FuelType.query.get_or_404(fuel_type_id)
     name = fuel.name
 
-    sale_count = Sale.query.filter_by(fuel_type_id=fuel.id).count()
-    credit_count = CreditSale.query.filter_by(fuel_type_id=fuel.id).count()
-    if sale_count or credit_count:
-        flash(
-            f'Cannot delete “{name}”: it is used in sale records.',
-            'danger',
-        )
-        return redirect(url_for('inventory.index'))
+    # Detach sale history (keep ledger rows, clear fuel FK)
+    CreditSale.query.filter_by(fuel_type_id=fuel.id).update(
+        {CreditSale.fuel_type_id: None}, synchronize_session=False
+    )
+    Sale.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
 
-    machine_count = Machine.query.filter_by(fuel_type_id=fuel.id).count()
-    if machine_count:
-        flash(
-            f'Cannot delete “{name}”: {machine_count} machine(s) are linked to it.',
-            'danger',
+    # Machines → their meter readings first
+    machine_ids = [m.id for m in Machine.query.filter_by(fuel_type_id=fuel.id).all()]
+    if machine_ids:
+        MeterReading.query.filter(MeterReading.machine_id.in_(machine_ids)).delete(
+            synchronize_session=False
         )
-        return redirect(url_for('inventory.index'))
+    MeterReading.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+    Machine.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
 
     ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).update(
         {ItemPurchaseLog.fuel_type_id: None}, synchronize_session=False
     )
     DailyFuelStock.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+    StockEntry.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+    FuelPrice.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+    Inventory.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+
     db.session.delete(fuel)
     db.session.commit()
-    flash(f'Deleted fuel type “{name}”.', 'success')
+    flash(f'Deleted fuel type “{name}” and linked stock / meters / machines.', 'success')
     return redirect(url_for('inventory.index'))
 
 

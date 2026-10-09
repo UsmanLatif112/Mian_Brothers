@@ -3,8 +3,8 @@
  */
 (function (global) {
     const PALETTE = [
-        '#2563eb', '#0ea5e9', '#e11d48', '#f59e0b', '#6366f1',
-        '#10b981', '#ec4899', '#38bdf8', '#84cc16', '#a855f7',
+        '#0d9488', '#0284c7', '#e11d48', '#d97706', '#4f46e5',
+        '#059669', '#ec4899', '#38bdf8', '#84cc16', '#a855f7',
     ];
 
     function theme() {
@@ -189,7 +189,7 @@
     }
 
     function hexToRgba(hex, alpha) {
-        if (!hex) return `rgba(37,99,235,${alpha})`;
+        if (!hex) return `rgba(13,148,136,${alpha})`;
         let h = String(hex).trim();
         if (h.startsWith('rgba') || h.startsWith('rgb')) {
             return h.replace(/rgba?\(([^)]+)\)/, (_, inner) => {

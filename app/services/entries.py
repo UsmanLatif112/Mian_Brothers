@@ -25,14 +25,19 @@ def _is_ft_item(item):
 
 
 def restore_sale_stock(cs):
-    """Put back OtherItem stock consumed by a sale CreditSale."""
-    if (cs.entry_type or 'sale').lower() != 'sale' or not cs.other_item_id:
-        return
-    item = OtherItem.query.get(cs.other_item_id)
-    if not item:
+    """Put back shop/FT stock consumed by a sale CreditSale."""
+    if (cs.entry_type or 'sale').lower() != 'sale':
         return
     qty = float(cs.liters or 0)
     if qty <= 0:
+        return
+
+    if not cs.other_item_id:
+        # Fuel credit sales are ledger-only; tank stock comes from meter sales.
+        return
+
+    item = OtherItem.query.get(cs.other_item_id)
+    if not item:
         return
     if _is_ft_item(item):
         item.liters = float(item.liters or 0) + qty
@@ -41,15 +46,16 @@ def restore_sale_stock(cs):
 
 
 def apply_sale_stock_delta(item, old_qty, new_qty):
-    """Adjust stock when sale quantity changes (new - old consumed)."""
-    if not item:
-        return
+    """Adjust shop/FT stock when sale quantity changes (new - old consumed).
+
+    Fuel tank stock is owned by meter sales — credit fuel ledger edits do not touch it.
+    """
     delta = float(new_qty) - float(old_qty)
-    if abs(delta) < 1e-9:
+    if abs(delta) < 1e-9 or not item:
         return
+
     if _is_ft_item(item):
         available = float(item.liters or 0)
-        # Positive delta = more sold → need more stock out
         if delta > 0 and available < delta:
             raise EntryError(
                 f'Not enough stock. Available {available:.2f} L, need {delta:.2f} L more.'
@@ -66,9 +72,17 @@ def apply_sale_stock_delta(item, old_qty, new_qty):
 
 
 def delete_credit_sale(cs):
-    """Delete a CreditSale, restore stock if needed, recalc customer balance."""
+    """Delete a CreditSale, restore stock, sync previous_credit, recalc balance."""
     customer = Customer.query.get(cs.customer_id) if cs.customer_id else None
+    et = (cs.entry_type or 'sale').lower()
     restore_sale_stock(cs)
+
+    # Opening row owns customer.previous_credit — clear when deleted
+    if et == 'opening' and customer:
+        customer.previous_credit = None
+    elif et == 'advance' and customer and (cs.remarks or '') == 'Previous / opening advance':
+        customer.previous_credit = None
+
     db.session.delete(cs)
     db.session.flush()
     if customer:
@@ -121,7 +135,11 @@ def edit_credit_sale(cs, form):
             if cs.customer_id:
                 customer = Customer.query.get(cs.customer_id)
                 if customer:
-                    customer.previous_credit = amt
+                    # Keep customer.previous_credit in sync with opening row
+                    if (cs.remarks or '') == 'Previous / opening advance' or float(cs.amount or 0) < 0:
+                        customer.previous_credit = -abs(amt)
+                    else:
+                        customer.previous_credit = amt
 
         db.session.flush()
         if cs.customer_id:
@@ -196,8 +214,7 @@ def edit_credit_sale(cs, form):
 
     old_qty = float(cs.liters or 0)
     item = OtherItem.query.get(cs.other_item_id) if cs.other_item_id else None
-    if item:
-        apply_sale_stock_delta(item, old_qty, qty)
+    apply_sale_stock_delta(item, old_qty, qty)
 
     old_customer_id = cs.customer_id
     cs.sale_date = entry_date
