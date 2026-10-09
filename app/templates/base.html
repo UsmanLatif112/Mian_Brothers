@@ -76,17 +76,33 @@
     </div>
     <script>
     (function () {
-        try {
-            if (sessionStorage.getItem('ofNavLoad') === '1') {
-                var node = document.getElementById('ofLoader');
-                if (node) {
-                    node.classList.add('is-on');
-                    node.setAttribute('aria-hidden', 'false');
-                    var label = document.getElementById('ofLoaderLabel');
-                    if (label) label.textContent = sessionStorage.getItem('ofNavMsg') || 'Loading…';
-                }
+        var node = document.getElementById('ofLoader');
+        var fromNav = false;
+        try { fromNav = sessionStorage.getItem('ofNavLoad') === '1'; } catch (e) {}
+        if (fromNav && node) {
+            node.classList.add('is-on');
+            node.setAttribute('aria-hidden', 'false');
+            var label = document.getElementById('ofLoaderLabel');
+            if (label) {
+                try { label.textContent = sessionStorage.getItem('ofNavMsg') || 'Loading…'; }
+                catch (e2) { label.textContent = 'Loading…'; }
             }
-        } catch (e) {}
+        }
+        /* Hard failsafe: never leave the loader stuck if JS is late/broken */
+        setTimeout(function () {
+            try {
+                sessionStorage.removeItem('ofNavLoad');
+                sessionStorage.removeItem('ofNavMsg');
+            } catch (e3) {}
+            document.documentElement.classList.remove('of-loading');
+            if (node) {
+                node.classList.remove('is-on');
+                node.setAttribute('aria-hidden', 'true');
+            }
+            if (window.ofLoader && typeof window.ofLoader.hide === 'function') {
+                window.ofLoader.hide(true);
+            }
+        }, 1800);
     })();
     </script>
 
@@ -283,7 +299,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=17"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=18"></script>
 
     {% block scripts %}{% endblock %}
 </body>
