@@ -293,6 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
                               });
                       }
                     : false,
+                onInitialize() {
+                    this.wrapper.classList.add('of-select', 'of-select-search');
+                },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
         });
@@ -332,6 +335,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...shared.render,
                     option_create: (data, escape) =>
                         `<div class="create">Add vendor <strong>${escape(data.input)}</strong>…</div>`,
+                },
+                onInitialize() {
+                    this.wrapper.classList.add('of-select', 'of-select-search');
                 },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
@@ -408,14 +414,52 @@ document.addEventListener('DOMContentLoaded', () => {
                           }
                         : {}),
                 },
+                onInitialize() {
+                    this.wrapper.classList.add('of-select', 'of-select-search');
+                },
             });
             tom.on('change', () => el.dispatchEvent(new Event('change', { bubbles: true })));
+        });
+
+        // Plain selects (filters + modal fields) — same custom UI, no native OS chrome
+        document.querySelectorAll('select.form-select').forEach((el) => {
+            if (el.tomselect) return;
+
+            const isFilter =
+                el.classList.contains('topbar-filter-select') ||
+                el.classList.contains('period-select') ||
+                el.classList.contains('topbar-filter-type');
+            const inModal = !!el.closest('.modal');
+            const optionCount = el.options ? el.options.length : 0;
+            const searchable = !isFilter && optionCount > 10;
+
+            new TomSelect(el, {
+                maxOptions: null,
+                allowEmptyOption: true,
+                create: false,
+                controlInput: searchable ? undefined : null,
+                openOnFocus: true,
+                closeAfterSelect: true,
+                hideSelected: false,
+                searchField: ['text'],
+                dropdownParent: inModal ? 'body' : undefined,
+                placeholder: el.dataset.placeholder || el.getAttribute('placeholder') || '',
+                render: {
+                    no_results: (data, escape) =>
+                        `<div class="no-results">No matches for “${escape(data.input)}”</div>`,
+                },
+                onInitialize() {
+                    this.wrapper.classList.add('of-select');
+                    if (isFilter) this.wrapper.classList.add('of-select-filter');
+                    if (inModal) this.wrapper.classList.add('of-select-modal');
+                },
+            });
         });
 
         // Keep Tom Select usable inside Bootstrap modals (focus + position)
         document.querySelectorAll('.modal').forEach((modalEl) => {
             modalEl.addEventListener('shown.bs.modal', () => {
-                modalEl.querySelectorAll('select.js-search-item, select.js-search-customer, select.js-search-vendor').forEach((el) => {
+                modalEl.querySelectorAll('select.form-select').forEach((el) => {
                     if (!el.tomselect) return;
                     el.tomselect.positionDropdown();
                 });
