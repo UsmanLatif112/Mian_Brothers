@@ -456,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 hideSelected: false,
                 searchField: ['text'],
                 dropdownParent: inModal ? 'body' : undefined,
+                dropdownClass: isFilter ? 'ts-dropdown of-select-filter-menu' : 'ts-dropdown',
                 placeholder: el.dataset.placeholder || el.getAttribute('placeholder') || '',
                 render: {
                     no_results: (data, escape) =>
@@ -466,6 +467,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isFilter) this.wrapper.classList.add('of-select-filter');
                     if (inModal) this.wrapper.classList.add('of-select-modal');
                     attachSelectCaret(this.wrapper);
+                },
+                onDropdownOpen() {
+                    if (!isFilter || !this.dropdown) return;
+                    // Fit labels on one line — don't inherit the narrow control width
+                    this.dropdown.style.minWidth = '13rem';
+                    this.dropdown.style.width = 'max-content';
+                    this.dropdown.style.maxWidth = 'min(90vw, 18rem)';
                 },
             });
         });

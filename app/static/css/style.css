@@ -822,8 +822,9 @@ input.is-submitting {
     box-shadow: var(--shadow-md);
 }
 .ts-dropdown .ts-dropdown-content {
-    max-height: min(50vh, 280px);
+    max-height: min(70vh, 360px);
     overflow-y: auto;
+    overflow-x: hidden;
     overscroll-behavior: contain;
 }
 .ts-control {

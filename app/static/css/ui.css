@@ -1176,10 +1176,28 @@ body > .ts-dropdown {
 }
 
 .ts-dropdown .ts-dropdown-content {
-    max-height: min(50vh, 280px);
+    max-height: min(70vh, 360px);
     overflow-y: auto;
+    overflow-x: hidden;
     overscroll-behavior: contain;
     padding: 0 !important;
+}
+
+/* Topbar / period filters — few options, no scrollbar, no text wrap */
+.ts-dropdown.of-select-filter-menu {
+    min-width: 13rem !important;
+    width: max-content !important;
+    max-width: min(90vw, 18rem) !important;
+}
+
+.ts-dropdown.of-select-filter-menu .ts-dropdown-content {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+.ts-dropdown.of-select-filter-menu .option {
+    white-space: nowrap !important;
+    padding: 0.48rem 0.85rem !important;
 }
 
 .ts-dropdown .option,
@@ -1194,6 +1212,7 @@ body > .ts-dropdown {
     font-weight: 500 !important;
     color: var(--text-primary) !important;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .ts-dropdown .option:hover,
