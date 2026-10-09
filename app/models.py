@@ -474,6 +474,7 @@ class ItemPurchaseLog(db.Model):
     quantity = db.Column(db.Integer, nullable=True)
     liters = db.Column(db.Numeric(12, 2), nullable=True)
     fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), nullable=True)
+    payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid
     entry_date = db.Column(db.DateTime, default=datetime.utcnow)
     added_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 

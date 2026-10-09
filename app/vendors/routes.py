@@ -14,6 +14,7 @@ from app.vendors.service import (
     edit_vendor_payment,
     delete_vendor_payment,
     vendor_has_linked_activity,
+    purchase_log_payment_status,
 )
 
 PER_PAGE = 15
@@ -268,6 +269,7 @@ def ledger(vendor_id):
             'credit': 0.0,
             'ref_id': 'Opening',
             'pay_type': 'opening',
+            'payment_status': 'opening',
         })
 
     purchases = ItemPurchaseLog.query.filter_by(vendor_id=vendor.id).order_by(
@@ -333,20 +335,34 @@ def ledger(vendor_id):
     for log in purchases:
         amount = purchase_log_total(log)
         desc = _purchase_desc(log)
+        status = purchase_log_payment_status(log)
         auto_pay = _match_auto_payment(log, amount) if amount > 0 else None
         if auto_pay:
             used_payment_ids.add(auto_pay.id)
             entry = {
                 'date': log.entry_date or auto_pay.payment_date or datetime.min,
                 'type': 'purchase',
-                'desc': f"{desc} · Paid",
+                'desc': desc,
                 'debit': amount,
                 'credit': amount,
                 'ref_id': f"Purchase #{log.id}",
-                'pay_type': 'paid',
+                'pay_type': 'Cash',
+                'payment_status': 'paid',
             }
             entry.update(_pay_meta(auto_pay))
             ledger_entries.append(entry)
+        elif status == 'paid':
+            # Column says paid but auto payment missing — still show as paid settle
+            ledger_entries.append({
+                'date': log.entry_date or datetime.min,
+                'type': 'purchase',
+                'desc': desc,
+                'debit': amount,
+                'credit': amount,
+                'ref_id': f"Purchase #{log.id}",
+                'pay_type': 'Cash',
+                'payment_status': 'paid',
+            })
         else:
             ledger_entries.append({
                 'date': log.entry_date or datetime.min,
@@ -356,6 +372,7 @@ def ledger(vendor_id):
                 'credit': 0.0,
                 'ref_id': f"Purchase #{log.id}",
                 'pay_type': log.category,
+                'payment_status': 'unpaid',
             })
 
     for pay in payments:
@@ -369,6 +386,7 @@ def ledger(vendor_id):
             'credit': float(pay.amount_paid or 0),
             'ref_id': f"Payment #{pay.id}",
             'pay_type': pay.method,
+            'payment_status': 'paid',
         }
         entry.update(_pay_meta(pay))
         ledger_entries.append(entry)

@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <th>Date / Time</th>
                     <th>Reference</th>
                     <th>Description</th>
+                    <th>Status</th>
                     <th class="text-end">Purchase (+)</th>
                     <th class="text-end">Paid (−)</th>
                     <th class="text-end">Balance</th>
@@ -141,10 +142,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td class="ledger-desc-cell">
                             <div class="ledger-desc-wrap">
                                 <span class="ledger-desc-text">{{ entry.desc }}</span>
-                                {% if entry.pay_type %}
+                                {% if entry.pay_type and entry.payment_status != 'paid' and entry.payment_status != 'unpaid' %}
+                                <span class="ledger-badge badge badge-custom badge-staff text-uppercase">{{ entry.pay_type }}</span>
+                                {% elif entry.type == 'payment' and entry.pay_type %}
                                 <span class="ledger-badge badge badge-custom badge-staff text-uppercase">{{ entry.pay_type }}</span>
                                 {% endif %}
                             </div>
+                        </td>
+                        <td>
+                            {% if entry.payment_status == 'paid' or (entry.type == 'payment') %}
+                            <span class="badge badge-custom badge-success-custom text-uppercase">Paid</span>
+                            {% elif entry.payment_status == 'unpaid' %}
+                            <span class="badge badge-custom badge-danger-custom text-uppercase">Unpaid</span>
+                            {% elif entry.pay_type == 'opening' %}
+                            <span class="badge badge-custom badge-staff text-uppercase">Opening</span>
+                            {% else %}
+                            <span class="text-muted-custom">—</span>
+                            {% endif %}
                         </td>
                         <td class="text-end text-danger fw-semibold">
                             {% if entry.debit > 0 %}+{{ entry.debit | money }}{% else %}—{% endif %}
@@ -184,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="7" class="empty-state text-center py-5">
+                        <td colspan="8" class="empty-state text-center py-5">
                             <div class="empty-state-icon"><i class="bi bi-journal-check"></i></div>
                             <p class="text-muted-custom">No transactions yet for this vendor.</p>
                         </td>
@@ -212,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="thermal-line-desc">{{ entry.date.strftime('%d/%m %H:%M') if entry.date else '—' }} · {{ entry.ref_id }}</div>
             <div class="thermal-line-desc">{{ entry.desc }}</div>
             <div class="thermal-row">
-                <span>{% if entry.debit > 0 %}Pur {{ '%.2f'|format(entry.debit) }}{% elif entry.credit > 0 %}Pay {{ '%.2f'|format(entry.credit) }}{% else %}—{% endif %}</span>
+                <span>{% if entry.payment_status == 'paid' or entry.type == 'payment' %}PAID{% elif entry.payment_status == 'unpaid' %}UNPAID{% elif entry.debit > 0 %}Pur{% else %}Pay{% endif %} {% if entry.debit > 0 %}{{ '%.2f'|format(entry.debit) }}{% elif entry.credit > 0 %}{{ '%.2f'|format(entry.credit) }}{% endif %}</span>
                 <span>Bal {{ '%.2f'|format(entry.running_balance) }}</span>
             </div>
         </div>

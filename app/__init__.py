@@ -491,6 +491,10 @@ def ensure_vendors_schema():
         existing = {col['name'] for col in inspector.get_columns('item_purchase_logs')}
         if 'vendor_id' not in existing:
             alters.append('ALTER TABLE item_purchase_logs ADD COLUMN vendor_id INTEGER')
+        if 'payment_status' not in existing:
+            alters.append(
+                "ALTER TABLE item_purchase_logs ADD COLUMN payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'"
+            )
     if 'stock_entries' in tables:
         existing = {col['name'] for col in inspector.get_columns('stock_entries')}
         if 'vendor_id' not in existing:

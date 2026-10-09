@@ -298,6 +298,7 @@
                             <th>Cost</th>
                             <th>Qty / L</th>
                             <th>Batch</th>
+                            <th>Status</th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -305,6 +306,7 @@
                         {% if purchase_logs %}
                             {% for log in purchase_logs %}
                             {% set batch = (log.cost_price|float) * ((log.liters|float) if (log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity)) else (log.quantity|float)) %}
+                            {% set pay_status = (purchase_log_status or {}).get(log.id, 'unpaid') %}
                             <tr>
                                 <td class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') if log.entry_date else '—' }}</td>
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{{ log.category }}</span></td>
@@ -319,20 +321,31 @@
                                     {% endif %}
                                 </td>
                                 <td class="fw-semibold">{{ batch | money }}</td>
+                                <td>
+                                    {% if pay_status == 'paid' %}
+                                    <span class="badge badge-custom badge-success-custom text-uppercase">Paid</span>
+                                    {% else %}
+                                    <span class="badge badge-custom badge-danger-custom text-uppercase">Unpaid</span>
+                                    {% endif %}
+                                </td>
                                 <td class="text-end">
                                     <div class="table-actions btn-group gap-1 justify-content-end">
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-secondary border-0 edit-purchase-log-btn"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#editPurchaseLogModal"
                                                 data-edit-url="{{ url_for('inventory.edit_purchase_log', log_id=log.id) }}"
+                                                data-category="{{ log.category }}"
                                                 data-item="{{ log.item_name }}"
+                                                data-company="{{ log.company or '' }}"
+                                                data-item-type="{{ log.item_type or '' }}"
+                                                data-fuel-type-id="{{ log.fuel_type_id or '' }}"
+                                                data-vendor-id="{{ log.vendor_id or '' }}"
                                                 data-vendor="{{ log.vendor or '' }}"
                                                 data-cost="{{ log.cost_price }}"
                                                 data-sale="{{ log.sale_price }}"
                                                 data-liters="{{ log.liters if log.liters is not none else '' }}"
                                                 data-quantity="{{ log.quantity if log.quantity is not none else '' }}"
-                                                data-category="{{ log.category }}"
+                                                data-payment-status="{{ pay_status }}"
+                                                data-entry-date="{{ log.entry_date.strftime('%Y-%m-%d') if log.entry_date else today }}"
                                                 title="Edit purchase log">
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
@@ -349,7 +362,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="8" class="empty-state text-center py-4">
+                                <td colspan="9" class="empty-state text-center py-4">
                                     <p class="text-muted-custom mb-0">No purchase logs yet. Use Add Inventory to create batches.</p>
                                 </td>
                             </tr>
@@ -369,7 +382,8 @@
 <div class="modal fade" id="addInventoryModal" tabindex="-1" aria-labelledby="addInventoryModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow inventory-modal-content" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
-            <form action="{{ url_for('inventory.index') }}" method="POST" id="add-item-form" class="inventory-modal-form">
+            <form action="{{ url_for('inventory.index') }}" method="POST" id="add-item-form" class="inventory-modal-form"
+                  data-create-action="{{ url_for('inventory.index') }}">
                 <div class="modal-header border-0 pb-2">
                     <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory (Purchase Batch)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -674,51 +688,6 @@
     </div>
 </div>
 
-<!-- EDIT PURCHASE LOG -->
-<div class="modal fade" id="editPurchaseLogModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
-            <form id="edit-purchase-log-form" method="POST" action="">
-                <div class="modal-header border-0 pb-2">
-                    <h5 class="modal-title fw-bold">Edit Purchase Log</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body pt-2">
-                    <p class="text-muted-custom small mb-3" id="edit_log_item_label"></p>
-                    <div class="mb-3">
-                        <label for="edit_log_vendor" class="form-label form-label-custom">Vendor</label>
-                        <input type="text" class="form-control form-control-custom" id="edit_log_vendor" name="vendor">
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="edit_log_cost" class="form-label form-label-custom">Cost Price</label>
-                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_log_cost" name="cost_price" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="edit_log_sale" class="form-label form-label-custom">Sale Price</label>
-                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_log_sale" name="sale_price" required>
-                        </div>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-6" id="edit_log_liters_wrap">
-                            <label for="edit_log_liters" class="form-label form-label-custom">Liters</label>
-                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_log_liters" name="liters">
-                        </div>
-                        <div class="col-md-6" id="edit_log_qty_wrap">
-                            <label for="edit_log_qty" class="form-label form-label-custom">Quantity</label>
-                            <input type="number" step="1" min="0" class="form-control form-control-custom" id="edit_log_qty" name="quantity">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-2 pb-3 gap-2 justify-content-end">
-                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary-custom px-4">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- EDIT FUEL MODAL -->
 <div class="modal fade" id="editFuelModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -939,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateBatchTotal();
         syncOtherNameFields();
-        if (cat === 'fuel') refreshFuelDropdown();
+        if (cat === 'fuel' && inventoryModalMode !== 'edit') refreshFuelDropdown();
     };
 
     const updateBatchTotal = () => {
@@ -977,20 +946,133 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saleInput && rate > 0) saleInput.value = rate.toFixed(2);
     };
 
-    const resetForm = () => {
+    const modalTitle = document.getElementById('addInventoryModalLabel');
+    const submitBtn = document.getElementById('submit-btn');
+    const PRODUCT_LOCK_IDS = [
+        'fuel_type_id', 'ft_mobile_company', 'mobile_company', 'mobile_type',
+        'filter_type', 'filter_company', 'item_name', 'custom_company', 'custom_type',
+        'custom_item_name', 'ft_mobile_company_other', 'mobile_company_other',
+        'mobile_type_other', 'filter_type_other', 'filter_company_other',
+        'custom_company_other', 'custom_type_other',
+    ];
+    let inventoryModalMode = 'add';
+    let pendingEditData = null;
+
+    const setSelectValue = (el, value) => {
+        if (!el) return;
+        const v = value == null ? '' : String(value);
+        if (el.tomselect) {
+            if (v) el.tomselect.setValue(v, true);
+            else el.tomselect.clear(true);
+            return;
+        }
+        el.value = v;
+    };
+
+    const setNamedSelect = (selectId, otherInputId, value) => {
+        const sel = document.getElementById(selectId);
+        if (!sel || !value) return;
+        const exists = Array.from(sel.options).some((o) => o.value === value);
+        if (exists) {
+            sel.value = value;
+        } else if (Array.from(sel.options).some((o) => o.value === 'Other')) {
+            sel.value = 'Other';
+            const other = document.getElementById(otherInputId);
+            if (other) other.value = value;
+        } else {
+            const o = document.createElement('option');
+            o.value = value;
+            o.textContent = value;
+            sel.appendChild(o);
+            sel.value = value;
+        }
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const setProductFieldsLocked = (locked) => {
+        categorySelect.disabled = !!locked;
+        PRODUCT_LOCK_IDS.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = !!locked;
+        });
+    };
+
+    const resetToAddMode = () => {
+        inventoryModalMode = 'add';
+        pendingEditData = null;
+        form.action = form.dataset.createAction || form.getAttribute('action');
         form.reset();
         categorySelect.value = '';
         companyHidden.value = '';
         typeHidden.value = '';
-        const fuelSel = document.getElementById('fuel_type_id');
-        if (fuelSel && fuelSel.tomselect) fuelSel.tomselect.clear(true);
-        const vendorSel = document.getElementById('vendor_id');
-        if (vendorSel && vendorSel.tomselect) vendorSel.tomselect.clear(true);
+        setSelectValue(document.getElementById('fuel_type_id'), '');
+        setSelectValue(document.getElementById('vendor_id'), '');
         const paySel = document.getElementById('payment_status');
         if (paySel) paySel.value = 'unpaid';
+        const dateInput = document.getElementById('entry_date');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = dateInput.getAttribute('value') || '';
+        }
+        setProductFieldsLocked(false);
+        if (modalTitle) modalTitle.textContent = 'Add Inventory (Purchase Batch)';
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
+        }
         syncVisibleFields();
         updateBatchTotal();
         refreshFuelDropdown();
+    };
+
+    const applyEditData = (d) => {
+        form.action = d.editUrl;
+        if (modalTitle) modalTitle.textContent = 'Edit Purchase Batch';
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Changes';
+        }
+
+        categorySelect.value = d.category || '';
+        syncVisibleFields();
+
+        const cat = d.category || '';
+        if (cat === 'fuel') {
+            setSelectValue(document.getElementById('fuel_type_id'), d.fuelTypeId || '');
+        } else if (cat === 'ft_mobile') {
+            setNamedSelect('ft_mobile_company', 'ft_mobile_company_other', d.company);
+        } else if (cat === 'mobile') {
+            setNamedSelect('mobile_company', 'mobile_company_other', d.company);
+            setNamedSelect('mobile_type', 'mobile_type_other', d.itemType);
+        } else if (cat === 'filter') {
+            setNamedSelect('filter_company', 'filter_company_other', d.company);
+            setNamedSelect('filter_type', 'filter_type_other', d.itemType);
+        } else if (cat === 'other') {
+            const nameEl = document.getElementById('item_name');
+            if (nameEl) nameEl.value = d.item || '';
+        } else if (cat) {
+            setNamedSelect('custom_company', 'custom_company_other', d.company);
+            setNamedSelect('custom_type', 'custom_type_other', d.itemType);
+            const customName = document.getElementById('custom_item_name');
+            if (customName) customName.value = d.item || '';
+        }
+
+        companyHidden.value = d.company || '';
+        typeHidden.value = d.itemType || '';
+        setSelectValue(document.getElementById('vendor_id'), d.vendorId || '');
+        const paySel = document.getElementById('payment_status');
+        if (paySel) paySel.value = d.paymentStatus === 'paid' ? 'paid' : 'unpaid';
+        const dateInput = document.getElementById('entry_date');
+        if (dateInput) dateInput.value = d.entryDate || dateInput.value;
+        const costEl = document.getElementById('cost_price');
+        const saleEl = document.getElementById('sale_price');
+        const litersEl = document.getElementById('liters');
+        const qtyEl = document.getElementById('quantity');
+        if (costEl) costEl.value = d.cost || '';
+        if (saleEl) saleEl.value = d.sale || '';
+        if (litersEl) litersEl.value = d.liters || '';
+        if (qtyEl) qtyEl.value = d.quantity || '';
+
+        syncOtherNameFields();
+        updateBatchTotal();
+        setProductFieldsLocked(true);
     };
 
     categorySelect.addEventListener('change', syncVisibleFields);
@@ -1009,16 +1091,45 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el) el.addEventListener('input', updateBatchTotal);
     });
 
-    modalEl.addEventListener('show.bs.modal', resetForm);
+    modalEl.addEventListener('show.bs.modal', () => {
+        if (inventoryModalMode === 'edit' && pendingEditData) return;
+        resetToAddMode();
+    });
+
+    modalEl.addEventListener('shown.bs.modal', () => {
+        if (inventoryModalMode === 'edit' && pendingEditData) {
+            applyEditData(pendingEditData);
+            pendingEditData = null;
+        }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        resetToAddMode();
+    });
+
+    document.getElementById('open-add-inventory-btn')?.addEventListener('click', () => {
+        inventoryModalMode = 'add';
+        pendingEditData = null;
+    });
 
     form.addEventListener('submit', (e) => {
+        // Disabled category/product fields are not posted — re-enable briefly so values stay consistent
+        if (inventoryModalMode === 'edit') {
+            setProductFieldsLocked(false);
+        }
+
+        const fail = (msg) => {
+            e.preventDefault();
+            if (inventoryModalMode === 'edit') setProductFieldsLocked(true);
+            alert(msg);
+        };
+
         const cat = categorySelect.value;
 
         const vendorSel = document.getElementById('vendor_id');
         const vendorVal = vendorSel && (vendorSel.tomselect ? vendorSel.tomselect.getValue() : vendorSel.value);
         if (!vendorVal) {
-            e.preventDefault();
-            alert('Please select or add a vendor. Inventory purchases post to the vendor account (unpaid by default).');
+            fail('Please select or add a vendor. Inventory purchases post to the vendor account (unpaid by default).');
             return;
         }
 
@@ -1026,8 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const fuelSel = document.getElementById('fuel_type_id');
             const fuelVal = fuelSel && (fuelSel.tomselect ? fuelSel.tomselect.getValue() : fuelSel.value);
             if (!fuelVal) {
-                e.preventDefault();
-                alert('Please select a fuel type, or type a new name and choose Add.');
+                fail('Please select a fuel type, or type a new name and choose Add.');
                 return;
             }
         }
@@ -1038,16 +1148,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (company === 'Other') {
                 company = document.getElementById('mobile_company_other').value.trim();
                 if (!company) {
-                    e.preventDefault();
-                    alert('Please enter the company name.');
+                    fail('Please enter the company name.');
                     return;
                 }
             }
             if (type === 'Other') {
                 type = document.getElementById('mobile_type_other').value.trim();
                 if (!type) {
-                    e.preventDefault();
-                    alert('Please enter the oil type name.');
+                    fail('Please enter the oil type name.');
                     return;
                 }
             }
@@ -1058,8 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (company === 'Other') {
                 company = document.getElementById('ft_mobile_company_other').value.trim();
                 if (!company) {
-                    e.preventDefault();
-                    alert('Please enter the company name.');
+                    fail('Please enter the company name.');
                     return;
                 }
             }
@@ -1071,16 +1178,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (company === 'Other') {
                 company = document.getElementById('filter_company_other').value.trim();
                 if (!company) {
-                    e.preventDefault();
-                    alert('Please enter the company name.');
+                    fail('Please enter the company name.');
                     return;
                 }
             }
             if (type === 'Other') {
                 type = document.getElementById('filter_type_other').value.trim();
                 if (!type) {
-                    e.preventDefault();
-                    alert('Please enter the filter type name.');
+                    fail('Please enter the filter type name.');
                     return;
                 }
             }
@@ -1101,8 +1206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (company) name = company;
             }
             if (!name) {
-                e.preventDefault();
-                alert('Please enter an item name (or company / type).');
+                fail('Please enter an item name (or company / type).');
                 return;
             }
             const nameInput = document.getElementById('item_name');
@@ -1144,18 +1248,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.edit-purchase-log-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const form = document.getElementById('edit-purchase-log-form');
-            form.action = btn.dataset.editUrl;
-            document.getElementById('edit_log_item_label').textContent = btn.dataset.item || '';
-            document.getElementById('edit_log_vendor').value = btn.dataset.vendor || '';
-            document.getElementById('edit_log_cost').value = btn.dataset.cost || '';
-            document.getElementById('edit_log_sale').value = btn.dataset.sale || '';
-            document.getElementById('edit_log_liters').value = btn.dataset.liters || '';
-            document.getElementById('edit_log_qty').value = btn.dataset.quantity || '';
-            const cat = btn.dataset.category || '';
-            const litersMode = cat === 'fuel' || cat === 'ft_mobile';
-            document.getElementById('edit_log_liters_wrap').classList.toggle('d-none', !litersMode && !btn.dataset.liters);
-            document.getElementById('edit_log_qty_wrap').classList.toggle('d-none', litersMode);
+            inventoryModalMode = 'edit';
+            pendingEditData = {
+                editUrl: btn.dataset.editUrl || '',
+                category: btn.dataset.category || '',
+                item: btn.dataset.item || '',
+                company: btn.dataset.company || '',
+                itemType: btn.dataset.itemType || '',
+                fuelTypeId: btn.dataset.fuelTypeId || '',
+                vendorId: btn.dataset.vendorId || '',
+                cost: btn.dataset.cost || '',
+                sale: btn.dataset.sale || '',
+                liters: btn.dataset.liters || '',
+                quantity: btn.dataset.quantity || '',
+                paymentStatus: btn.dataset.paymentStatus || 'unpaid',
+                entryDate: btn.dataset.entryDate || '',
+            };
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
         });
     });
 

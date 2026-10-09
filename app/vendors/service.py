@@ -68,6 +68,21 @@ def link_purchase_to_vendor(vendor_name, purchase_log, stock_entry=None, increme
     return vendor
 
 
+def normalize_purchase_payment_status(status):
+    status = (status or 'unpaid').strip().lower()
+    return 'paid' if status == 'paid' else 'unpaid'
+
+
+def purchase_log_payment_status(log):
+    """Resolve paid/unpaid from column, falling back to linked auto-payment."""
+    stored = normalize_purchase_payment_status(getattr(log, 'payment_status', None))
+    if stored == 'paid':
+        return 'paid'
+    if find_auto_payments_for_log(log):
+        return 'paid'
+    return 'unpaid'
+
+
 def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid', payment_date=None):
     """
     After purchase is linked:
@@ -76,7 +91,8 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
     paid   → record VendorPayment for that same batch total (payable reduced)
     Always rebuild payable from sources of truth.
     """
-    status = (payment_status or 'unpaid').strip().lower()
+    status = normalize_purchase_payment_status(payment_status)
+    purchase_log.payment_status = status
     payment = None
     if status == 'paid' and vendor:
         total = purchase_log_total(purchase_log)
@@ -91,6 +107,8 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
                 purchase_log_id=purchase_log.id,
             )
             db.session.add(payment)
+    elif status == 'unpaid':
+        purchase_log.payment_status = 'unpaid'
 
     if vendor:
         db.session.flush()
@@ -207,20 +225,50 @@ def delete_purchase_log_cascade(log):
     return vendor_id
 
 
-def sync_auto_payment_for_log(log):
-    """Keep linked auto-payment amount/note in sync after log edit."""
+def sync_auto_payment_for_log(log, payment_status=None, payment_date=None):
+    """Keep linked auto-payment + payment_status in sync after log edit."""
+    status = normalize_purchase_payment_status(
+        payment_status if payment_status is not None else getattr(log, 'payment_status', None)
+    )
+    log.payment_status = status
     total = purchase_log_total(log)
     pays = find_auto_payments_for_log(log)
-    if not pays:
+
+    if status == 'unpaid':
+        for pay in pays:
+            db.session.delete(pay)
         return
-    pay = pays[0]
-    for extra in pays[1:]:
-        db.session.delete(extra)
-    pay.amount_paid = total
-    pay.note = f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})'
-    pay.purchase_log_id = log.id
-    if log.vendor_id:
-        pay.vendor_id = log.vendor_id
+
+    # paid
+    if total <= 0:
+        for pay in pays:
+            db.session.delete(pay)
+        return
+
+    if pays:
+        pay = pays[0]
+        for extra in pays[1:]:
+            db.session.delete(extra)
+        pay.amount_paid = total
+        pay.note = f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})'
+        pay.purchase_log_id = log.id
+        if log.vendor_id:
+            pay.vendor_id = log.vendor_id
+        if payment_date is not None:
+            pay.payment_date = payment_date
+        return
+
+    if not log.vendor_id:
+        return
+    db.session.flush()
+    db.session.add(VendorPayment(
+        vendor_id=log.vendor_id,
+        amount_paid=total,
+        payment_date=payment_date or log.entry_date,
+        method='Cash',
+        note=f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})',
+        purchase_log_id=log.id,
+    ))
 
 
 def recalculate_vendor_balance(vendor):

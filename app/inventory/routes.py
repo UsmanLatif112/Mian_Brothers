@@ -17,6 +17,8 @@ from app.vendors.service import (
     sync_auto_payment_for_log,
     recalculate_vendor_balance,
     find_auto_payments_for_log,
+    purchase_log_payment_status,
+    normalize_purchase_payment_status,
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
@@ -530,6 +532,9 @@ def index():
         )
     logs_page = request.args.get('logs_page', 1)
     purchase_logs, purchase_logs_pagination = paginate(purchase_logs_q, logs_page, PER_PAGE)
+    purchase_log_status = {
+        log.id: purchase_log_payment_status(log) for log in purchase_logs
+    }
 
     from app.charts_data import inventory_listing_series
 
@@ -543,6 +548,7 @@ def index():
         shop_pagination=shop_pagination,
         purchase_logs=purchase_logs,
         purchase_logs_pagination=purchase_logs_pagination,
+        purchase_log_status=purchase_log_status,
         vendors=vendors,
         today=datetime.utcnow().date().isoformat(),
         chart_series=inventory_listing_series(),
@@ -590,21 +596,27 @@ def edit_purchase_log(log_id):
             flash(f'Invalid quantity: {e}', 'danger')
             return redirect(url_for('inventory.index'))
 
+    vendor_id = (request.form.get('vendor_id') or '').strip() or None
     vendor_name = (request.form.get('vendor') or log.vendor or '').strip() or None
+    payment_status = normalize_purchase_payment_status(request.form.get('payment_status'))
+    entry_day = parse_form_date(request.form.get('entry_date'))
     apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty)
 
     log.cost_price = cost_val
     log.sale_price = sale_val
+    log.entry_date = datetime_from_date(entry_day)
     log.liters = new_liters if (log.category in ('fuel', 'ft_mobile') or new_liters > 0) else log.liters
     if log.category not in ('fuel', 'ft_mobile'):
         log.quantity = new_qty
-    if vendor_name:
-        log.vendor = vendor_name
-        vendor = resolve_vendor(vendor_name=vendor_name)
-        if vendor:
-            log.vendor_id = vendor.id
 
-    sync_auto_payment_for_log(log)
+    vendor = resolve_vendor(vendor_id=vendor_id, vendor_name=vendor_name)
+    if vendor:
+        log.vendor = vendor.name
+        log.vendor_id = vendor.id
+    elif vendor_name:
+        log.vendor = vendor_name
+
+    sync_auto_payment_for_log(log, payment_status=payment_status, payment_date=log.entry_date)
     db.session.flush()
     if log.vendor_id:
         vendor = Vendor.query.get(log.vendor_id)
