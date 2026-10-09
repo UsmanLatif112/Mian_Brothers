@@ -106,7 +106,7 @@ body.sidebar-open .sidebar-backdrop {
     justify-content: center;
     overflow: hidden;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0, 128, 96, 0.28);
+    box-shadow: 0 4px 12px rgba(232, 93, 4, 0.28);
     background: transparent;
 }
 
@@ -576,14 +576,14 @@ body.sidebar-open .sidebar-backdrop {
 .user-avatar {
     width: 34px;
     height: 34px;
-    border-radius: 50%;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
     font-size: 0.9rem;
     color: #fff;
-    background: linear-gradient(135deg, #008060, #004c3f);
+    background: linear-gradient(145deg, #e85d04, #f59e0b 55%, #0ea5e9);
     flex-shrink: 0;
 }
 

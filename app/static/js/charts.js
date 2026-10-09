@@ -3,19 +3,19 @@
  */
 (function (global) {
     const PALETTE = [
-        '#008060', '#0891b2', '#e11d48', '#f59e0b', '#6366f1',
-        '#10b981', '#ec4899', '#0ea5e9', '#84cc16', '#a855f7',
+        '#e85d04', '#0ea5e9', '#e11d48', '#f59e0b', '#6366f1',
+        '#10b981', '#ec4899', '#38bdf8', '#84cc16', '#a855f7',
     ];
 
     function theme() {
         const dark = document.documentElement.getAttribute('data-theme') === 'dark';
         return {
             dark,
-            tick: dark ? '#9ea3a8' : '#6d7175',
-            grid: dark ? 'rgba(255,255,255,0.06)' : 'rgba(22,29,37,0.06)',
-            tooltipBg: dark ? '#1a1c21' : '#1a1c1d',
-            font: "'Plus Jakarta Sans', system-ui, sans-serif",
-            muted: dark ? 'rgba(255,255,255,0.08)' : 'rgba(22,29,37,0.04)',
+            tick: dark ? '#94a3b8' : '#5b6577',
+            grid: dark ? 'rgba(255,255,255,0.06)' : 'rgba(11,18,32,0.06)',
+            tooltipBg: dark ? '#121826' : '#0b1220',
+            font: "'Sora', 'IBM Plex Sans', system-ui, sans-serif",
+            muted: dark ? 'rgba(255,255,255,0.08)' : 'rgba(11,18,32,0.04)',
         };
     }
 
@@ -189,7 +189,7 @@
     }
 
     function hexToRgba(hex, alpha) {
-        if (!hex) return `rgba(0,128,96,${alpha})`;
+        if (!hex) return `rgba(232,93,4,${alpha})`;
         let h = String(hex).trim();
         if (h.startsWith('rgba') || h.startsWith('rgb')) {
             return h.replace(/rgba?\(([^)]+)\)/, (_, inner) => {
