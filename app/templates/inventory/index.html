@@ -515,17 +515,25 @@
 
                         <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <label for="vendor_id" class="form-label form-label-custom">Vendor</label>
-                            <select class="form-select form-control-custom js-search-vendor js-create-vendor" id="vendor_id" name="vendor_id"
-                                    data-placeholder="Search or add vendor..."
-                                    data-create-url="{{ url_for('vendors.quick_vendor') }}">
-                                <option value="">Search or add vendor...</option>
-                                {% for v in vendors %}
-                                <option value="{{ v.id }}" data-phone="{{ v.phone or '' }}">
-                                    {{ v.name }}{% if v.phone %} · {{ v.phone }}{% endif %}
-                                    (Payable: {{ v.current_balance_payable | money }})
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <div class="of-select-with-add">
+                                <select class="form-select form-control-custom js-search-vendor js-create-vendor" id="vendor_id" name="vendor_id"
+                                        data-placeholder="Search or add vendor..."
+                                        data-create-url="{{ url_for('vendors.quick_vendor') }}">
+                                    <option value="">Search or add vendor...</option>
+                                    {% for v in vendors %}
+                                    <option value="{{ v.id }}" data-phone="{{ v.phone or '' }}">
+                                        {{ v.name }}{% if v.phone %} · {{ v.phone }}{% endif %}
+                                        (Payable: {{ v.current_balance_payable | money }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                        data-bs-toggle="modal" data-bs-target="#createVendorModal"
+                                        data-of-select-target="#vendor_id"
+                                        title="Register vendor" aria-label="Register vendor">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
@@ -686,6 +694,8 @@
         </div>
     </div>
 </div>
+
+{% include 'partials/create_vendor_modal.html' %}
 
 {% endblock %}
 

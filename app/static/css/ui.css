@@ -1160,6 +1160,49 @@ select.form-control-custom:disabled {
     min-height: 2.55rem !important;
 }
 
+/* Select + plus (quick register vendor/customer) */
+.of-select-with-add {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.of-select-with-add > select,
+.of-select-with-add > .ts-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.of-quick-add-btn {
+    flex: 0 0 auto;
+    width: 2.55rem;
+    min-height: 2.55rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border-color: var(--border-color, #e2e8f0);
+    color: var(--text-primary, #1e293b);
+    background: var(--card-bg, #fff);
+}
+
+.of-quick-add-btn:hover {
+    border-color: var(--primary, #0d9488);
+    color: var(--primary, #0d9488);
+    background: color-mix(in srgb, var(--primary, #0d9488) 8%, transparent);
+}
+
+.of-quick-add-btn .bi {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+/* Nested Register Vendor/Customer over inventory/sales modals */
+.modal.of-quick-create-modal {
+    z-index: 1065;
+}
+
 /* Dropdown panel */
 .ts-dropdown,
 .ts-wrapper.of-select + .ts-dropdown,

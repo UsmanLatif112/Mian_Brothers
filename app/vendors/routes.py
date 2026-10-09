@@ -20,6 +20,15 @@ from app.vendors.service import (
 PER_PAGE = 15
 
 
+def _vendor_option_payload(vendor):
+    due = float(vendor.current_balance_payable or 0)
+    label = f"{vendor.name}"
+    if vendor.phone:
+        label += f" · {vendor.phone}"
+    label += f" (Payable: PKR {due:,.2f})"
+    return {'ok': True, 'id': vendor.id, 'text': label, 'phone': vendor.phone or ''}
+
+
 @vendors_bp.route('/api/quick', methods=['POST'])
 @login_required
 def quick_vendor():
@@ -34,13 +43,49 @@ def quick_vendor():
     if phone and not vendor.phone:
         vendor.phone = phone
     db.session.commit()
+    return jsonify(_vendor_option_payload(vendor))
 
-    due = float(vendor.current_balance_payable or 0)
-    label = f"{vendor.name}"
-    if vendor.phone:
-        label += f" · {vendor.phone}"
-    label += f" (Payable: PKR {due:,.2f})"
-    return jsonify({'ok': True, 'id': vendor.id, 'text': label, 'phone': vendor.phone or ''})
+
+@vendors_bp.route('/api/create', methods=['POST'])
+@login_required
+def api_create():
+    """Full Register Vendor (same fields as vendors page) for AJAX modal."""
+    data = request.get_json(silent=True) or {}
+    if not data:
+        data = request.form.to_dict()
+
+    name = normalize_vendor_name(data.get('name'))
+    phone = (data.get('phone') or '').strip() or None
+    address = (data.get('address') or '').strip() or None
+    contact_person = (data.get('contact_person') or '').strip() or None
+    prev_raw = (data.get('previous_payable') or '').strip()
+
+    if not name:
+        return jsonify({'ok': False, 'error': 'Vendor name is required'}), 400
+
+    if Vendor.query.filter(db.func.lower(Vendor.name) == name.lower()).first():
+        return jsonify({'ok': False, 'error': f"Vendor '{name}' already exists."}), 400
+
+    prev_payable = 0.0
+    if prev_raw:
+        try:
+            prev_payable = float(prev_raw)
+            if prev_payable < 0:
+                raise ValueError('Opening payable cannot be negative.')
+        except ValueError as e:
+            return jsonify({'ok': False, 'error': f'Invalid opening payable: {e}'}), 400
+
+    vendor = Vendor(
+        name=name,
+        phone=phone,
+        address=address,
+        contact_person=contact_person,
+        previous_payable=prev_payable if prev_payable > 0 else None,
+        current_balance_payable=prev_payable,
+    )
+    db.session.add(vendor)
+    db.session.commit()
+    return jsonify(_vendor_option_payload(vendor))
 
 
 @vendors_bp.route('/', methods=['GET', 'POST'])

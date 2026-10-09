@@ -389,16 +389,24 @@
                         <label class="form-label form-label-custom" for="credit_customer">
                             Customer <span class="text-muted-custom fw-normal" id="customer_hint">(required)</span>
                         </label>
-                        <select class="form-select form-control-custom js-search-customer js-create-customer" id="credit_customer" name="customer_id"
-                                data-placeholder="Search or add customer..."
-                                data-create-url="{{ url_for('sales.quick_customer') }}">
-                            <option value="">Search or add customer...</option>
-                            {% for c in customers %}
-                            <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
-                                {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <div class="of-select-with-add">
+                            <select class="form-select form-control-custom js-search-customer js-create-customer" id="credit_customer" name="customer_id"
+                                    data-placeholder="Search or add customer..."
+                                    data-create-url="{{ url_for('sales.quick_customer') }}">
+                                <option value="">Search or add customer...</option>
+                                {% for c in customers %}
+                                <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
+                                    {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                    data-bs-toggle="modal" data-bs-target="#createCustomerModal"
+                                    data-of-select-target="#credit_customer"
+                                    title="Register customer" aria-label="Register customer">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="credit_item">Item</label>
@@ -501,16 +509,24 @@
                         <label class="form-label form-label-custom" for="ft_customer">
                             Customer <span class="text-muted-custom fw-normal" id="ft_customer_hint">(optional for paid)</span>
                         </label>
-                        <select class="form-select form-control-custom js-search-customer js-create-customer" id="ft_customer" name="customer_id"
-                                data-placeholder="Search or add customer..."
-                                data-create-url="{{ url_for('sales.quick_customer') }}">
-                            <option value="">Search or add customer...</option>
-                            {% for c in customers %}
-                            <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
-                                {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <div class="of-select-with-add">
+                            <select class="form-select form-control-custom js-search-customer js-create-customer" id="ft_customer" name="customer_id"
+                                    data-placeholder="Search or add customer..."
+                                    data-create-url="{{ url_for('sales.quick_customer') }}">
+                                <option value="">Search or add customer...</option>
+                                {% for c in customers %}
+                                <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
+                                    {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                    data-bs-toggle="modal" data-bs-target="#createCustomerModal"
+                                    data-of-select-target="#ft_customer"
+                                    title="Register customer" aria-label="Register customer">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_item_id">FT Mobile Oil</label>
@@ -677,6 +693,9 @@
         </div>
     </div>
 </div>
+
+{% include 'partials/create_customer_modal.html' %}
+
 {% endblock %}
 
 {% block scripts %}

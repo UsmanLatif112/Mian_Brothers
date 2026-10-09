@@ -1,6 +1,93 @@
 """Customer balance helpers — rebuild due from ledger sources of truth."""
 
-from app.models import CreditSale, Payment, Sale
+from app.models import db, Customer, CreditSale, Payment, Sale
+from app.utils import parse_form_date
+
+
+def customer_option_label(customer):
+    due = float(customer.current_balance_due or 0)
+    label = f"{customer.name}"
+    if customer.phone:
+        label += f" · {customer.phone}"
+    label += f" (Due: PKR {due:,.2f})"
+    return label
+
+
+def register_customer(data, recorded_by=None):
+    """
+    Create a customer from form/JSON payload (same fields as Register Customer modal).
+    Returns (customer, None) or (None, error_message).
+    """
+    name = (data.get('name') or '').strip()
+    phone = (data.get('phone') or '').strip() or None
+    address = (data.get('address') or '').strip() or None
+    old_book_no = (data.get('old_book_no') or '').strip() or None
+    limit = data.get('credit_limit')
+    prev_raw = (data.get('previous_credit') or '').strip()
+    entry_date = parse_form_date(data.get('entry_date'))
+
+    if not name:
+        return None, 'Customer name is required'
+
+    limit_val = None
+    if limit not in (None, ''):
+        try:
+            limit_val = float(limit)
+            if limit_val <= 0:
+                raise ValueError('Limit must be greater than zero.')
+        except ValueError as e:
+            return None, f'Invalid credit limit: {e}'
+
+    prev_credit = 0.0
+    if prev_raw:
+        try:
+            prev_credit = float(prev_raw)
+        except ValueError as e:
+            return None, f'Invalid previous balance: {e}'
+
+    customer = Customer(
+        name=name,
+        phone=phone,
+        address=address,
+        old_book_no=old_book_no,
+        previous_credit=prev_credit if prev_credit != 0 else None,
+        credit_limit=limit_val,
+        current_balance_due=0,
+    )
+    db.session.add(customer)
+    db.session.flush()
+
+    if prev_credit > 0:
+        db.session.add(CreditSale(
+            customer_id=customer.id,
+            sale_date=entry_date,
+            liters=0,
+            rate=0,
+            amount=prev_credit,
+            amount_paid=0,
+            entry_type='opening',
+            payment_status='unpaid',
+            remarks='Previous / opening book credit',
+            recorded_by=recorded_by,
+        ))
+    elif prev_credit < 0:
+        db.session.add(CreditSale(
+            customer_id=customer.id,
+            sale_date=entry_date,
+            liters=0,
+            rate=0,
+            amount=abs(prev_credit),
+            amount_paid=0,
+            entry_type='advance',
+            payment_status='paid',
+            remarks='Previous / opening advance',
+            recorded_by=recorded_by,
+        ))
+
+    db.session.flush()
+    recalculate_customer_balance(customer)
+    db.session.commit()
+    return customer, None
 
 
 def customer_has_linked_activity(customer):

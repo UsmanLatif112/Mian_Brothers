@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from app.customers import customers_bp
 from app.models import db, Customer, Sale, Payment, CreditSale
@@ -6,10 +6,33 @@ from app.utils import paginate, parse_form_date, datetime_from_date
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
 )
-from app.customers.service import recalculate_customer_balance, customer_has_linked_activity
+from app.customers.service import (
+    recalculate_customer_balance,
+    customer_has_linked_activity,
+    register_customer,
+    customer_option_label,
+)
 from datetime import datetime
 
 PER_PAGE = 15
+
+
+@customers_bp.route('/api/create', methods=['POST'])
+@login_required
+def api_create():
+    """Full Register Customer (same fields as customers page) for AJAX modal."""
+    data = request.get_json(silent=True) or {}
+    if not data:
+        data = request.form.to_dict()
+    customer, err = register_customer(data, recorded_by=current_user.id)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    return jsonify({
+        'ok': True,
+        'id': customer.id,
+        'text': customer_option_label(customer),
+        'phone': customer.phone or '',
+    })
 
 
 @customers_bp.route('/', methods=['GET', 'POST'])

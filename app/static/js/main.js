@@ -590,6 +590,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = e.target;
         if (!(form instanceof HTMLFormElement)) return;
 
+        // AJAX Register Vendor / Customer — handled below (do not full-page navigate)
+        if (form.dataset.ofAjaxCreate) return;
+
         // Filter / multi-submit forms: still show loader, allow resubmit
         if (form.dataset.allowMultiSubmit === '1') {
             if (!e.defaultPrevented) showFormLoader(form);
@@ -639,6 +642,150 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return res.json();
     }
+
+    /* —— Plus-button Register Vendor / Customer (AJAX + TomSelect cascade) —— */
+    let ofQuickSelectTarget = null;
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('[data-of-select-target]');
+        if (!btn) return;
+        const sel = document.querySelector(btn.getAttribute('data-of-select-target'));
+        ofQuickSelectTarget = sel || null;
+    }, true);
+
+    function ofAddOptionToSelects(selector, option) {
+        const id = String(option.id);
+        document.querySelectorAll(selector).forEach((el) => {
+            const tom = el.tomselect;
+            if (tom) {
+                if (!tom.options[id]) {
+                    tom.addOption({
+                        value: id,
+                        text: option.text,
+                        phone: option.phone || '',
+                    });
+                } else {
+                    tom.updateOption(id, {
+                        value: id,
+                        text: option.text,
+                        phone: option.phone || '',
+                    });
+                }
+                tom.refreshOptions(false);
+            } else {
+                let opt = el.querySelector(`option[value="${CSS.escape(id)}"]`);
+                if (!opt) {
+                    opt = document.createElement('option');
+                    opt.value = id;
+                    el.appendChild(opt);
+                }
+                opt.textContent = option.text;
+                if (option.phone) opt.dataset.phone = option.phone;
+            }
+        });
+    }
+
+    function ofSelectNewOption(el, option) {
+        if (!el) return;
+        const id = String(option.id);
+        if (el.tomselect) {
+            if (!el.tomselect.options[id]) {
+                el.tomselect.addOption({
+                    value: id,
+                    text: option.text,
+                    phone: option.phone || '',
+                });
+            }
+            el.tomselect.setValue(id, true);
+        } else {
+            el.value = id;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function ofStackQuickModal(modalEl) {
+        if (!modalEl) return;
+        const openCount = document.querySelectorAll('.modal.show').length;
+        if (openCount <= 1) return;
+        const z = 1055 + openCount * 20;
+        modalEl.style.zIndex = String(z);
+        setTimeout(() => {
+            const backs = document.querySelectorAll('.modal-backdrop');
+            const last = backs[backs.length - 1];
+            if (last) last.style.zIndex = String(z - 5);
+        }, 0);
+    }
+
+    document.addEventListener('show.bs.modal', (e) => {
+        if (e.target && e.target.classList.contains('of-quick-create-modal')) {
+            ofStackQuickModal(e.target);
+        }
+    });
+
+    document.addEventListener('submit', async (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.dataset.ofAjaxCreate) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const kind = form.dataset.ofAjaxCreate;
+        const url = form.dataset.createUrl;
+        if (!url) return;
+
+        if (form.dataset.submitting === '1') return;
+        form.dataset.submitting = '1';
+
+        const submitBtn = form.querySelector('[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.dataset._label = submitBtn.innerHTML;
+            submitBtn.innerHTML = 'Saving…';
+        }
+
+        const payload = Object.fromEntries(new FormData(form).entries());
+        try {
+            const data = await postJson(url, payload);
+            if (!data || !data.ok) {
+                if (window.ofToast) window.ofToast(data && data.error ? data.error : 'Could not save', 'danger');
+                else alert((data && data.error) || 'Could not save');
+                return;
+            }
+
+            const selectSel = kind === 'vendor' ? 'select.js-search-vendor' : 'select.js-search-customer';
+            const matches = document.querySelectorAll(selectSel);
+            if (matches.length) {
+                ofAddOptionToSelects(selectSel, data);
+                ofSelectNewOption(ofQuickSelectTarget || matches[0], data);
+                if (window.ofToast) {
+                    window.ofToast(
+                        kind === 'vendor' ? 'Vendor registered' : 'Customer registered',
+                        'success'
+                    );
+                }
+                const modalEl = form.closest('.modal');
+                if (modalEl && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                }
+                form.reset();
+            } else {
+                // Standalone vendors/customers page — refresh list
+                window.location.reload();
+                return;
+            }
+        } catch (err) {
+            if (window.ofToast) window.ofToast('Could not save. Try again.', 'danger');
+            else alert('Could not save. Try again.');
+        } finally {
+            delete form.dataset.submitting;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                if (submitBtn.dataset._label) {
+                    submitBtn.innerHTML = submitBtn.dataset._label;
+                    delete submitBtn.dataset._label;
+                }
+            }
+        }
+    });
 
     if (typeof TomSelect !== 'undefined') {
         const shared = {
