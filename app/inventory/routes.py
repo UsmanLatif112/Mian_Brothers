@@ -22,7 +22,7 @@ from app.vendors.service import (
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
-    category_has_linked_activity, option_has_linked_activity,
+    category_has_linked_activity, option_has_linked_activity, ensure_shop_categories,
 )
 from datetime import datetime
 
@@ -516,6 +516,7 @@ def index():
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
     existing_fuel_names = {ft.name.lower() for ft in fuel_types}
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
+    ensure_shop_categories()
     shop_categories = [category_payload(c) for c in list_active_categories()]
 
     purchase_logs_q = ItemPurchaseLog.query.order_by(
@@ -868,6 +869,7 @@ def delete_fuel(fuel_type_id):
 @login_required
 def categories():
     """Dedicated page to manage inventory categories and subcategories."""
+    ensure_shop_categories()
     cat_rows = list_active_categories()
     cats = []
     for row in cat_rows:
@@ -1078,6 +1080,7 @@ def quick_fuel():
 @inventory_bp.route('/api/categories', methods=['GET'])
 @login_required
 def api_categories():
+    ensure_shop_categories()
     return jsonify({
         'ok': True,
         'categories': [category_payload(c) for c in list_active_categories()],

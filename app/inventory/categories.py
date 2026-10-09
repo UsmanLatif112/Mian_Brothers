@@ -60,7 +60,8 @@ def slugify_category(name: str) -> str:
 
 
 def ensure_shop_categories():
-    """Create tables' seed rows (idempotent)."""
+    """Create tables' seed rows (idempotent). Backfill missing system company/type options."""
+    changed = False
     for spec in SYSTEM_DEFAULTS:
         cat = ShopCategory.query.filter_by(key=spec['key']).first()
         if not cat:
@@ -74,12 +75,20 @@ def ensure_shop_categories():
             )
             db.session.add(cat)
             db.session.flush()
+            changed = True
         else:
-            cat.is_system = True
+            if not cat.is_system:
+                cat.is_system = True
+                changed = True
+            if not cat.is_active:
+                cat.is_active = True
+                changed = True
             if not cat.name:
                 cat.name = spec['name']
+                changed = True
             if not cat.unit_mode:
                 cat.unit_mode = spec['unit_mode']
+                changed = True
 
         for kind, names in (('company', spec['companies']), ('type', spec['types'])):
             for name in names:
@@ -90,7 +99,9 @@ def ensure_shop_categories():
                     db.session.add(ShopCategoryOption(
                         category_id=cat.id, kind=kind, name=name
                     ))
-    db.session.commit()
+                    changed = True
+    if changed:
+        db.session.commit()
 
 
 def list_active_categories():

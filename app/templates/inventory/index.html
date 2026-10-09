@@ -425,10 +425,18 @@
                             </select>
                         </div>
 
+                        {% set ft_cat = (shop_categories or [])|selectattr('key', 'equalto', 'ft_mobile')|list|first %}
+                        {% set mobile_cat = (shop_categories or [])|selectattr('key', 'equalto', 'mobile')|list|first %}
+                        {% set filter_cat = (shop_categories or [])|selectattr('key', 'equalto', 'filter')|list|first %}
+
                         <div class="col-12 field-group d-none" data-show="ft_mobile">
                             <label for="ft_mobile_company" class="form-label form-label-custom">Company Name</label>
                             <select class="form-select form-control-custom" id="ft_mobile_company" name="company_ft_mobile">
                                 <option value="" disabled selected>Select company...</option>
+                                {% for name in (ft_cat.companies if ft_cat else []) %}
+                                <option value="{{ name }}">{{ name }}</option>
+                                {% endfor %}
+                                <option value="Other">Other (add new)</option>
                             </select>
                             <div class="mt-2 d-none" id="ft_mobile_company_other_wrap">
                                 <label for="ft_mobile_company_other" class="form-label form-label-custom">Company Name</label>
@@ -440,6 +448,10 @@
                             <label for="mobile_company" class="form-label form-label-custom">Mobile Company</label>
                             <select class="form-select form-control-custom" id="mobile_company" name="company_mobile">
                                 <option value="" disabled selected>Select company...</option>
+                                {% for name in (mobile_cat.companies if mobile_cat else []) %}
+                                <option value="{{ name }}">{{ name }}</option>
+                                {% endfor %}
+                                <option value="Other">Other (add new)</option>
                             </select>
                             <div class="mt-2 d-none" id="mobile_company_other_wrap">
                                 <label for="mobile_company_other" class="form-label form-label-custom">Company Name</label>
@@ -451,6 +463,10 @@
                             <label for="mobile_type" class="form-label form-label-custom">Oil Type</label>
                             <select class="form-select form-control-custom" id="mobile_type" name="item_type_mobile">
                                 <option value="" disabled selected>Select type...</option>
+                                {% for name in (mobile_cat.types if mobile_cat else []) %}
+                                <option value="{{ name }}">{{ name }}</option>
+                                {% endfor %}
+                                <option value="Other">Other (add new)</option>
                             </select>
                             <div class="mt-2 d-none" id="mobile_type_other_wrap">
                                 <label for="mobile_type_other" class="form-label form-label-custom">Oil Type Name</label>
@@ -462,6 +478,10 @@
                             <label for="filter_type" class="form-label form-label-custom">Filter Type</label>
                             <select class="form-select form-control-custom" id="filter_type" name="item_type_filter">
                                 <option value="" disabled selected>Select filter type...</option>
+                                {% for name in (filter_cat.types if filter_cat else []) %}
+                                <option value="{{ name }}">{{ name }}</option>
+                                {% endfor %}
+                                <option value="Other">Other (add new)</option>
                             </select>
                             <div class="mt-2 d-none" id="filter_type_other_wrap">
                                 <label for="filter_type_other" class="form-label form-label-custom">Filter Type Name</label>
@@ -473,6 +493,10 @@
                             <label for="filter_company" class="form-label form-label-custom">Company Name</label>
                             <select class="form-select form-control-custom" id="filter_company" name="company_filter">
                                 <option value="" disabled selected>Select company...</option>
+                                {% for name in (filter_cat.companies if filter_cat else []) %}
+                                <option value="{{ name }}">{{ name }}</option>
+                                {% endfor %}
+                                <option value="Other">Other (add new)</option>
                             </select>
                             <div class="mt-2 d-none" id="filter_company_other_wrap">
                                 <label for="filter_company_other" class="form-label form-label-custom">Custom Company</label>
@@ -708,6 +732,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const companyHidden = document.getElementById('company_hidden');
     const typeHidden = document.getElementById('item_type_hidden');
     const SYSTEM_CATS = new Set(['fuel', 'mobile', 'ft_mobile', 'filter', 'other']);
+    const SYSTEM_OPTION_DEFAULTS = {
+        mobile: {
+            companies: ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
+            types: ['5W-30', '10W-40', '15W-40', '20W-50', 'ATF', 'Gear Oil', 'Coolant', 'Brake Fluid'],
+        },
+        ft_mobile: {
+            companies: ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
+            types: [],
+        },
+        filter: {
+            companies: ['Bosch', 'Mann', 'Fram', 'Toyota', 'Honda'],
+            types: ['Oil Filter', 'Air Filter', 'Fuel Filter', 'Cabin Filter'],
+        },
+    };
     let categoriesCache = [];
 
     const otherPairs = [
@@ -796,27 +834,52 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Array.isArray(raw)) {
             return raw.map((v) => (typeof v === 'string' ? v : (v && v.name) || '')).filter(Boolean);
         }
+        if (raw == null || raw === '') return [];
         try {
-            const arr = JSON.parse(raw || '[]');
+            const arr = JSON.parse(raw);
             return (arr || []).map((v) => (typeof v === 'string' ? v : (v && v.name) || '')).filter(Boolean);
         } catch (e) {
             return [];
         }
     };
 
+    const normalizeCatMeta = (cat) => {
+        if (!cat) return null;
+        let companies = parseOptionNames(cat.companies);
+        let types = parseOptionNames(cat.types);
+        if (!companies.length) companies = parseOptionNames(cat.company_options);
+        if (!types.length) types = parseOptionNames(cat.type_options);
+        const defaults = SYSTEM_OPTION_DEFAULTS[cat.key];
+        if (defaults) {
+            if (!companies.length) companies = defaults.companies.slice();
+            if (!types.length) types = defaults.types.slice();
+        }
+        return {
+            ...cat,
+            companies,
+            types,
+            unit_mode: cat.unit_mode || 'qty',
+            is_system: !!cat.is_system,
+        };
+    };
+
     const categoryMeta = (key) => {
         const fromCache = categoriesCache.find((c) => c.key === key);
-        if (fromCache) return fromCache;
+        if (fromCache) return normalizeCatMeta(fromCache);
         const opt = categorySelect.querySelector(`option[value="${CSS.escape(key || '')}"]`);
-        if (!opt) return null;
-        return {
+        if (!opt) {
+            const defaults = SYSTEM_OPTION_DEFAULTS[key];
+            if (!defaults) return null;
+            return { key, companies: defaults.companies.slice(), types: defaults.types.slice(), unit_mode: 'qty', is_system: true };
+        }
+        return normalizeCatMeta({
             key,
             id: opt.dataset.id,
             unit_mode: opt.dataset.unit || 'qty',
             is_system: opt.dataset.system === '1',
             companies: parseOptionNames(opt.dataset.companies),
             types: parseOptionNames(opt.dataset.types),
-        };
+        });
     };
 
     const fillSelectOptions = (selectEl, values, includeOther) => {
@@ -825,11 +888,12 @@ document.addEventListener('DOMContentLoaded', () => {
         selectEl.innerHTML = '';
         const empty = document.createElement('option');
         empty.value = '';
+        empty.disabled = true;
         empty.textContent = 'Select…';
         selectEl.appendChild(empty);
         (values || []).forEach((entry) => {
             const name = typeof entry === 'string' ? entry : (entry && entry.name) || '';
-            if (!name) return;
+            if (!name || name === 'Other') return;
             const o = document.createElement('option');
             o.value = name;
             o.textContent = name;
@@ -841,7 +905,13 @@ document.addEventListener('DOMContentLoaded', () => {
             o.textContent = 'Other (add new)';
             selectEl.appendChild(o);
         }
-        if (cur) selectEl.value = cur;
+        if (cur && Array.from(selectEl.options).some((o) => o.value === cur)) {
+            selectEl.value = cur;
+            empty.selected = false;
+        } else {
+            empty.selected = true;
+            selectEl.value = '';
+        }
         if (selectEl.tomselect) {
             selectEl.tomselect.destroy();
         }
@@ -854,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(url, { headers: { Accept: 'application/json' }, ofSilent: true });
             const data = await res.json();
             if (!data.ok || !Array.isArray(data.categories)) return categoriesCache;
-            categoriesCache = data.categories;
+            categoriesCache = data.categories.map((c) => normalizeCatMeta(c)).filter(Boolean);
             const current = categorySelect.value;
             const placeholder = document.createElement('option');
             placeholder.value = '';
@@ -892,8 +962,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const isCustom = !!(cat && !SYSTEM_CATS.has(cat));
         const unit = meta.unit_mode || (opt && opt.dataset.unit) || 'qty';
         const showKey = isCustom ? 'custom' : cat;
-        const companies = meta.companies || (opt ? parseOptionNames(opt.dataset.companies) : []);
-        const types = meta.types || (opt ? parseOptionNames(opt.dataset.types) : []);
+        let companies = Array.isArray(meta.companies) ? meta.companies.slice() : [];
+        let types = Array.isArray(meta.types) ? meta.types.slice() : [];
+        if (!companies.length && opt) companies = parseOptionNames(opt.dataset.companies);
+        if (!types.length && opt) types = parseOptionNames(opt.dataset.types);
+        const defaults = SYSTEM_OPTION_DEFAULTS[cat];
+        if (defaults) {
+            if (!companies.length) companies = defaults.companies.slice();
+            if (!types.length) types = defaults.types.slice();
+        }
 
         if (isCustom) {
             fillSelectOptions(document.getElementById('custom_company'), companies, true);
@@ -1133,6 +1210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     modalEl.addEventListener('show.bs.modal', () => {
         if (inventoryModalMode === 'edit' && pendingEditData) return;
+        // Fire-and-forget reset; options finish loading on shown
         resetToAddMode();
     });
 
@@ -1141,7 +1219,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = pendingEditData;
             pendingEditData = null;
             await applyEditData(data);
+            return;
         }
+        // Ensure Filter/Mobile company+type lists are filled after categories API
+        await refreshCategoriesFromApi();
+        syncVisibleFields();
     });
 
     modalEl.addEventListener('hidden.bs.modal', () => {
