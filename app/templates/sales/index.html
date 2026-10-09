@@ -227,10 +227,7 @@
             <form method="POST" action="{{ url_for('sales.index') }}" id="meter-sale-form">
                 <input type="hidden" name="action" value="meter_sale">
                 <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="meterSaleModalLabel">Meter Sale</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">All fuel sale of the day from machine readings.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="meterSaleModalLabel">Meter Sale</h5>
                     <div class="d-flex align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-add-machine" title="Add machine">
                             <i class="bi bi-plus-lg"></i> Machine
@@ -343,17 +340,10 @@
             <form method="POST" action="{{ url_for('sales.index') }}" id="item-sale-form">
                 <input type="hidden" name="action" value="credit_sale">
                 <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="otherSaleModalLabel">Other Sale</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Fuel credit · shop items · paid / unpaid.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="otherSaleModalLabel">Other Sale</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-3">
-                    <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
-                        <strong>Fuel:</strong> customer required, no walk-in (credit / paid).<br>
-                        <strong>Other items:</strong> Paid or Unpaid. If cash paid is more than the sale total, the extra clears customer due first, then the rest is saved as customer advance.
-                    </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="credit_customer">
                             Customer <span class="text-muted-custom fw-normal" id="customer_hint">(required)</span>
@@ -462,17 +452,10 @@
             <form method="POST" action="{{ url_for('sales.index') }}" id="ft-sale-form">
                 <input type="hidden" name="action" value="ft_sale">
                 <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="ftSaleModalLabel">FT Sale</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">FT Mobile Oil by liters — paid or unpaid.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="ftSaleModalLabel">FT Sale</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-3">
-                    <div class="alert alert-info border-0 mb-3" style="font-size: 0.85rem;">
-                        <strong>Paid:</strong> select company + liters (walk-in OK).<br>
-                        <strong>Unpaid:</strong> customer required (same as other sales).
-                    </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="ft_customer">
                             Customer <span class="text-muted-custom fw-normal" id="ft_customer_hint">(optional for paid)</span>
@@ -576,10 +559,7 @@
                 <input type="hidden" name="action" value="edit_entry">
                 <input type="hidden" name="entry_id" id="edit_entry_id" value="">
                 <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="editPeriodEntryModalLabel">Edit Entry</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;" id="edit_entry_subtitle">Correct this period entry.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="editPeriodEntryModalLabel">Edit Entry</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-3">
@@ -1186,8 +1166,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const et = (btn.getAttribute('data-entry-type') || 'sale').toLowerCase();
             document.getElementById('edit_entry_id').value = btn.getAttribute('data-id') || '';
             document.getElementById('edit_entry_date').value = btn.getAttribute('data-sale-date') || '';
-            document.getElementById('edit_entry_subtitle').textContent = et.toUpperCase() + ' · ' + (btn.getAttribute('data-item-name') || '');
-
             const isSale = et === 'sale';
             if (saleFields) saleFields.classList.toggle('d-none', !isSale);
             if (simpleFields) simpleFields.classList.toggle('d-none', isSale);

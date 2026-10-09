@@ -255,10 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="hidden" name="amount" id="ledger_amount" value="">
 
                 <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="ledgerModalLabel">Settlement / Advance / Loan</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Choose the action and record the transaction.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="ledgerModalLabel">Settlement / Advance / Loan</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
@@ -321,10 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="hidden" name="source_type" id="edit_source_type" value="">
                 <input type="hidden" name="source_id" id="edit_source_id" value="">
                 <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="editLedgerModalLabel">Edit Ledger Entry</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;" id="edit_ledger_subtitle">Correct this transaction.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="editLedgerModalLabel">Edit Ledger Entry</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-3">
@@ -483,7 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit_source_type').value = sourceType;
             document.getElementById('edit_source_id').value = btn.getAttribute('data-source-id') || '';
             document.getElementById('edit_ledger_date').value = btn.getAttribute('data-sale-date') || '';
-            document.getElementById('edit_ledger_subtitle').textContent = (kind || sourceType).toUpperCase();
 
             const isSale = sourceType === 'credit_sale' && kind === 'sale';
             const isPayment = sourceType === 'payment';

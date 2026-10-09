@@ -278,10 +278,7 @@
         <div class="modal-content border-0 shadow inventory-modal-content" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
             <form action="{{ url_for('inventory.index') }}" method="POST" id="add-item-form" class="inventory-modal-form">
                 <div class="modal-header border-0 pb-2">
-                    <div>
-                        <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory (Purchase Batch)</h5>
-                        <p class="text-muted-custom mb-0" style="font-size: 0.85rem;">Adds to live stock and creates one Purchasing log line per save.</p>
-                    </div>
+                    <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory (Purchase Batch)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-2 inventory-modal-body">
