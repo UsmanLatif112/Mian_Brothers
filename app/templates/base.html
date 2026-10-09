@@ -144,9 +144,6 @@
             <a class="sidebar-link {% if request.endpoint == 'inventory.index' %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
                 <i class="bi bi-box-seam"></i><span>Inventory</span>
             </a>
-            <a class="sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory.categories') %}active{% endif %}" href="{{ url_for('inventory.categories') }}" data-search-label="Categories">
-                <i class="bi bi-collection"></i><span>Categories</span>
-            </a>
             <a class="sidebar-link {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}" data-search-label="Expenses">
                 <i class="bi bi-receipt"></i><span>Expenses</span>
             </a>
@@ -155,6 +152,9 @@
             </a>
             <a class="sidebar-link {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}" data-search-label="Vendors">
                 <i class="bi bi-building"></i><span>Vendors</span>
+            </a>
+            <a class="sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory.categories') %}active{% endif %}" href="{{ url_for('inventory.categories') }}" data-search-label="Categories">
+                <i class="bi bi-collection"></i><span>Categories</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
                 <i class="bi bi-wallet2"></i><span>Account</span>
