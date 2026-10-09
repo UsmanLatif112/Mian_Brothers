@@ -1,11 +1,11 @@
-/* Global motion loader — orbit + nozzle fill; hard-clear on every page ready */
+/* Global motion loader — orbit + fill; nav resume is handled in base.html (early clear) */
 (function initOfLoader() {
     let busy = 0;
     let shownAt = 0;
     let hideTimer = null;
     let safetyTimer = null;
     const MIN_MS = 220;
-    const MAX_MS = 8000;
+    const MAX_MS = 6000;
     const NAV_KEY = 'ofNavLoad';
     const NAV_MSG = 'ofNavMsg';
 
@@ -33,6 +33,7 @@
             sessionStorage.removeItem(NAV_KEY);
             sessionStorage.removeItem(NAV_MSG);
         } catch (e) {}
+        window.__ofNavPending = false;
     }
 
     function markNav(message) {
@@ -99,14 +100,9 @@
         },
     };
 
-    // Show briefly if arriving from in-app navigation
-    let fromNav = false;
-    try {
-        fromNav = sessionStorage.getItem(NAV_KEY) === '1';
-        if (fromNav) {
-            reveal(sessionStorage.getItem(NAV_MSG) || 'Loading…');
-        }
-    } catch (e) {}
+    // Never re-show the nav loader here (that froze animation while Chart.js parsed).
+    // Always hard-clear leftovers; in-page CRUD uses show()/hide() after this.
+    forceOff();
 
     // Only mutate requests show loader by default (GET polling must not hang UI)
     const nativeFetch = window.fetch.bind(window);
@@ -146,29 +142,13 @@
         window.ofLoader.showNav('Loading…');
     }, true);
 
-    // ALWAYS clear when the document is ready (fixes hang if `load` already fired)
-    function settlePage() {
+    window.addEventListener('pageshow', () => {
         forceOff();
-    }
-
-    if (document.readyState === 'complete') {
-        // Page already fully loaded before this script ran
-        setTimeout(settlePage, fromNav ? 160 : 0);
-    } else if (document.readyState === 'interactive') {
-        window.addEventListener('load', settlePage, { once: true });
-        // Also clear soon so we never wait on slow images/fonts
-        setTimeout(settlePage, fromNav ? 500 : 0);
-    } else {
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(settlePage, fromNav ? 160 : 0);
-        }, { once: true });
-        window.addEventListener('load', settlePage, { once: true });
-    }
-
-    window.addEventListener('pageshow', (ev) => {
-        settlePage();
-        if (ev.persisted) forceOff();
     });
+
+    window.addEventListener('load', () => {
+        if (busy === 0) forceOff();
+    }, { once: true });
 })();
 
 /* Modern floating toasts */

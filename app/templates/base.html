@@ -17,16 +17,42 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=5">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=10">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=5">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
     <script>
-    /* Resume loader across full page navigations (no blank white wait) */
+    /* Resume nav loader across full-page navigations; clear ASAP (do not wait for main.js) */
     (function () {
+        var KEY = 'ofNavLoad';
+        var MSG = 'ofNavMsg';
+        var fromNav = false;
+        var navMsg = 'Loading…';
         try {
-            if (sessionStorage.getItem('ofNavLoad') === '1') {
-                document.documentElement.classList.add('of-loading');
-            }
+            fromNav = sessionStorage.getItem(KEY) === '1';
+            if (fromNav) navMsg = sessionStorage.getItem(MSG) || navMsg;
         } catch (e) {}
+        if (fromNav) {
+            document.documentElement.classList.add('of-loading');
+            /* Consume flag immediately so refresh / late scripts cannot re-hang */
+            try {
+                sessionStorage.removeItem(KEY);
+                sessionStorage.removeItem(MSG);
+            } catch (e2) {}
+        }
+        window.__ofNavPending = fromNav;
+        window.__ofNavMsg = navMsg;
+        window.__ofClearLoader = function (force) {
+            window.__ofNavPending = false;
+            document.documentElement.classList.remove('of-loading');
+            var node = document.getElementById('ofLoader');
+            if (node) {
+                node.classList.remove('is-on');
+                node.setAttribute('aria-hidden', 'true');
+            }
+            /* Only force ofLoader when explicitly requested (nav settle), not mid-CRUD */
+            if (force && window.ofLoader && typeof window.ofLoader.hide === 'function') {
+                window.ofLoader.hide(true);
+            }
+        };
     })();
     </script>
 </head>
@@ -50,24 +76,11 @@
                     </div>
                 </div>
                 <div class="of-loader-fill">
-                    <svg viewBox="0 0 78 86" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <!-- Tank body -->
-                        <rect x="22" y="28" width="34" height="48" rx="6" stroke="#334155" stroke-width="2.5" fill="#fff"/>
-                        <rect class="of-loader-fuel-rect" x="25" y="31" width="28" height="42" rx="3" fill="url(#ofFuelGrad)"/>
-                        <!-- Nozzle (modern red handle + gray spout) -->
-                        <path d="M48 18 L62 10 L66 14 L54 24 Z" fill="#e11d48" stroke="#9f1239" stroke-width="1"/>
-                        <path d="M44 22 C40 18 34 18 30 22 L28 26 C34 24 40 24 44 26 Z" fill="#94a3b8" stroke="#64748b" stroke-width="1"/>
-                        <rect x="52" y="12" width="10" height="7" rx="1.5" fill="#ef4444" stroke="#9f1239" stroke-width="0.8"/>
-                        <!-- Fuel drop -->
-                        <path class="of-loader-drop" d="M31 26 C31 26 27 32 31 34 C35 32 31 26 31 26 Z" fill="#f59e0b"/>
-                        <defs>
-                            <linearGradient id="ofFuelGrad" x1="39" y1="31" x2="39" y2="73" gradientUnits="userSpaceOnUse">
-                                <stop stop-color="#2dd4bf"/>
-                                <stop offset="0.55" stop-color="#0d9488"/>
-                                <stop offset="1" stop-color="#0f766e"/>
-                            </linearGradient>
-                        </defs>
-                    </svg>
+                    <div class="of-loader-tank">
+                        <div class="of-loader-fuel"></div>
+                        <div class="of-loader-nozzle" aria-hidden="true"></div>
+                        <div class="of-loader-drop" aria-hidden="true"></div>
+                    </div>
                 </div>
             </div>
             <p class="of-loader-label" id="ofLoaderLabel">Loading…</p>
@@ -77,32 +90,21 @@
     <script>
     (function () {
         var node = document.getElementById('ofLoader');
-        var fromNav = false;
-        try { fromNav = sessionStorage.getItem('ofNavLoad') === '1'; } catch (e) {}
+        var fromNav = !!window.__ofNavPending;
         if (fromNav && node) {
             node.classList.add('is-on');
             node.setAttribute('aria-hidden', 'false');
             var label = document.getElementById('ofLoaderLabel');
-            if (label) {
-                try { label.textContent = sessionStorage.getItem('ofNavMsg') || 'Loading…'; }
-                catch (e2) { label.textContent = 'Loading…'; }
-            }
+            if (label) label.textContent = window.__ofNavMsg || 'Loading…';
+            /* Clear right after first paint — never wait on Chart.js / main.js */
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    setTimeout(function () { window.__ofClearLoader(true); }, 220);
+                });
+            });
+            /* Absolute nav failsafe only */
+            setTimeout(function () { window.__ofClearLoader(true); }, 900);
         }
-        /* Hard failsafe: never leave the loader stuck if JS is late/broken */
-        setTimeout(function () {
-            try {
-                sessionStorage.removeItem('ofNavLoad');
-                sessionStorage.removeItem('ofNavMsg');
-            } catch (e3) {}
-            document.documentElement.classList.remove('of-loading');
-            if (node) {
-                node.classList.remove('is-on');
-                node.setAttribute('aria-hidden', 'true');
-            }
-            if (window.ofLoader && typeof window.ofLoader.hide === 'function') {
-                window.ofLoader.hide(true);
-            }
-        }, 1800);
     })();
     </script>
 
@@ -299,7 +301,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=18"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=19"></script>
 
     {% block scripts %}{% endblock %}
 </body>
