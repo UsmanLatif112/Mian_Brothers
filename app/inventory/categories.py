@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 
-from app.models import db, ShopCategory, ShopCategoryOption
+from sqlalchemy.orm import joinedload
+
+from app.models import db, ShopCategory, ShopCategoryOption, OtherItem, ItemPurchaseLog
 
 
 SYSTEM_DEFAULTS = [
@@ -94,6 +96,7 @@ def ensure_shop_categories():
 def list_active_categories():
     return (
         ShopCategory.query
+        .options(joinedload(ShopCategory.options))
         .filter_by(is_active=True)
         .order_by(ShopCategory.sort_order.asc(), ShopCategory.name.asc())
         .all()
@@ -103,11 +106,13 @@ def list_active_categories():
 def category_payload(cat: ShopCategory) -> dict:
     company_opts = [
         {'id': o.id, 'name': o.name}
-        for o in cat.options if o.kind == 'company'
+        for o in sorted(cat.options, key=lambda x: (x.name or '').lower())
+        if o.kind == 'company'
     ]
     type_opts = [
         {'id': o.id, 'name': o.name}
-        for o in cat.options if o.kind == 'type'
+        for o in sorted(cat.options, key=lambda x: (x.name or '').lower())
+        if o.kind == 'type'
     ]
     return {
         'id': cat.id,
@@ -120,6 +125,33 @@ def category_payload(cat: ShopCategory) -> dict:
         'company_options': company_opts,
         'type_options': type_opts,
     }
+
+
+def category_has_linked_activity(cat: ShopCategory) -> bool:
+    """True if category key is used by stock or purchase history."""
+    if OtherItem.query.filter_by(category=cat.key).first():
+        return True
+    if ItemPurchaseLog.query.filter_by(category=cat.key).first():
+        return True
+    return False
+
+
+def option_has_linked_activity(opt: ShopCategoryOption) -> bool:
+    """True if company/type is used on stock items or purchase logs."""
+    cat = opt.category or ShopCategory.query.get(opt.category_id)
+    if not cat:
+        return False
+    if opt.kind == 'company':
+        if OtherItem.query.filter_by(category=cat.key, company=opt.name).first():
+            return True
+        if ItemPurchaseLog.query.filter_by(category=cat.key, company=opt.name).first():
+            return True
+    elif opt.kind == 'type':
+        if OtherItem.query.filter_by(category=cat.key, item_type=opt.name).first():
+            return True
+        if ItemPurchaseLog.query.filter_by(category=cat.key, item_type=opt.name).first():
+            return True
+    return False
 
 
 def unique_category_key(base: str) -> str:

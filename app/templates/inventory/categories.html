@@ -104,6 +104,15 @@
                     </div>
                 </div>
                 {% if not cat.is_system %}
+                {% if cat.linked %}
+                <form method="POST" action="{{ url_for('inventory.categories_delete', category_id=cat.id) }}"
+                      data-block-delete="“{{ cat.name }}” already has inventory stock or purchase logs. Clear linked items first."
+                      data-block-title="Cannot delete category">
+                    <button type="submit" class="btn btn-sm btn-outline-danger border-0 cat-card-delete" title="Delete category">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+                {% else %}
                 <form method="POST" action="{{ url_for('inventory.categories_delete', category_id=cat.id) }}"
                       data-confirm="Delete category {{ cat.name }}? Only unused custom categories can be removed."
                       data-confirm-title="Delete category">
@@ -111,6 +120,7 @@
                         <i class="bi bi-trash"></i>
                     </button>
                 </form>
+                {% endif %}
                 {% endif %}
             </div>
 
@@ -175,6 +185,15 @@
                         {% for opt in cat.company_options %}
                         <div class="cat-chip">
                             <span>{{ opt.name }}</span>
+                            {% if opt.linked %}
+                            <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}"
+                                  data-block-delete="“{{ opt.name }}” is already used on inventory stock or purchase logs."
+                                  data-block-title="Cannot remove">
+                                <button type="submit" class="cat-chip-remove" title="Remove {{ opt.name }}" aria-label="Remove {{ opt.name }}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                            {% else %}
                             <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}"
                                   data-confirm="Remove {{ opt.name }}?"
                                   data-confirm-title="Remove"
@@ -183,6 +202,7 @@
                                     <i class="bi bi-x"></i>
                                 </button>
                             </form>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -211,6 +231,15 @@
                         {% for opt in cat.type_options %}
                         <div class="cat-chip">
                             <span>{{ opt.name }}</span>
+                            {% if opt.linked %}
+                            <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}"
+                                  data-block-delete="“{{ opt.name }}” is already used on inventory stock or purchase logs."
+                                  data-block-title="Cannot remove">
+                                <button type="submit" class="cat-chip-remove" title="Remove {{ opt.name }}" aria-label="Remove {{ opt.name }}">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </form>
+                            {% else %}
                             <form method="POST" action="{{ url_for('inventory.categories_delete_option', option_id=opt.id) }}"
                                   data-confirm="Remove {{ opt.name }}?"
                                   data-confirm-title="Remove"
@@ -219,6 +248,7 @@
                                     <i class="bi bi-x"></i>
                                 </button>
                             </form>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>

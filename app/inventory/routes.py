@@ -22,6 +22,7 @@ from app.vendors.service import (
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
+    category_has_linked_activity, option_has_linked_activity,
 )
 from datetime import datetime
 
@@ -867,7 +868,18 @@ def delete_fuel(fuel_type_id):
 @login_required
 def categories():
     """Dedicated page to manage inventory categories and subcategories."""
-    cats = [category_payload(c) for c in list_active_categories()]
+    cat_rows = list_active_categories()
+    cats = []
+    for row in cat_rows:
+        payload = category_payload(row)
+        payload['linked'] = category_has_linked_activity(row)
+        for opt in (payload.get('company_options') or []):
+            opt_row = next((o for o in row.options if o.id == opt['id']), None)
+            opt['linked'] = bool(opt_row and option_has_linked_activity(opt_row))
+        for opt in (payload.get('type_options') or []):
+            opt_row = next((o for o in row.options if o.id == opt['id']), None)
+            opt['linked'] = bool(opt_row and option_has_linked_activity(opt_row))
+        cats.append(payload)
     fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
     existing_fuel_names = {(ft.name or '').strip().lower() for ft in fuel_types}
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
@@ -923,9 +935,12 @@ def categories_delete(category_id):
     if cat.is_system:
         flash('System categories cannot be deleted.', 'danger')
         return redirect(url_for('inventory.categories'))
-    in_use = OtherItem.query.filter_by(category=cat.key).first()
-    if in_use:
-        flash('Category is used by stock items and cannot be deleted.', 'danger')
+    if category_has_linked_activity(cat):
+        flash(
+            f'Cannot delete “{cat.name}”. It already has inventory stock or purchase logs. '
+            f'Clear linked items first.',
+            'danger',
+        )
         return redirect(url_for('inventory.categories'))
     name = cat.name
     db.session.delete(cat)
@@ -965,6 +980,12 @@ def categories_add_option(category_id):
 @login_required
 def categories_delete_option(option_id):
     opt = ShopCategoryOption.query.get_or_404(option_id)
+    if option_has_linked_activity(opt):
+        flash(
+            f'Cannot remove “{opt.name}”. It is already used on inventory stock or purchase logs.',
+            'danger',
+        )
+        return redirect(url_for('inventory.categories'))
     name = opt.name
     db.session.delete(opt)
     db.session.commit()
@@ -1119,6 +1140,11 @@ def api_add_category_option(category_id):
 @login_required
 def api_delete_category_option(option_id):
     opt = ShopCategoryOption.query.get_or_404(option_id)
+    if option_has_linked_activity(opt):
+        return jsonify({
+            'ok': False,
+            'error': f'Cannot remove “{opt.name}”. It is already used on inventory stock or purchase logs.',
+        }), 400
     db.session.delete(opt)
     db.session.commit()
     return jsonify({'ok': True})
@@ -1130,9 +1156,11 @@ def api_delete_category(category_id):
     cat = ShopCategory.query.get_or_404(category_id)
     if cat.is_system:
         return jsonify({'ok': False, 'error': 'System categories cannot be deleted.'}), 400
-    in_use = OtherItem.query.filter_by(category=cat.key).first()
-    if in_use:
-        return jsonify({'ok': False, 'error': 'Category is used by stock items. Deactivate instead.'}), 400
+    if category_has_linked_activity(cat):
+        return jsonify({
+            'ok': False,
+            'error': f'Cannot delete “{cat.name}”. It already has inventory stock or purchase logs.',
+        }), 400
     db.session.delete(cat)
     db.session.commit()
     return jsonify({'ok': True})

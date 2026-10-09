@@ -1,12 +1,14 @@
-"""Cash journal helpers — IN/OUT cash movements only (no openings / unpaid purchases)."""
+"""Cash journal helpers — IN/OUT cash movements."""
 
 from types import SimpleNamespace
 
-# User rules:
-#   IN  — customer settle/payment, customer advance, expense settle
-#   OUT — paid inventory purchase, vendor payment, customer loan, expenses, cash taken
-# Excluded — opening balance, unpaid purchases (payable via vendor ledger), sales lines
+# Journal cash rules (business):
+#   OUT — inventory purchase (paid/unpaid), vendor payment, vendor advance,
+#         customer loan, expense, cash taken
+#   IN  — sale (paid/unpaid), customer settle/payment, customer advance, expense settle
+# Excluded — openings
 JOURNAL_DIRECTION = {
+    'sale': 'in',
     'payment': 'in',
     'advance': 'in',
     'overpay': 'in',
@@ -15,10 +17,12 @@ JOURNAL_DIRECTION = {
     'expense': 'out',
     'purchase': 'out',
     'vendor_pay': 'out',
+    'vendor_advance': 'out',
     'cash_taken': 'out',
 }
 
 JOURNAL_TYPE_LABELS = {
+    'sale': 'Sale',
     'payment': 'Customer settle',
     'advance': 'Customer advance',
     'overpay': 'Overpayment',
@@ -27,16 +31,19 @@ JOURNAL_TYPE_LABELS = {
     'expense': 'Expense',
     'purchase': 'Inventory purchase',
     'vendor_pay': 'Vendor payment',
+    'vendor_advance': 'Vendor advance',
     'cash_taken': 'Cash taken',
 }
 
 TYPE_FILTER_CHOICES = (
     ('all', 'All types'),
+    ('sale', 'Sale'),
     ('payment', 'Customer settle'),
     ('advance', 'Customer advance'),
     ('loan', 'Customer loan'),
     ('purchase', 'Inventory purchase'),
     ('vendor_pay', 'Vendor payment'),
+    ('vendor_advance', 'Vendor advance'),
     ('expense', 'Expense'),
     ('settle', 'Expense settle'),
     ('cash_taken', 'Cash taken'),
@@ -57,9 +64,9 @@ def _row_cash_amount(row):
         return 0.0
     if et in ('payment', 'advance', 'overpay', 'settle'):
         amt = float(getattr(row, 'amount_paid', 0) or getattr(row, 'amount', 0) or 0)
-    elif et == 'purchase':
-        # Paid inventory only (unpaid never reaches the journal)
-        amt = float(getattr(row, 'amount_paid', 0) or getattr(row, 'amount', 0) or 0)
+    elif et in ('sale', 'purchase'):
+        # Sale (paid/unpaid) → full amount IN; purchase (paid/unpaid) → full amount OUT
+        amt = float(getattr(row, 'amount', 0) or getattr(row, 'amount_paid', 0) or 0)
     else:
         amt = float(getattr(row, 'amount', 0) or getattr(row, 'amount_paid', 0) or 0)
     return amt if direction == 'in' else -amt
@@ -68,7 +75,7 @@ def _row_cash_amount(row):
 def build_cash_flow_rows(stats, direction='all', entry_type='all'):
     """
     Build journal rows from period stats.
-    Skips openings, previous balance, sales, and unpaid purchases.
+    Sales (paid/unpaid) are IN. Purchases (paid/unpaid) are OUT.
     """
     from app.utils import build_period_cash_entries
 
@@ -93,6 +100,8 @@ def build_cash_flow_rows(stats, direction='all', entry_type='all'):
 
         signed = _row_cash_amount(row)
         abs_amt = abs(signed)
+        if abs_amt <= 0:
+            continue
         if cash_dir == 'in':
             total_in += abs_amt
         else:

@@ -392,14 +392,15 @@
                     <div class="row g-3">
                         <div class="col-12">
                             <label for="category" class="form-label form-label-custom">Item Category</label>
-                            <select class="form-select form-control-custom" id="category" name="category" required>
+                            <select class="form-select form-control-custom" id="category" name="category" required
+                                    data-categories-url="{{ url_for('inventory.api_categories') }}">
                                 <option value="" disabled selected>Select category...</option>
                                 {% for cat in shop_categories or [] %}
                                 <option value="{{ cat.key }}"
                                         data-id="{{ cat.id }}"
                                         data-unit="{{ cat.unit_mode }}"
-                                        data-companies="{{ cat.companies | tojson | e }}"
-                                        data-types="{{ cat.types | tojson | e }}"
+                                        data-companies='{{ cat.companies | tojson }}'
+                                        data-types='{{ cat.types | tojson }}'
                                         data-system="{{ '1' if cat.is_system else '0' }}">
                                     {{ cat.name }}
                                 </option>
@@ -428,13 +429,6 @@
                             <label for="ft_mobile_company" class="form-label form-label-custom">Company Name</label>
                             <select class="form-select form-control-custom" id="ft_mobile_company" name="company_ft_mobile">
                                 <option value="" disabled selected>Select company...</option>
-                                <option value="Shell">Shell</option>
-                                <option value="Castrol">Castrol</option>
-                                <option value="Mobil">Mobil</option>
-                                <option value="Total">Total</option>
-                                <option value="PSO">PSO</option>
-                                <option value="Caltex">Caltex</option>
-                                <option value="Other">Other</option>
                             </select>
                             <div class="mt-2 d-none" id="ft_mobile_company_other_wrap">
                                 <label for="ft_mobile_company_other" class="form-label form-label-custom">Company Name</label>
@@ -446,13 +440,6 @@
                             <label for="mobile_company" class="form-label form-label-custom">Mobile Company</label>
                             <select class="form-select form-control-custom" id="mobile_company" name="company_mobile">
                                 <option value="" disabled selected>Select company...</option>
-                                <option value="Shell">Shell</option>
-                                <option value="Castrol">Castrol</option>
-                                <option value="Mobil">Mobil</option>
-                                <option value="Total">Total</option>
-                                <option value="PSO">PSO</option>
-                                <option value="Caltex">Caltex</option>
-                                <option value="Other">Other</option>
                             </select>
                             <div class="mt-2 d-none" id="mobile_company_other_wrap">
                                 <label for="mobile_company_other" class="form-label form-label-custom">Company Name</label>
@@ -464,15 +451,6 @@
                             <label for="mobile_type" class="form-label form-label-custom">Oil Type</label>
                             <select class="form-select form-control-custom" id="mobile_type" name="item_type_mobile">
                                 <option value="" disabled selected>Select type...</option>
-                                <option value="5W-30">5W-30</option>
-                                <option value="10W-40">10W-40</option>
-                                <option value="15W-40">15W-40</option>
-                                <option value="20W-50">20W-50</option>
-                                <option value="ATF">ATF</option>
-                                <option value="Gear Oil">Gear Oil</option>
-                                <option value="Coolant">Coolant</option>
-                                <option value="Brake Fluid">Brake Fluid</option>
-                                <option value="Other">Other</option>
                             </select>
                             <div class="mt-2 d-none" id="mobile_type_other_wrap">
                                 <label for="mobile_type_other" class="form-label form-label-custom">Oil Type Name</label>
@@ -484,11 +462,6 @@
                             <label for="filter_type" class="form-label form-label-custom">Filter Type</label>
                             <select class="form-select form-control-custom" id="filter_type" name="item_type_filter">
                                 <option value="" disabled selected>Select filter type...</option>
-                                <option value="Oil Filter">Oil Filter</option>
-                                <option value="Air Filter">Air Filter</option>
-                                <option value="Fuel Filter">Fuel Filter</option>
-                                <option value="Cabin Filter">Cabin Filter</option>
-                                <option value="Other">Other</option>
                             </select>
                             <div class="mt-2 d-none" id="filter_type_other_wrap">
                                 <label for="filter_type_other" class="form-label form-label-custom">Filter Type Name</label>
@@ -500,12 +473,6 @@
                             <label for="filter_company" class="form-label form-label-custom">Company Name</label>
                             <select class="form-select form-control-custom" id="filter_company" name="company_filter">
                                 <option value="" disabled selected>Select company...</option>
-                                <option value="Bosch">Bosch</option>
-                                <option value="Mann">Mann</option>
-                                <option value="Fram">Fram</option>
-                                <option value="Toyota">Toyota</option>
-                                <option value="Honda">Honda</option>
-                                <option value="Other">Other</option>
                             </select>
                             <div class="mt-2 d-none" id="filter_company_other_wrap">
                                 <label for="filter_company_other" class="form-label form-label-custom">Custom Company</label>
@@ -731,6 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const companyHidden = document.getElementById('company_hidden');
     const typeHidden = document.getElementById('item_type_hidden');
     const SYSTEM_CATS = new Set(['fuel', 'mobile', 'ft_mobile', 'filter', 'other']);
+    let categoriesCache = [];
 
     const otherPairs = [
         { select: 'ft_mobile_company', wrap: 'ft_mobile_company_other_wrap', input: 'ft_mobile_company_other', match: 'Other' },
@@ -814,12 +782,30 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const parseOptionNames = (raw) => {
+        if (Array.isArray(raw)) {
+            return raw.map((v) => (typeof v === 'string' ? v : (v && v.name) || '')).filter(Boolean);
+        }
         try {
             const arr = JSON.parse(raw || '[]');
             return (arr || []).map((v) => (typeof v === 'string' ? v : (v && v.name) || '')).filter(Boolean);
         } catch (e) {
             return [];
         }
+    };
+
+    const categoryMeta = (key) => {
+        const fromCache = categoriesCache.find((c) => c.key === key);
+        if (fromCache) return fromCache;
+        const opt = categorySelect.querySelector(`option[value="${CSS.escape(key || '')}"]`);
+        if (!opt) return null;
+        return {
+            key,
+            id: opt.dataset.id,
+            unit_mode: opt.dataset.unit || 'qty',
+            is_system: opt.dataset.system === '1',
+            companies: parseOptionNames(opt.dataset.companies),
+            types: parseOptionNames(opt.dataset.types),
+        };
     };
 
     const fillSelectOptions = (selectEl, values, includeOther) => {
@@ -850,14 +836,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const refreshCategoriesFromApi = async () => {
+        const url = categorySelect.dataset.categoriesUrl;
+        if (!url) return categoriesCache;
+        try {
+            const res = await fetch(url, { headers: { Accept: 'application/json' } });
+            const data = await res.json();
+            if (!data.ok || !Array.isArray(data.categories)) return categoriesCache;
+            categoriesCache = data.categories;
+            const current = categorySelect.value;
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.disabled = true;
+            placeholder.selected = !current;
+            placeholder.textContent = 'Select category...';
+            categorySelect.innerHTML = '';
+            categorySelect.appendChild(placeholder);
+            categoriesCache.forEach((cat) => {
+                const o = document.createElement('option');
+                o.value = cat.key;
+                o.textContent = cat.name;
+                o.dataset.id = String(cat.id || '');
+                o.dataset.unit = cat.unit_mode || 'qty';
+                o.dataset.companies = JSON.stringify(cat.companies || []);
+                o.dataset.types = JSON.stringify(cat.types || []);
+                o.dataset.system = cat.is_system ? '1' : '0';
+                categorySelect.appendChild(o);
+            });
+            if (current && categoriesCache.some((c) => c.key === current)) {
+                categorySelect.value = current;
+                placeholder.selected = false;
+            }
+            return categoriesCache;
+        } catch (err) {
+            console.warn('Could not refresh categories', err);
+            return categoriesCache;
+        }
+    };
+
     const syncVisibleFields = () => {
         const cat = categorySelect.value;
         const opt = categorySelect.selectedOptions[0];
+        const meta = categoryMeta(cat) || {};
         const isCustom = !!(cat && !SYSTEM_CATS.has(cat));
-        const unit = (opt && opt.dataset.unit) || 'qty';
+        const unit = meta.unit_mode || (opt && opt.dataset.unit) || 'qty';
         const showKey = isCustom ? 'custom' : cat;
-        const companies = opt ? parseOptionNames(opt.dataset.companies) : [];
-        const types = opt ? parseOptionNames(opt.dataset.types) : [];
+        const companies = meta.companies || (opt ? parseOptionNames(opt.dataset.companies) : []);
+        const types = meta.types || (opt ? parseOptionNames(opt.dataset.types) : []);
 
         if (isCustom) {
             fillSelectOptions(document.getElementById('custom_company'), companies, true);
@@ -997,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const resetToAddMode = () => {
+    const resetToAddMode = async () => {
         inventoryModalMode = 'add';
         pendingEditData = null;
         form.action = form.dataset.createAction || form.getAttribute('action');
@@ -1018,17 +1043,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (submitBtn) {
             submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
         }
+        await refreshCategoriesFromApi();
         syncVisibleFields();
         updateBatchTotal();
-        refreshFuelDropdown();
+        await refreshFuelDropdown();
     };
 
-    const applyEditData = (d) => {
+    const applyEditData = async (d) => {
         form.action = d.editUrl;
         if (modalTitle) modalTitle.textContent = 'Edit Purchase Batch';
         if (submitBtn) {
             submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Changes';
         }
+
+        await refreshCategoriesFromApi();
+        await refreshFuelDropdown();
 
         categorySelect.value = d.category || '';
         syncVisibleFields();
@@ -1096,15 +1125,23 @@ document.addEventListener('DOMContentLoaded', () => {
         resetToAddMode();
     });
 
-    modalEl.addEventListener('shown.bs.modal', () => {
+    modalEl.addEventListener('shown.bs.modal', async () => {
         if (inventoryModalMode === 'edit' && pendingEditData) {
-            applyEditData(pendingEditData);
+            const data = pendingEditData;
             pendingEditData = null;
+            await applyEditData(data);
         }
     });
 
     modalEl.addEventListener('hidden.bs.modal', () => {
-        resetToAddMode();
+        inventoryModalMode = 'add';
+        pendingEditData = null;
+        setProductFieldsLocked(false);
+        form.action = form.dataset.createAction || form.getAttribute('action');
+        if (modalTitle) modalTitle.textContent = 'Add Inventory (Purchase Batch)';
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
+        }
     });
 
     document.getElementById('open-add-inventory-btn')?.addEventListener('click', () => {

@@ -803,6 +803,27 @@ def build_period_cash_entries(stats):
         other_amt = over if over > 0 else credit
         paid_display = (paid + over) if et == 'sale' else paid
 
+        # Journal labels: sale / advance / loan keep paid-unpaid clarity
+        if display_type == 'sale':
+            if status == 'overpay':
+                pay_label = 'Overpay'
+            elif status == 'paid' or (paid >= amt - 0.02 and amt > 0):
+                pay_label = 'Paid'
+                status = 'paid'
+            elif paid > 0:
+                pay_label = 'Partial'
+                status = 'partial'
+            else:
+                pay_label = 'Unpaid'
+                status = 'unpaid'
+            item_name = f'{item_name} · {pay_label}' if item_name else pay_label
+        elif display_type == 'loan':
+            item_name = f'{item_name} · Unpaid' if item_name else 'Unpaid'
+            status = 'unpaid'
+        elif display_type in ('advance', 'overpay'):
+            item_name = f'{item_name} · Paid' if item_name else 'Paid'
+            status = 'paid'
+
         rows.append(SimpleNamespace(
             id=e.id,
             sale_date=e.sale_date,
@@ -818,7 +839,7 @@ def build_period_cash_entries(stats):
             other_amount=other_amt,
             other_kind='over' if over > 0 else ('due' if credit > 0 else 'none'),
             payment_status=status,
-            cash_direction='in' if et in ('advance',) or paid_display > 0 else 'none',
+            cash_direction='in' if display_type in ('sale', 'advance', 'overpay') or et in ('advance',) or paid_display > 0 else ('out' if et == 'loan' else 'none'),
             is_fuel=bool(getattr(e, 'is_fuel', False) or getattr(e, 'fuel_type_id', None)),
             other_item=getattr(e, 'other_item', None),
         ))
@@ -859,8 +880,26 @@ def build_period_cash_entries(stats):
     AUTO_INV_PAY = 'Paid with inventory purchase:'
     vendor_payments = list(stats.get('vendor_payments') or [])
     absorbed_vendor_pay_ids = set()
+    from app.vendors.service import purchase_log_payment_status
+    from app.models import VendorPayment as _VendorPayment
 
     def _match_inventory_auto_payment(log, amount):
+        # Prefer FK link (works even if payment_date falls outside the filter window)
+        for vp in vendor_payments:
+            if vp.id in absorbed_vendor_pay_ids:
+                continue
+            if getattr(vp, 'purchase_log_id', None) == log.id:
+                return vp
+        if getattr(log, 'id', None):
+            linked = (
+                _VendorPayment.query
+                .filter_by(purchase_log_id=log.id)
+                .order_by(_VendorPayment.id.asc())
+                .first()
+            )
+            if linked and linked.id not in absorbed_vendor_pay_ids:
+                return linked
+
         item = (log.item_name or '').strip().lower()
         for vp in vendor_payments:
             if vp.id in absorbed_vendor_pay_ids:
@@ -873,7 +912,6 @@ def build_period_cash_entries(stats):
             if item and item not in note.lower():
                 continue
             return vp
-        # Amount-only fallback when item text differs slightly
         for vp in vendor_payments:
             if vp.id in absorbed_vendor_pay_ids:
                 continue
@@ -882,19 +920,25 @@ def build_period_cash_entries(stats):
                 return vp
         return None
 
-    # Paid inventory adds → one cash-out journal line per product.
-    # Unpaid inventory stays on the vendor ledger only (no till cash).
+    # Every inventory add = purchasing → journal OUT (paid or unpaid).
+    # Paid-with-purchase auto payments are absorbed so we don't double-count.
     for log in stats.get('purchase_logs') or []:
         amt = purchase_log_total(log)
         if amt <= 0:
             continue
         auto_pay = _match_inventory_auto_payment(log, amt)
-        if not auto_pay:
-            continue
-        absorbed_vendor_pay_ids.add(auto_pay.id)
-        entry_dt = log.entry_date or auto_pay.payment_date
+        status = purchase_log_payment_status(log)
+        is_paid = status == 'paid' or auto_pay is not None
+        if auto_pay:
+            absorbed_vendor_pay_ids.add(auto_pay.id)
+        entry_dt = log.entry_date or (auto_pay.payment_date if auto_pay else None)
         sale_date = entry_dt.date() if hasattr(entry_dt, 'date') else entry_dt
         vendor = getattr(log, 'vendor_ref', None)
+        desc = _purchase_log_description(log)
+        if is_paid:
+            desc = f'{desc} · Paid'
+        else:
+            desc = f'{desc} · Unpaid'
         rows.append(SimpleNamespace(
             id=log.id,
             sale_date=sale_date,
@@ -902,7 +946,7 @@ def build_period_cash_entries(stats):
             customer=None,
             vendor=vendor,
             vendor_name=(vendor.name if vendor else (log.vendor or '—')),
-            item_name=_purchase_log_description(log),
+            item_name=desc,
             liters=_purchase_log_qty(log),
             amount=amt,
             discount=0,
@@ -911,7 +955,7 @@ def build_period_cash_entries(stats):
             credit_amount=0,
             other_amount=0,
             other_kind='none',
-            payment_status='paid',
+            payment_status='paid' if is_paid else 'unpaid',
             cash_direction='out',
             is_fuel=(log.category == 'fuel'),
             other_item=None,
@@ -925,7 +969,13 @@ def build_period_cash_entries(stats):
         sale_date = pay_dt.date() if hasattr(pay_dt, 'date') else pay_dt
         method = (vp.method or 'Cash').strip()
         note = (vp.note or '').strip()
-        item_name = f'Payment · {method}'
+        blob = f'{method} {note}'.lower()
+        is_advance = 'advance' in blob
+        entry_type = 'vendor_advance' if is_advance else 'vendor_pay'
+        if is_advance:
+            item_name = f'Advance · {method}'
+        else:
+            item_name = f'Payment · {method}'
         if note:
             item_name = f'{item_name} — {note}'
         amt = float(vp.amount_paid or 0)
@@ -933,7 +983,7 @@ def build_period_cash_entries(stats):
         rows.append(SimpleNamespace(
             id=vp.id,
             sale_date=sale_date,
-            entry_type='vendor_pay',
+            entry_type=entry_type,
             customer=None,
             vendor=vendor,
             vendor_name=(vendor.name if vendor else '—'),

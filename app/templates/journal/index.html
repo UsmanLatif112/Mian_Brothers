@@ -77,7 +77,7 @@
                 <span class="journal-kpi-label">Cash In</span>
             </div>
             <div class="journal-kpi-value">{{ total_in | money }}</div>
-            <div class="journal-kpi-meta">Settles · advances · returns</div>
+            <div class="journal-kpi-meta">Sales · customer settle/advance · expense settle</div>
         </article>
         <article class="journal-kpi journal-kpi-out">
             <div class="journal-kpi-top">
@@ -85,7 +85,7 @@
                 <span class="journal-kpi-label">Cash Out</span>
             </div>
             <div class="journal-kpi-value">{{ total_out | money }}</div>
-            <div class="journal-kpi-meta">Inventory · vendors · loans · expenses</div>
+            <div class="journal-kpi-meta">Purchases · vendor pay/advance · loans · expenses</div>
         </article>
         <article class="journal-kpi journal-kpi-net {% if net >= 0 %}is-positive{% else %}is-negative{% endif %}">
             <div class="journal-kpi-top">
@@ -99,11 +99,13 @@
 
     <section class="journal-breakdown mb-4" aria-label="By type">
         {% set chips = [
-            ('payment', 'Settle'),
-            ('advance', 'Advance'),
-            ('loan', 'Loan'),
-            ('purchase', 'Inventory'),
-            ('vendor_pay', 'Vendor'),
+            ('sale', 'Sale'),
+            ('payment', 'Cust. settle'),
+            ('advance', 'Cust. advance'),
+            ('loan', 'Cust. loan'),
+            ('purchase', 'Purchase'),
+            ('vendor_pay', 'Vendor pay'),
+            ('vendor_advance', 'Vendor adv.'),
             ('expense', 'Expense'),
             ('settle', 'Exp. settle'),
             ('cash_taken', 'Taken'),
@@ -152,7 +154,12 @@
                                     {% endif %}
                                 </span>
                             </td>
-                            <td><span class="journal-type journal-type-{{ row.entry_type }}">{{ row.type_label }}</span></td>
+                            <td>
+                                <span class="journal-type journal-type-{{ row.entry_type }}">{{ row.type_label }}</span>
+                                {% if row.payment_status in ('paid', 'unpaid', 'partial', 'overpay') %}
+                                <span class="badge badge-custom {% if row.payment_status == 'paid' %}badge-success-custom{% elif row.payment_status == 'overpay' %}badge-staff{% elif row.payment_status == 'partial' %}badge-staff{% else %}badge-danger-custom{% endif %} text-uppercase ms-1">{{ row.payment_status }}</span>
+                                {% endif %}
+                            </td>
                             <td>{{ row.party }}</td>
                             <td><div class="journal-desc">{{ row.item_name }}</div></td>
                             <td class="text-end fw-bold journal-amt-{{ row.cash_direction }}">
