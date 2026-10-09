@@ -351,13 +351,13 @@
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-secondary border-0 edit-purchase-log-btn"
                                                 data-edit-url="{{ url_for('inventory.edit_purchase_log', log_id=log.id) }}"
-                                                data-category="{{ log.category }}"
-                                                data-item="{{ log.item_name }}"
-                                                data-company="{{ log.company or '' }}"
-                                                data-item-type="{{ log.item_type or '' }}"
+                                                data-category="{{ log.category|e }}"
+                                                data-item="{{ log.item_name|e }}"
+                                                data-company="{{ (log.company or '')|e }}"
+                                                data-item-type="{{ (log.item_type or '')|e }}"
                                                 data-fuel-type-id="{{ log.fuel_type_id or '' }}"
                                                 data-vendor-id="{{ log.vendor_id or '' }}"
-                                                data-vendor="{{ log.vendor or '' }}"
+                                                data-vendor="{{ (log.vendor or '')|e }}"
                                                 data-cost="{{ log.cost_price }}"
                                                 data-sale="{{ log.sale_price }}"
                                                 data-liters="{{ log.liters if log.liters is not none else '' }}"
@@ -935,7 +935,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const refreshCategoriesFromApi = async () => {
+    const setCategoryValue = (key) => {
+        const cat = (key || '').trim();
+        const placeholder = categorySelect.querySelector('option[value=""]');
+        if (placeholder) placeholder.selected = false;
+        if (!cat) {
+            categorySelect.value = '';
+            if (placeholder) placeholder.selected = true;
+            return;
+        }
+        ensureCategoryOption(cat, (categoriesCache.find((c) => c.key === cat) || {}).name || cat);
+        Array.from(categorySelect.options).forEach((o) => {
+            o.selected = o.value === cat;
+        });
+        categorySelect.value = cat;
+    };
+
+    const refreshCategoriesFromApi = async (preferredKey) => {
         const url = categorySelect.dataset.categoriesUrl;
         if (!url) return categoriesCache;
         try {
@@ -943,11 +959,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             if (!data.ok || !Array.isArray(data.categories)) return categoriesCache;
             categoriesCache = data.categories.map((c) => normalizeCatMeta(c)).filter(Boolean);
-            const current = categorySelect.value;
+            const keep = (preferredKey || categorySelect.value || '').trim();
             const placeholder = document.createElement('option');
             placeholder.value = '';
             placeholder.disabled = true;
-            placeholder.selected = !current;
             placeholder.textContent = 'Select category...';
             categorySelect.innerHTML = '';
             categorySelect.appendChild(placeholder);
@@ -962,9 +977,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 o.dataset.system = cat.is_system ? '1' : '0';
                 categorySelect.appendChild(o);
             });
-            if (current && categoriesCache.some((c) => c.key === current)) {
-                categorySelect.value = current;
-                placeholder.selected = false;
+            if (keep && categoriesCache.some((c) => c.key === keep)) {
+                setCategoryValue(keep);
+            } else {
+                placeholder.selected = true;
+                categorySelect.value = '';
             }
             return categoriesCache;
         } catch (err) {
@@ -1192,63 +1209,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const ensureCategoryOption = (key, label) => {
         if (!key) return;
         let opt = categorySelect.querySelector(`option[value="${CSS.escape(key)}"]`);
-        if (opt) return;
+        if (opt) {
+            if (label && opt.textContent !== label) opt.textContent = label;
+            return;
+        }
         opt = document.createElement('option');
         opt.value = key;
         opt.textContent = label || key;
         categorySelect.appendChild(opt);
     };
 
-    const resetToAddMode = async () => {
-        const seq = ++modalLoadSeq;
-        inventoryModalMode = 'add';
-        pendingEditData = null;
-        form.action = form.dataset.createAction || form.getAttribute('action');
-        if (modalTitle) modalTitle.textContent = 'Add Inventory (Purchase Batch)';
-        if (submitBtn) {
-            submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
-        }
-        clearInventoryFormFields();
-        await refreshCategoriesFromApi();
-        if (seq !== modalLoadSeq) return;
-        clearInventoryFormFields();
-        await refreshFuelDropdown();
-        if (seq !== modalLoadSeq) return;
-        syncVisibleFields();
-        updateBatchTotal();
-    };
-
-    const applyEditData = async (d) => {
-        if (!d) return;
-        const seq = ++modalLoadSeq;
-        inventoryModalMode = 'edit';
-        pendingEditData = null;
-
-        form.action = d.editUrl || form.action;
-        if (modalTitle) modalTitle.textContent = 'Edit Purchase Batch';
-        if (submitBtn) {
-            submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Changes';
-        }
-
-        // Always unlock + wipe previous row before cascading this row
-        setProductFieldsLocked(false);
-        clearInventoryFormFields();
-
-        await refreshCategoriesFromApi();
-        if (seq !== modalLoadSeq) return;
-        await refreshFuelDropdown();
-        if (seq !== modalLoadSeq) return;
-
+    const fillEditProductFields = (d) => {
         const cat = (d.category || '').trim();
-        ensureCategoryOption(cat, cat);
-        categorySelect.value = cat;
-        // Force cascade for this row only
         clearCategorySpecificFields();
+        setCategoryValue(cat);
         syncVisibleFields();
 
         if (cat === 'fuel') {
             setSelectValue(document.getElementById('fuel_type_id'), d.fuelTypeId || '');
-            fillFuelSalePrice();
         } else if (cat === 'ft_mobile') {
             setNamedSelect('ft_mobile_company', 'ft_mobile_company_other', d.company);
         } else if (cat === 'mobile') {
@@ -1267,15 +1245,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (customName) customName.value = d.item || '';
         }
 
-        if (seq !== modalLoadSeq) return;
-
         companyHidden.value = d.company || '';
         typeHidden.value = d.itemType || '';
         setSelectValue(document.getElementById('vendor_id'), d.vendorId || '');
+
+        const isPaid = String(d.paymentStatus || '').trim().toLowerCase() === 'paid';
         const paySel = document.getElementById('payment_status');
-        if (paySel) paySel.value = d.paymentStatus === 'paid' ? 'paid' : 'unpaid';
+        if (paySel) paySel.value = isPaid ? 'paid' : 'unpaid';
+
         const dateInput = document.getElementById('entry_date');
         if (dateInput) dateInput.value = d.entryDate || dateInput.getAttribute('value') || '';
+
         const costEl = document.getElementById('cost_price');
         const saleEl = document.getElementById('sale_price');
         const litersEl = document.getElementById('liters');
@@ -1285,14 +1265,69 @@ document.addEventListener('DOMContentLoaded', () => {
         if (litersEl) litersEl.value = d.liters !== '' && d.liters != null ? d.liters : '';
         if (qtyEl) qtyEl.value = d.quantity !== '' && d.quantity != null ? d.quantity : '';
 
+        // Re-assert category + payment after cascades (prevents stale unpaid / wrong category)
+        setCategoryValue(cat);
+        if (paySel) paySel.value = isPaid ? 'paid' : 'unpaid';
         syncOtherNameFields();
         updateBatchTotal();
-        setProductFieldsLocked(true);
+    };
+
+    const resetToAddMode = async () => {
+        const seq = ++modalLoadSeq;
+        // Do not clobber an in-progress edit open
+        if (inventoryModalMode === 'edit' && pendingEditData) return;
+        inventoryModalMode = 'add';
+        pendingEditData = null;
+        form.action = form.dataset.createAction || form.getAttribute('action');
+        if (modalTitle) modalTitle.textContent = 'Add Inventory (Purchase Batch)';
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Add Item';
+        }
+        setProductFieldsLocked(false);
+        clearInventoryFormFields();
+        await refreshCategoriesFromApi('');
+        if (seq !== modalLoadSeq || inventoryModalMode !== 'add') return;
+        clearInventoryFormFields();
+        await refreshFuelDropdown();
+        if (seq !== modalLoadSeq || inventoryModalMode !== 'add') return;
+        syncVisibleFields();
+        updateBatchTotal();
+    };
+
+    const applyEditData = async (d) => {
+        if (!d) return;
+        const seq = ++modalLoadSeq;
+        inventoryModalMode = 'edit';
+
+        form.action = d.editUrl || form.action;
+        if (modalTitle) modalTitle.textContent = 'Edit Purchase Batch';
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Changes';
+        }
+
+        setProductFieldsLocked(false);
+        clearInventoryFormFields();
+
+        const cat = (d.category || '').trim();
+        await refreshCategoriesFromApi(cat);
+        if (seq !== modalLoadSeq) return;
+        await refreshFuelDropdown();
+        if (seq !== modalLoadSeq) return;
+
+        fillEditProductFields(d);
+        if (seq !== modalLoadSeq) return;
+
+        // Final paint after layout — locks product fields for edit
+        requestAnimationFrame(() => {
+            if (seq !== modalLoadSeq) return;
+            fillEditProductFields(d);
+            setProductFieldsLocked(true);
+        });
     };
 
     const readPurchaseEditPayload = (btn) => ({
         editUrl: btn.getAttribute('data-edit-url') || '',
-        category: btn.getAttribute('data-category') || '',
+        category: (btn.getAttribute('data-category') || '').trim(),
         item: btn.getAttribute('data-item') || '',
         company: btn.getAttribute('data-company') || '',
         itemType: btn.getAttribute('data-item-type') || '',
@@ -1302,7 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sale: btn.getAttribute('data-sale') || '',
         liters: btn.getAttribute('data-liters') || '',
         quantity: btn.getAttribute('data-quantity') || '',
-        paymentStatus: btn.getAttribute('data-payment-status') || 'unpaid',
+        paymentStatus: (btn.getAttribute('data-payment-status') || 'unpaid').trim().toLowerCase(),
         entryDate: btn.getAttribute('data-entry-date') || '',
     });
 
@@ -1323,19 +1358,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     modalEl.addEventListener('show.bs.modal', () => {
-        if (inventoryModalMode === 'edit' && pendingEditData) return;
+        // Edit opens must never run add-reset (that wiped category / forced unpaid)
+        if (inventoryModalMode === 'edit') return;
         resetToAddMode();
     });
 
     modalEl.addEventListener('shown.bs.modal', async () => {
-        if (inventoryModalMode === 'edit' && pendingEditData) {
+        if (inventoryModalMode === 'edit') {
             const data = pendingEditData;
             pendingEditData = null;
-            await applyEditData(data);
+            if (data) await applyEditData(data);
             return;
         }
         if (inventoryModalMode === 'add') {
-            await refreshCategoriesFromApi();
+            await refreshCategoriesFromApi('');
             if (inventoryModalMode !== 'add') return;
             syncVisibleFields();
         }
@@ -1495,12 +1531,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.querySelectorAll('.edit-purchase-log-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const payload = readPurchaseEditPayload(btn);
+            modalLoadSeq += 1; // cancel any in-flight add reset
             inventoryModalMode = 'edit';
             pendingEditData = payload;
             const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            // Modal already open (switching rows): re-apply immediately, no stale fields
             if (modalEl.classList.contains('show')) {
                 pendingEditData = null;
                 applyEditData(payload);
