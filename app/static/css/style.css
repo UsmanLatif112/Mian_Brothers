@@ -1,81 +1,82 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* Shopify-inspired admin shell — emerald accent, cool neutrals */
+/* OctaneFlow base tokens — elevated by ui.css */
 :root {
-    --bg-color: #f1f2f4;
-    --bg-accent: linear-gradient(180deg, #eef1f4 0%, #f1f2f4 40%, #f6f7f9 100%);
+    --font-ui: "Outfit", "Plus Jakarta Sans", system-ui, sans-serif;
+    --bg-color: #eef1f4;
+    --bg-accent: linear-gradient(165deg, #f4f6f8 0%, #eef1f4 45%, #f7f8fa 100%);
     --card-bg: #ffffff;
-    --text-primary: #1a1c1d;
-    --text-secondary: #6d7175;
-    --accent-blue: #008060;
-    --accent-blue-hover: #004c3f;
-    --accent-amber: #b98900;
-    --accent-teal: #00a0ac;
-    --accent-rose: #d72c0d;
-    --accent-violet: #5c6ac4;
-    --accent-emerald: #008060;
-    --border-color: #e1e3e5;
-    --shadow-sm: 0 1px 0 rgba(22, 29, 37, 0.05);
-    --shadow-md: 0 4px 16px rgba(22, 29, 37, 0.08);
-    --shadow-lg: 0 12px 28px rgba(22, 29, 37, 0.12);
-    --card-border: 1px solid #e1e3e5;
-    --glass-blur: blur(0px);
+    --text-primary: #111827;
+    --text-secondary: #64748b;
+    --accent-blue: #0a7a5c;
+    --accent-blue-hover: #065f48;
+    --accent-amber: #c27803;
+    --accent-teal: #0e9aa7;
+    --accent-rose: #dc2626;
+    --accent-violet: #4f6bed;
+    --accent-emerald: #0a7a5c;
+    --border-color: rgba(15, 23, 42, 0.08);
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.07);
+    --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.12);
+    --card-border: 1px solid rgba(15, 23, 42, 0.07);
+    --glass-blur: blur(12px);
     --shell-max: 100%;
-    --sidebar-width: 260px;
-    --topbar-height: 56px;
-    --nav-height: 56px;
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 14px;
-    --danger-soft: #fee9e8;
-    --danger-text: #d72c0d;
-    --table-head-bg: linear-gradient(180deg, #f6f6f7 0%, #f1f2f4 100%);
-    --table-row-hover: rgba(0, 128, 96, 0.05);
-    --table-stripe: rgba(22, 29, 37, 0.015);
-    --chart-sales: #008060;
-    --chart-profit: #00a0ac;
+    --sidebar-width: 268px;
+    --topbar-height: 60px;
+    --nav-height: 60px;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --danger-soft: #fef2f2;
+    --danger-text: #dc2626;
+    --table-head-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    --table-row-hover: rgba(10, 122, 92, 0.055);
+    --table-stripe: rgba(15, 23, 42, 0.018);
+    --chart-sales: #0a7a5c;
+    --chart-profit: #0e9aa7;
     --sidebar-bg: #ffffff;
-    --sidebar-border: #e1e3e5;
-    --sidebar-link: #4a4a4a;
-    --sidebar-link-hover: #f1f2f4;
-    --sidebar-link-active-bg: #eaf6f2;
-    --sidebar-link-active: #004c3f;
-    --topbar-bg: rgba(255, 255, 255, 0.92);
+    --sidebar-border: rgba(15, 23, 42, 0.07);
+    --sidebar-link: #475569;
+    --sidebar-link-hover: rgba(15, 23, 42, 0.045);
+    --sidebar-link-active-bg: #e8f6f1;
+    --sidebar-link-active: #065f48;
+    --topbar-bg: rgba(255, 255, 255, 0.82);
 }
 
 [data-theme="dark"] {
-    --bg-color: #0b0c0e;
-    --bg-accent: linear-gradient(180deg, #12141a 0%, #0b0c0e 50%, #0e1014 100%);
-    --card-bg: #1a1c21;
-    --text-primary: #f6f6f7;
-    --text-secondary: #9ea3a8;
+    --bg-color: #0a0c10;
+    --bg-accent: linear-gradient(165deg, #10131a 0%, #0a0c10 50%, #0d1016 100%);
+    --card-bg: #161921;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
     --accent-blue: #2db89a;
-    --accent-blue-hover: #4fd1b3;
-    --accent-amber: #e3b448;
+    --accent-blue-hover: #5ee0c2;
+    --accent-amber: #f0b429;
     --accent-teal: #47c1c9;
-    --accent-rose: #f5836d;
-    --accent-violet: #8c9bf0;
+    --accent-rose: #fb7185;
+    --accent-violet: #8b9cf7;
     --accent-emerald: #2db89a;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
-    --card-border: 1px solid rgba(255, 255, 255, 0.08);
-    --glass-blur: blur(12px);
-    --danger-soft: rgba(215, 44, 13, 0.18);
-    --danger-text: #f5836d;
-    --table-head-bg: linear-gradient(180deg, rgba(45, 184, 154, 0.14) 0%, rgba(45, 184, 154, 0.06) 100%);
-    --table-row-hover: rgba(45, 184, 154, 0.08);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.55);
+    --card-border: 1px solid rgba(255, 255, 255, 0.07);
+    --glass-blur: blur(16px);
+    --danger-soft: rgba(251, 113, 133, 0.14);
+    --danger-text: #fb7185;
+    --table-head-bg: linear-gradient(180deg, rgba(45, 184, 154, 0.12) 0%, rgba(45, 184, 154, 0.04) 100%);
+    --table-row-hover: rgba(45, 184, 154, 0.09);
     --table-stripe: rgba(255, 255, 255, 0.02);
     --chart-sales: #2db89a;
     --chart-profit: #47c1c9;
-    --sidebar-bg: #12141a;
-    --sidebar-border: rgba(255, 255, 255, 0.08);
-    --sidebar-link: #c9cccf;
-    --sidebar-link-hover: rgba(255, 255, 255, 0.06);
-    --sidebar-link-active-bg: rgba(45, 184, 154, 0.16);
-    --sidebar-link-active: #4fd1b3;
-    --topbar-bg: rgba(18, 20, 26, 0.92);
+    --sidebar-bg: #0e1016;
+    --sidebar-border: rgba(255, 255, 255, 0.07);
+    --sidebar-link: #b8c0cc;
+    --sidebar-link-hover: rgba(255, 255, 255, 0.05);
+    --sidebar-link-active-bg: rgba(45, 184, 154, 0.18);
+    --sidebar-link-active: #5ee0c2;
+    --topbar-bg: rgba(14, 16, 22, 0.82);
 }
 
 /* Global Styles */
@@ -91,7 +92,7 @@ html {
 }
 
 body {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: var(--font-ui, "Outfit", "Plus Jakarta Sans", system-ui, sans-serif);
     background-color: var(--bg-color);
     background-image: var(--bg-accent);
     background-attachment: fixed;
@@ -100,6 +101,7 @@ body {
     min-height: 100vh;
     line-height: 1.5;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
 }
 
 body.no-navbar {
