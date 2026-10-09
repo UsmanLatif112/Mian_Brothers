@@ -25,6 +25,9 @@
                 </button>
             </form>
             {% endif %}
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manageCategoriesModal" title="Categories">
+                <i class="bi bi-tags me-1"></i><span class="btn-label"> Categories</span>
+            </button>
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn" title="Add Inventory">
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Inventory</span>
             </button>
@@ -299,11 +302,16 @@
                             <label for="category" class="form-label form-label-custom">Item Category</label>
                             <select class="form-select form-control-custom" id="category" name="category" required>
                                 <option value="" disabled selected>Select category...</option>
-                                <option value="fuel">Fuel</option>
-                                <option value="mobile">Mobile (Oil)</option>
-                                <option value="ft_mobile">FT Mobile Oil</option>
-                                <option value="filter">Filter</option>
-                                <option value="other">Other Item</option>
+                                {% for cat in shop_categories or [] %}
+                                <option value="{{ cat.key }}"
+                                        data-id="{{ cat.id }}"
+                                        data-unit="{{ cat.unit_mode }}"
+                                        data-companies="{{ cat.companies | tojson | e }}"
+                                        data-types="{{ cat.types | tojson | e }}"
+                                        data-system="{{ '1' if cat.is_system else '0' }}">
+                                    {{ cat.name }}
+                                </option>
+                                {% endfor %}
                             </select>
                         </div>
 
@@ -418,11 +426,35 @@
                             <input type="text" class="form-control form-control-custom" id="item_name" name="item_name" placeholder="e.g. Air Freshener">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        {# Custom categories — company / type / name #}
+                        <div class="col-12 col-md-6 field-group d-none" id="custom_company_wrap" data-show="custom">
+                            <label for="custom_company" class="form-label form-label-custom">Company / Brand</label>
+                            <select class="form-select form-control-custom" id="custom_company" name="company_custom">
+                                <option value="">Optional…</option>
+                            </select>
+                            <div class="mt-2 d-none" id="custom_company_other_wrap">
+                                <input type="text" class="form-control form-control-custom" id="custom_company_other" placeholder="New company name">
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 field-group d-none" id="custom_type_wrap" data-show="custom">
+                            <label for="custom_type" class="form-label form-label-custom">Type / Subcategory</label>
+                            <select class="form-select form-control-custom" id="custom_type" name="item_type_custom">
+                                <option value="">Optional…</option>
+                            </select>
+                            <div class="mt-2 d-none" id="custom_type_other_wrap">
+                                <input type="text" class="form-control form-control-custom" id="custom_type_other" placeholder="New type name">
+                            </div>
+                        </div>
+                        <div class="col-12 field-group d-none" id="custom_name_wrap" data-show="custom">
+                            <label for="custom_item_name" class="form-label form-label-custom">Item Name</label>
+                            <input type="text" class="form-control form-control-custom" id="custom_item_name" name="item_name_custom" placeholder="Product name">
+                        </div>
+
+                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <hr class="my-1" style="border-color: var(--border-color); opacity: 0.4;">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <label for="vendor_id" class="form-label form-label-custom">Vendor</label>
                             <select class="form-select form-control-custom js-search-vendor js-create-vendor" id="vendor_id" name="vendor_id"
                                     data-placeholder="Search or add vendor..."
@@ -437,7 +469,7 @@
                             </select>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <label for="payment_status" class="form-label form-label-custom">Payment to Vendor</label>
                             <select class="form-select form-control-custom" id="payment_status" name="payment_status">
                                 <option value="unpaid" selected>Unpaid</option>
@@ -445,12 +477,12 @@
                             </select>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <label for="entry_date" class="form-label form-label-custom">Purchase Date</label>
                             <input type="date" class="form-control form-control-custom" id="entry_date" name="entry_date" value="{{ today }}">
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
                             <div class="input-group">
                                 <span class="input-group-text">PKR</span>
@@ -458,7 +490,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
                             <div class="input-group">
                                 <span class="input-group-text">PKR</span>
@@ -466,7 +498,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile">
+                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel mobile ft_mobile custom_liters">
                             <label for="liters" class="form-label form-label-custom">
                                 <span class="liters-label">Liters</span>
                             </label>
@@ -476,7 +508,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other">
+                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
                             <div class="p-3 rounded" style="background: rgba(2,132,199,0.08); font-size: 0.9rem;">
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted-custom">This purchase batch total</span>
@@ -486,7 +518,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="mobile filter other">
+                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="mobile filter other custom_qty">
                             <label for="quantity" class="form-label form-label-custom">Quantity</label>
                             <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="Enter quantity">
                         </div>
@@ -595,6 +627,50 @@
         </div>
     </div>
 </div>
+
+<!-- MANAGE CATEGORIES -->
+<div class="modal fade" id="manageCategoriesModal" tabindex="-1" aria-labelledby="manageCategoriesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
+            <div class="modal-header border-0 pb-2">
+                <h5 class="modal-title fw-bold" id="manageCategoriesModalLabel">Categories &amp; Subcategories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="text-muted-custom small mb-3">
+                    Add new product categories, or companies / types under an existing one. System categories (Fuel, Mobile, Filter…) stay fixed but you can extend their lists.
+                </p>
+
+                <div class="border rounded-3 p-3 mb-4" style="border-color: var(--border-color) !important;">
+                    <div class="fw-semibold mb-2">New category</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-5">
+                            <label for="new_cat_name" class="form-label form-label-custom">Name</label>
+                            <input type="text" class="form-control form-control-custom" id="new_cat_name" placeholder="e.g. Grease, Batteries">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="new_cat_unit" class="form-label form-label-custom">Stock unit</label>
+                            <select class="form-select form-control-custom" id="new_cat_unit">
+                                <option value="qty" selected>Quantity (pcs)</option>
+                                <option value="liters">Liters</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <button type="button" class="btn btn-primary-custom w-100" id="btn-create-category">Add</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="categories-manage-list" class="d-flex flex-column gap-3">
+                    {# Filled by JS #}
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-2 pb-3">
+                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -605,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('add-item-form');
     const companyHidden = document.getElementById('company_hidden');
     const typeHidden = document.getElementById('item_type_hidden');
+    const SYSTEM_CATS = new Set(['fuel', 'mobile', 'ft_mobile', 'filter', 'other']);
 
     const otherPairs = [
         { select: 'ft_mobile_company', wrap: 'ft_mobile_company_other_wrap', input: 'ft_mobile_company_other', match: 'Other' },
@@ -612,9 +689,13 @@ document.addEventListener('DOMContentLoaded', () => {
         { select: 'mobile_type', wrap: 'mobile_type_other_wrap', input: 'mobile_type_other', match: 'Other' },
         { select: 'filter_company', wrap: 'filter_company_other_wrap', input: 'filter_company_other', match: 'Other' },
         { select: 'filter_type', wrap: 'filter_type_other_wrap', input: 'filter_type_other', match: 'Other' },
+        { select: 'custom_company', wrap: 'custom_company_other_wrap', input: 'custom_company_other', match: 'Other' },
+        { select: 'custom_type', wrap: 'custom_type_other_wrap', input: 'custom_type_other', match: 'Other' },
     ];
 
     const syncOtherNameFields = () => {
+        const cat = categorySelect.value;
+        const isCustom = cat && !SYSTEM_CATS.has(cat);
         otherPairs.forEach(({ select, wrap, input, match }) => {
             const sel = document.getElementById(select);
             const wrapEl = document.getElementById(wrap);
@@ -622,9 +703,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!sel || !wrapEl || !inputEl) return;
 
             let categoryOk = false;
-            if (select === 'ft_mobile_company') categoryOk = categorySelect.value === 'ft_mobile';
-            if (['mobile_company', 'mobile_type'].includes(select)) categoryOk = categorySelect.value === 'mobile';
-            if (['filter_company', 'filter_type'].includes(select)) categoryOk = categorySelect.value === 'filter';
+            if (select === 'ft_mobile_company') categoryOk = cat === 'ft_mobile';
+            if (['mobile_company', 'mobile_type'].includes(select)) categoryOk = cat === 'mobile';
+            if (['filter_company', 'filter_type'].includes(select)) categoryOk = cat === 'filter';
+            if (['custom_company', 'custom_type'].includes(select)) categoryOk = isCustom;
 
             const visible = categoryOk && sel.value === match;
             wrapEl.classList.toggle('d-none', !visible);
@@ -682,26 +764,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const parseOptionNames = (raw) => {
+        try {
+            const arr = JSON.parse(raw || '[]');
+            return (arr || []).map((v) => (typeof v === 'string' ? v : (v && v.name) || '')).filter(Boolean);
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const fillSelectOptions = (selectEl, values, includeOther) => {
+        if (!selectEl) return;
+        const cur = selectEl.value;
+        selectEl.innerHTML = '';
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'Select…';
+        selectEl.appendChild(empty);
+        (values || []).forEach((entry) => {
+            const name = typeof entry === 'string' ? entry : (entry && entry.name) || '';
+            if (!name) return;
+            const o = document.createElement('option');
+            o.value = name;
+            o.textContent = name;
+            selectEl.appendChild(o);
+        });
+        if (includeOther) {
+            const o = document.createElement('option');
+            o.value = 'Other';
+            o.textContent = 'Other (add new)';
+            selectEl.appendChild(o);
+        }
+        if (cur) selectEl.value = cur;
+        if (selectEl.tomselect) {
+            selectEl.tomselect.destroy();
+        }
+    };
+
     const syncVisibleFields = () => {
         const cat = categorySelect.value;
+        const opt = categorySelect.selectedOptions[0];
+        const isCustom = !!(cat && !SYSTEM_CATS.has(cat));
+        const unit = (opt && opt.dataset.unit) || 'qty';
+        const showKey = isCustom ? 'custom' : cat;
+        const companies = opt ? parseOptionNames(opt.dataset.companies) : [];
+        const types = opt ? parseOptionNames(opt.dataset.types) : [];
+
+        if (isCustom) {
+            fillSelectOptions(document.getElementById('custom_company'), companies, true);
+            fillSelectOptions(document.getElementById('custom_type'), types, true);
+        } else if (cat === 'mobile') {
+            fillSelectOptions(document.getElementById('mobile_company'), companies, true);
+            fillSelectOptions(document.getElementById('mobile_type'), types, true);
+        } else if (cat === 'ft_mobile') {
+            fillSelectOptions(document.getElementById('ft_mobile_company'), companies, true);
+        } else if (cat === 'filter') {
+            fillSelectOptions(document.getElementById('filter_company'), companies, true);
+            fillSelectOptions(document.getElementById('filter_type'), types, true);
+        }
+
         document.querySelectorAll('#add-item-form .field-group').forEach(el => {
-            const showFor = (el.dataset.show || '').split(/\s+/);
-            const visible = cat && showFor.includes(cat);
+            const showFor = (el.dataset.show || '').split(/\s+/).filter(Boolean);
+            let visible = cat && showFor.includes(showKey);
+            if (el.id === 'liters_field_wrap') {
+                visible = cat === 'fuel' || cat === 'ft_mobile' || cat === 'mobile'
+                    || (isCustom && unit === 'liters');
+            }
+            if (el.id === 'quantity_field_wrap') {
+                visible = cat === 'mobile' || cat === 'filter' || cat === 'other'
+                    || (isCustom && unit === 'qty');
+            }
             el.classList.toggle('d-none', !visible);
 
             el.querySelectorAll('input, select').forEach(input => {
                 if (input.type === 'hidden') return;
-                if (visible) {
-                    if (['cost_price', 'sale_price', 'vendor_id', 'payment_status'].includes(input.id) ||
-                        (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id)) ||
-                        (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id)) ||
-                        (cat === 'mobile' && ['mobile_company', 'mobile_type', 'quantity', 'liters'].includes(input.id)) ||
-                        (cat === 'filter' && ['filter_type', 'filter_company', 'quantity'].includes(input.id)) ||
-                        (cat === 'other' && ['item_name', 'quantity'].includes(input.id))) {
-                        input.required = true;
-                    }
-                } else {
-                    input.required = false;
+                input.required = false;
+                if (!visible) return;
+                if (['cost_price', 'sale_price', 'vendor_id', 'payment_status'].includes(input.id)
+                    || (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id))
+                    || (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id))
+                    || (cat === 'mobile' && ['mobile_company', 'mobile_type', 'quantity'].includes(input.id))
+                    || (cat === 'filter' && ['filter_type', 'filter_company', 'quantity'].includes(input.id))
+                    || (cat === 'other' && ['item_name', 'quantity'].includes(input.id))
+                    || (isCustom && unit === 'liters' && input.id === 'liters')
+                    || (isCustom && unit === 'qty' && input.id === 'quantity')) {
+                    input.required = true;
                 }
             });
         });
@@ -717,14 +864,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateBatchTotal = () => {
         const cat = categorySelect.value;
+        const opt = categorySelect.selectedOptions[0];
+        const unit = (opt && opt.dataset.unit) || 'qty';
+        const isCustom = cat && !SYSTEM_CATS.has(cat);
         const cost = Number(document.getElementById('cost_price')?.value || 0);
         let qty = 0;
-        if (cat === 'fuel' || cat === 'ft_mobile' || cat === 'mobile') {
+        if (cat === 'fuel' || cat === 'ft_mobile' || (isCustom && unit === 'liters')) {
             qty = Number(document.getElementById('liters')?.value || 0);
-            if (cat === 'mobile') {
-                // Mobile: cost is per unit; liters are optional metadata
-                qty = Number(document.getElementById('quantity')?.value || 0);
-            }
+        } else if (cat === 'mobile') {
+            qty = Number(document.getElementById('quantity')?.value || 0);
         } else {
             qty = Number(document.getElementById('quantity')?.value || 0);
         }
@@ -858,6 +1006,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             companyHidden.value = company;
             typeHidden.value = type;
+        } else if (cat && !SYSTEM_CATS.has(cat)) {
+            let company = document.getElementById('custom_company')?.value || '';
+            let type = document.getElementById('custom_type')?.value || '';
+            if (company === 'Other') {
+                company = (document.getElementById('custom_company_other')?.value || '').trim();
+            }
+            if (type === 'Other') {
+                type = (document.getElementById('custom_type_other')?.value || '').trim();
+            }
+            let name = (document.getElementById('custom_item_name')?.value || '').trim();
+            if (!name) {
+                if (company && type) name = `${company} ${type}`;
+                else if (company) name = company;
+            }
+            if (!name) {
+                e.preventDefault();
+                alert('Please enter an item name (or company / type).');
+                return;
+            }
+            const nameInput = document.getElementById('item_name');
+            if (nameInput) nameInput.value = name;
+            companyHidden.value = company || '';
+            typeHidden.value = type || '';
         } else {
             companyHidden.value = '';
             typeHidden.value = '';
@@ -889,6 +1060,224 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit_fuel_stock').value = btn.dataset.stock || '0';
             document.getElementById('edit_fuel_threshold').value = btn.dataset.threshold || '0';
         });
+    });
+
+    /* —— Manage categories —— */
+    const catsListUrl = {{ url_for('inventory.api_categories') | tojson }};
+    const catsCreateUrl = {{ url_for('inventory.api_categories') | tojson }};
+    const catOptionUrlTpl = {{ url_for('inventory.api_add_category_option', category_id=999001) | tojson }}.replace('999001', '{id}');
+    const catDeleteUrlTpl = {{ url_for('inventory.api_delete_category', category_id=999001) | tojson }}.replace('999001', '{id}');
+    const catOptDeleteUrlTpl = {{ url_for('inventory.api_delete_category_option', option_id=999001) | tojson }}.replace('999001', '{id}');
+    const manageListEl = document.getElementById('categories-manage-list');
+    let categoriesCache = [];
+
+    const applyCategoriesToPurchaseSelect = (categories) => {
+        if (!categorySelect) return;
+        const current = categorySelect.value;
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.disabled = true;
+        placeholder.textContent = 'Select category...';
+        if (!current) placeholder.selected = true;
+        categorySelect.innerHTML = '';
+        categorySelect.appendChild(placeholder);
+        (categories || []).forEach((c) => {
+            const o = document.createElement('option');
+            o.value = c.key;
+            o.textContent = c.name;
+            o.dataset.id = c.id;
+            o.dataset.unit = c.unit_mode || 'qty';
+            o.dataset.companies = JSON.stringify(c.companies || []);
+            o.dataset.types = JSON.stringify(c.types || []);
+            o.dataset.system = c.is_system ? '1' : '0';
+            if (c.key === current) o.selected = true;
+            categorySelect.appendChild(o);
+        });
+        if (categorySelect.tomselect) {
+            categorySelect.tomselect.destroy();
+        }
+        syncVisibleFields();
+    };
+
+    const chipHtml = (opt, kind) => `
+        <span class="badge rounded-pill text-bg-light border d-inline-flex align-items-center gap-1 me-1 mb-1 py-2 px-2"
+              style="font-weight:500; color: var(--text-primary); border-color: var(--border-color) !important;">
+            ${opt.name}
+            <button type="button" class="btn-close btn-close-sm ms-1 cat-opt-delete"
+                    style="font-size:0.55rem;" title="Remove"
+                    data-option-id="${opt.id}" data-kind="${kind}" aria-label="Remove"></button>
+        </span>`;
+
+    const renderManageList = () => {
+        if (!manageListEl) return;
+        if (!categoriesCache.length) {
+            manageListEl.innerHTML = '<p class="text-muted-custom mb-0">No categories yet.</p>';
+            return;
+        }
+        manageListEl.innerHTML = categoriesCache.map((c) => {
+            const unitLabel = c.unit_mode === 'liters' ? 'Liters' : (c.unit_mode === 'fuel' ? 'Fuel tank' : 'Quantity');
+            const companies = c.company_options || [];
+            const types = c.type_options || [];
+            const showCompanies = c.key !== 'fuel' && c.key !== 'other';
+            const showTypes = showCompanies && c.key !== 'ft_mobile';
+            return `
+            <div class="border rounded-3 p-3" data-cat-id="${c.id}" style="border-color: var(--border-color) !important;">
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <div>
+                        <div class="fw-semibold">${c.name}
+                            ${c.is_system ? '<span class="badge bg-secondary-subtle text-secondary ms-1">System</span>' : ''}
+                        </div>
+                        <div class="text-muted-custom small">${unitLabel} · key: ${c.key}</div>
+                    </div>
+                    ${!c.is_system ? `<button type="button" class="btn btn-sm btn-outline-danger cat-delete" data-cat-id="${c.id}" title="Delete category"><i class="bi bi-trash"></i></button>` : ''}
+                </div>
+                ${showCompanies ? `
+                <div class="${showTypes ? 'mb-2' : ''}">
+                    <div class="small text-muted-custom mb-1">Companies / brands</div>
+                    <div class="mb-2">${companies.map((o) => chipHtml(o, 'company')).join('') || '<span class="text-muted-custom small">None yet</span>'}</div>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control form-control-custom cat-opt-input" data-cat-id="${c.id}" data-kind="company" placeholder="Add company…">
+                        <button type="button" class="btn btn-outline-secondary cat-opt-add" data-cat-id="${c.id}" data-kind="company">Add</button>
+                    </div>
+                </div>
+                ${showTypes ? `
+                <div>
+                    <div class="small text-muted-custom mb-1">Types / subcategories</div>
+                    <div class="mb-2">${types.map((o) => chipHtml(o, 'type')).join('') || '<span class="text-muted-custom small">None yet</span>'}</div>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control form-control-custom cat-opt-input" data-cat-id="${c.id}" data-kind="type" placeholder="Add type…">
+                        <button type="button" class="btn btn-outline-secondary cat-opt-add" data-cat-id="${c.id}" data-kind="type">Add</button>
+                    </div>
+                </div>` : ''}` : '<p class="text-muted-custom small mb-0">No company/type lists for this category.</p>'}
+            </div>`;
+        }).join('');
+    };
+
+    const loadCategories = async ({ syncPurchase = false } = {}) => {
+        try {
+            const res = await fetch(catsListUrl, { headers: { Accept: 'application/json' } });
+            const data = await res.json();
+            if (!data.ok) return;
+            categoriesCache = data.categories || [];
+            renderManageList();
+            if (syncPurchase) applyCategoriesToPurchaseSelect(categoriesCache);
+        } catch (err) {
+            console.warn('Could not load categories', err);
+        }
+    };
+
+    const manageModal = document.getElementById('manageCategoriesModal');
+    if (manageModal) {
+        manageModal.addEventListener('show.bs.modal', () => { loadCategories(); });
+    }
+
+    document.getElementById('btn-create-category')?.addEventListener('click', async () => {
+        const name = (document.getElementById('new_cat_name')?.value || '').trim();
+        const unit_mode = document.getElementById('new_cat_unit')?.value || 'qty';
+        if (!name) {
+            alert('Enter a category name.');
+            return;
+        }
+        try {
+            const res = await fetch(catsCreateUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ name, unit_mode }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                alert(data.error || 'Could not create category.');
+                return;
+            }
+            document.getElementById('new_cat_name').value = '';
+            await loadCategories({ syncPurchase: true });
+        } catch (err) {
+            alert('Could not create category.');
+        }
+    });
+
+    manageListEl?.addEventListener('click', async (e) => {
+        const addBtn = e.target.closest('.cat-opt-add');
+        const delOpt = e.target.closest('.cat-opt-delete');
+        const delCat = e.target.closest('.cat-delete');
+
+        if (addBtn) {
+            const catId = addBtn.dataset.catId;
+            const kind = addBtn.dataset.kind;
+            const input = manageListEl.querySelector(`.cat-opt-input[data-cat-id="${catId}"][data-kind="${kind}"]`);
+            const name = (input?.value || '').trim();
+            if (!name) {
+                alert(kind === 'company' ? 'Enter a company name.' : 'Enter a type name.');
+                return;
+            }
+            try {
+                const res = await fetch(catOptionUrlTpl.replace('{id}', catId), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ kind, name }),
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    alert(data.error || 'Could not add.');
+                    return;
+                }
+                if (input) input.value = '';
+                await loadCategories({ syncPurchase: true });
+            } catch (err) {
+                alert('Could not add option.');
+            }
+            return;
+        }
+
+        if (delOpt) {
+            const optionId = delOpt.dataset.optionId;
+            if (!confirm('Remove this option from the list?')) return;
+            try {
+                const res = await fetch(catOptDeleteUrlTpl.replace('{id}', optionId), {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    alert(data.error || 'Could not remove.');
+                    return;
+                }
+                await loadCategories({ syncPurchase: true });
+            } catch (err) {
+                alert('Could not remove option.');
+            }
+            return;
+        }
+
+        if (delCat) {
+            const catId = delCat.dataset.catId;
+            if (!confirm('Delete this category? Only unused custom categories can be removed.')) return;
+            try {
+                const res = await fetch(catDeleteUrlTpl.replace('{id}', catId), {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    alert(data.error || 'Could not delete.');
+                    return;
+                }
+                await loadCategories({ syncPurchase: true });
+            } catch (err) {
+                alert('Could not delete category.');
+            }
+        }
+    });
+
+    manageListEl?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const input = e.target.closest('.cat-opt-input');
+        if (!input) return;
+        e.preventDefault();
+        const btn = manageListEl.querySelector(
+            `.cat-opt-add[data-cat-id="${input.dataset.catId}"][data-kind="${input.dataset.kind}"]`
+        );
+        btn?.click();
     });
 });
 </script>

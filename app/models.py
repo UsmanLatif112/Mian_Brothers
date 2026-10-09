@@ -385,11 +385,54 @@ class VendorPayment(db.Model):
         return f"<VendorPayment {self.id}: {self.amount_paid} to vendor {self.vendor_id}>"
 
 
+class ShopCategory(db.Model):
+    """Inventory product categories (Fuel, Mobile Oil, custom… spares)."""
+    __tablename__ = 'shop_categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(40), unique=True, nullable=False)  # slug used on OtherItem.category
+    name = db.Column(db.String(100), nullable=False)
+    unit_mode = db.Column(db.String(20), nullable=False, default='qty')  # fuel | liters | qty
+    is_system = db.Column(db.Boolean, nullable=False, default=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=100)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    options = db.relationship(
+        'ShopCategoryOption',
+        backref='category',
+        lazy=True,
+        cascade='all, delete-orphan',
+        order_by='ShopCategoryOption.kind, ShopCategoryOption.name',
+    )
+
+    def __repr__(self):
+        return f"<ShopCategory {self.key}>"
+
+
+class ShopCategoryOption(db.Model):
+    """Sub-options under a category (company brands, oil/filter types, etc.)."""
+    __tablename__ = 'shop_category_options'
+
+    id = db.Column(db.Integer, primary_key=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('shop_categories.id'), nullable=False)
+    kind = db.Column(db.String(20), nullable=False)  # company | type
+    name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('category_id', 'kind', 'name', name='uq_shop_cat_option'),
+    )
+
+    def __repr__(self):
+        return f"<ShopCategoryOption {self.kind}:{self.name}>"
+
+
 class OtherItem(db.Model):
     __tablename__ = 'other_items'
 
     id = db.Column(db.Integer, primary_key=True)
-    category = db.Column(db.String(20), nullable=False, default='other')  # mobile, filter, other, ft_mobile
+    category = db.Column(db.String(40), nullable=False, default='other')  # shop category key
     name = db.Column(db.String(100), nullable=False)
     company = db.Column(db.String(100), nullable=True)
     item_type = db.Column(db.String(100), nullable=True)
@@ -416,7 +459,7 @@ class ItemPurchaseLog(db.Model):
     __tablename__ = 'item_purchase_logs'
 
     id = db.Column(db.Integer, primary_key=True)
-    category = db.Column(db.String(20), nullable=False)  # fuel, mobile, filter, other
+    category = db.Column(db.String(40), nullable=False)  # shop category key
     item_name = db.Column(db.String(100), nullable=False)
     company = db.Column(db.String(100), nullable=True)
     item_type = db.Column(db.String(100), nullable=True)

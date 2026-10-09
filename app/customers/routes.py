@@ -558,3 +558,20 @@ def ledger(customer_id):
         today=datetime.utcnow().date().isoformat(),
         chart_series=customer_ledger_pie(ledger_entries),
     )
+
+
+@customers_bp.route('/api/sync-balances', methods=['POST'])
+@login_required
+def sync_balances():
+    """Rebuild all customer balances from sales + payments (cascade truth)."""
+    if current_user.role != 'admin':
+        flash('Only administrators can sync customer balances.', 'danger')
+        return redirect(url_for('customers.index'))
+
+    count = 0
+    for customer in Customer.query.all():
+        recalculate_customer_balance(customer)
+        count += 1
+    db.session.commit()
+    flash(f'Recalculated balances for {count} customer(s).', 'success')
+    return redirect(url_for('customers.index'))

@@ -11,6 +11,8 @@ from app.vendors.service import (
     purchase_log_total,
     recalculate_vendor_balance,
     get_or_create_vendor,
+    edit_vendor_payment,
+    delete_vendor_payment,
 )
 
 PER_PAGE = 15
@@ -104,8 +106,21 @@ def index():
                 vendor.phone = (request.form.get('phone') or '').strip() or None
                 vendor.address = (request.form.get('address') or '').strip() or None
                 vendor.contact_person = (request.form.get('contact_person') or '').strip() or None
+
+                prev_raw = (request.form.get('previous_payable') or '').strip()
+                if prev_raw != '' or 'previous_payable' in request.form:
+                    try:
+                        prev_payable = float(prev_raw or 0)
+                        if prev_payable < 0:
+                            raise ValueError('Opening payable cannot be negative.')
+                    except ValueError as e:
+                        flash(f'Invalid opening payable: {e}', 'danger')
+                        return redirect(url_for('vendors.index'))
+                    vendor.previous_payable = prev_payable if prev_payable > 0 else None
+                    recalculate_vendor_balance(vendor)
+
                 db.session.commit()
-                flash(f"Vendor details updated for '{vendor.name}'.", 'success')
+                flash(f"Vendor details updated for '{vendor.name}'. Payable recalculated.", 'success')
 
         return redirect(url_for('vendors.index'))
 
@@ -150,6 +165,36 @@ def ledger(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
 
     if request.method == 'POST':
+        action = (request.form.get('action') or 'payment').strip().lower()
+
+        if action == 'edit_payment':
+            payment = VendorPayment.query.filter_by(
+                id=request.form.get('payment_id'), vendor_id=vendor.id
+            ).first()
+            if not payment:
+                flash('Payment not found.', 'danger')
+                return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+            try:
+                edit_vendor_payment(payment, request.form)
+                db.session.commit()
+                flash('Payment updated. Payable recalculated.', 'success')
+            except ValueError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+            return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+
+        if action == 'delete_payment':
+            payment = VendorPayment.query.filter_by(
+                id=request.form.get('payment_id'), vendor_id=vendor.id
+            ).first()
+            if not payment:
+                flash('Payment not found.', 'danger')
+                return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+            delete_vendor_payment(payment)
+            db.session.commit()
+            flash('Payment deleted. Payable recalculated.', 'success')
+            return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+
         amount = request.form.get('amount_paid')
         method = request.form.get('method', 'Cash')
         note = (request.form.get('note') or '').strip() or None
@@ -175,7 +220,8 @@ def ledger(vendor_id):
             note=note,
         )
         db.session.add(payment)
-        vendor.current_balance_payable = float(vendor.current_balance_payable or 0) - amt_val
+        db.session.flush()
+        recalculate_vendor_balance(vendor)
         db.session.commit()
 
         flash(
@@ -238,6 +284,14 @@ def ledger(vendor_id):
             'credit': float(pay.amount_paid or 0),
             'ref_id': f"Payment #{pay.id}",
             'pay_type': pay.method,
+            'payment_id': pay.id,
+            'amount': float(pay.amount_paid or 0),
+            'method': pay.method or 'Cash',
+            'note': pay.note or '',
+            'entry_date': (pay.payment_date.date().isoformat()
+                           if pay.payment_date and hasattr(pay.payment_date, 'date')
+                           else (pay.payment_date.isoformat() if pay.payment_date else '')),
+            'can_edit': True,
         })
 
     ledger_entries.sort(key=lambda x: x['date'] or datetime.min)

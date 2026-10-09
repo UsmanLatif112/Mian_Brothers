@@ -72,7 +72,10 @@ def apply_sale_stock_delta(item, old_qty, new_qty):
 
 
 def delete_credit_sale(cs):
-    """Delete a CreditSale, restore stock, sync previous_credit, recalc balance."""
+    """Delete a CreditSale, restore stock, sync previous_credit, recalc balance.
+
+    Also removes same-day overpayment Payment / Advance rows created from this sale.
+    """
     customer = Customer.query.get(cs.customer_id) if cs.customer_id else None
     et = (cs.entry_type or 'sale').lower()
     restore_sale_stock(cs)
@@ -82,6 +85,29 @@ def delete_credit_sale(cs):
         customer.previous_credit = None
     elif et == 'advance' and customer and (cs.remarks or '') == 'Previous / opening advance':
         customer.previous_credit = None
+
+    # Cascade: overpayment Payment / Advance created with this sale (same day + item label)
+    if et == 'sale' and customer and cs.sale_date:
+        item_label = ''
+        try:
+            item_label = (cs.item_name or '').strip()
+        except Exception:
+            item_label = ''
+        overpay_hint = f'Overpayment from sale ({item_label})' if item_label else 'Overpayment from sale'
+        Payment.query.filter(
+            Payment.customer_id == customer.id,
+            db.func.date(Payment.payment_date) == cs.sale_date,
+            Payment.note.isnot(None),
+            Payment.note.ilike(f'%{overpay_hint}%'),
+        ).delete(synchronize_session=False)
+        CreditSale.query.filter(
+            CreditSale.customer_id == customer.id,
+            CreditSale.id != cs.id,
+            CreditSale.sale_date == cs.sale_date,
+            CreditSale.entry_type == 'advance',
+            CreditSale.remarks.isnot(None),
+            CreditSale.remarks.ilike(f'%{overpay_hint}%'),
+        ).delete(synchronize_session=False)
 
     db.session.delete(cs)
     db.session.flush()

@@ -129,19 +129,6 @@
                                 <i class="bi bi-moon-stars-fill me-2"></i> Dark Mode
                             </button>
                         </li>
-                        {% if current_user.role == 'admin' %}
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item rounded py-2 px-3" href="{{ url_for('auth.staff_accounts') }}">
-                                <i class="bi bi-person-gear me-2"></i> Manage Staff
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item rounded py-2 px-3" href="{{ url_for('backup.index') }}">
-                                <i class="bi bi-cloud-arrow-up me-2"></i> Backup
-                            </a>
-                        </li>
-                        {% endif %}
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <a class="dropdown-item rounded py-2 px-3 text-danger" href="{{ url_for('auth.logout') }}">

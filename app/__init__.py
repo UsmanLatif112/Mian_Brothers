@@ -85,6 +85,11 @@ def create_app():
         ensure_till_schema()
         ensure_item_price_log_schema()
         ensure_default_fuel_types()
+        try:
+            from app.inventory.categories import ensure_shop_categories
+            ensure_shop_categories()
+        except Exception as e:
+            print(f'shop categories seed skipped: {e}')
         # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
         ensure_meter_sale_rate_schema()
         ensure_fuel_price_effective_at_schema()

@@ -10,9 +10,11 @@ def normalize_vendor_name(name):
 def purchase_log_total(log):
     """Total purchase spend for one log row (cost × liters or quantity)."""
     cost = float(log.cost_price or 0)
-    if log.category in ('fuel', 'ft_mobile'):
-        return cost * float(log.liters or 0)
-    return cost * float(log.quantity or 0)
+    liters = float(log.liters or 0) if log.liters is not None else 0.0
+    qty = int(log.quantity or 0) if log.quantity is not None else 0
+    if log.category in ('fuel', 'ft_mobile') or (liters > 0 and qty <= 0):
+        return cost * liters
+    return cost * float(qty)
 
 
 def get_or_create_vendor(name):
@@ -54,8 +56,11 @@ def link_purchase_to_vendor(vendor_name, purchase_log, stock_entry=None, increme
         stock_entry.vendor_id = vendor.id
         stock_entry.supplier = vendor.name
 
+    # Payable is always rebuilt via recalculate_vendor_balance after payment handling.
+    # Keep increment_balance for callers that skip apply_purchase_vendor_payment.
     if increment_balance:
-        vendor.current_balance_payable = float(vendor.current_balance_payable or 0) + purchase_log_total(purchase_log)
+        db.session.flush()
+        recalculate_vendor_balance(vendor)
 
     return vendor
 
@@ -66,29 +71,30 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
 
     unpaid → leave payable increased by cost × liters/qty
     paid   → record VendorPayment for that same batch total (payable reduced by same amount)
+    Always rebuild payable from sources of truth.
     """
     status = (payment_status or 'unpaid').strip().lower()
-    if status != 'paid' or not vendor:
-        return None
+    payment = None
+    if status == 'paid' and vendor:
+        total = purchase_log_total(purchase_log)
+        if total > 0:
+            payment = VendorPayment(
+                vendor_id=vendor.id,
+                amount_paid=total,
+                payment_date=payment_date,
+                method='Cash',
+                note=f'Paid with inventory purchase: {purchase_log.item_name} (batch PKR {total:,.2f})',
+            )
+            db.session.add(payment)
 
-    total = purchase_log_total(purchase_log)
-    if total <= 0:
-        return None
-
-    payment = VendorPayment(
-        vendor_id=vendor.id,
-        amount_paid=total,
-        payment_date=payment_date,
-        method='Cash',
-        note=f'Paid with inventory purchase: {purchase_log.item_name} (batch PKR {total:,.2f})',
-    )
-    db.session.add(payment)
-    vendor.current_balance_payable = float(vendor.current_balance_payable or 0) - total
+    if vendor:
+        db.session.flush()
+        recalculate_vendor_balance(vendor)
     return payment
 
 
 def recalculate_vendor_balance(vendor):
-    """Rebuild payable balance from purchases and payments."""
+    """Rebuild payable balance from opening + purchases − payments."""
     total_purchases = 0.0
     for log in ItemPurchaseLog.query.filter_by(vendor_id=vendor.id).all():
         total_purchases += purchase_log_total(log)
@@ -97,3 +103,40 @@ def recalculate_vendor_balance(vendor):
     total_paid = sum(float(p.amount_paid or 0) for p in vendor.payments)
     vendor.current_balance_payable = opening + total_purchases - total_paid
     return vendor.current_balance_payable
+
+
+def edit_vendor_payment(payment, form):
+    """Update a vendor payment and rebuild payable."""
+    try:
+        amt = float(form.get('amount_paid') or form.get('amount'))
+        if amt <= 0:
+            raise ValueError('Amount must be greater than zero.')
+    except (TypeError, ValueError) as e:
+        raise ValueError(f'Invalid amount: {e}') from e
+
+    from app.utils import parse_form_date, datetime_from_date
+
+    entry_date = parse_form_date(form.get('entry_date') or form.get('payment_date'))
+    method = (form.get('method') or payment.method or 'Cash').strip() or 'Cash'
+    note = (form.get('note') or '').strip() or None
+
+    payment.amount_paid = amt
+    payment.payment_date = datetime_from_date(entry_date)
+    payment.method = method
+    payment.note = note
+
+    vendor = Vendor.query.get(payment.vendor_id)
+    db.session.flush()
+    if vendor:
+        recalculate_vendor_balance(vendor)
+    return payment
+
+
+def delete_vendor_payment(payment):
+    """Delete a vendor payment and rebuild payable."""
+    vendor = Vendor.query.get(payment.vendor_id)
+    db.session.delete(payment)
+    db.session.flush()
+    if vendor:
+        recalculate_vendor_balance(vendor)
+    return vendor

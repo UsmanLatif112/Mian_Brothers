@@ -4,6 +4,7 @@ from app.inventory import inventory_bp
 from app.models import (
     db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog,
     Sale, Machine, MeterReading, CreditSale, DailyFuelStock, Vendor,
+    ShopCategory, ShopCategoryOption,
 )
 from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for
 from app.vendors.service import (
@@ -11,6 +12,9 @@ from app.vendors.service import (
     resolve_vendor,
     apply_purchase_vendor_payment,
     purchase_log_total,
+)
+from app.inventory.categories import (
+    list_active_categories, category_payload, unique_category_key, slugify_category,
 )
 from datetime import datetime
 
@@ -83,7 +87,8 @@ def index():
         cost_price = request.form.get('cost_price')
         sale_price = request.form.get('sale_price')
 
-        if category not in ('fuel', 'mobile', 'filter', 'other', 'ft_mobile'):
+        cat_row = ShopCategory.query.filter_by(key=category, is_active=True).first()
+        if not cat_row and category not in ('fuel', 'mobile', 'filter', 'other', 'ft_mobile'):
             flash('Please select a valid item category.', 'danger')
             return redirect(url_for('inventory.index'))
 
@@ -295,6 +300,9 @@ def index():
         quantity_raw = request.form.get('quantity')
         liters_raw = request.form.get('liters')
 
+        unit_mode = (cat_row.unit_mode if cat_row else 'qty') or 'qty'
+
+        # Custom liter categories (not ft_mobile) use the liters shop path below via name.
         if category == 'mobile':
             if not company or not item_type:
                 flash('Mobile company name and type are required.', 'danger')
@@ -308,8 +316,75 @@ def index():
         else:
             item_name = (request.form.get('item_name') or '').strip()
             if not item_name:
-                flash('Item name is required for other items.', 'danger')
+                # Custom category with company+type → build name
+                if company and item_type:
+                    item_name = f"{company} {item_type}"
+                elif company:
+                    item_name = company
+                else:
+                    flash('Item name is required.', 'danger')
+                    return redirect(url_for('inventory.index'))
+
+        # Liter-mode custom categories behave like FT Mobile (stock in liters)
+        if unit_mode == 'liters' and category not in ('ft_mobile', 'fuel', 'mobile', 'filter', 'other'):
+            try:
+                liters_val = float(liters_raw)
+                if liters_val <= 0:
+                    raise ValueError('Liters must be greater than zero.')
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid liters value: {e}', 'danger')
                 return redirect(url_for('inventory.index'))
+
+            shop_item = _find_or_create_shop_item(category, item_name, company, item_type)
+            if shop_item:
+                shop_item.liters = float(shop_item.liters or 0) + liters_val
+                shop_item.vendor = vendor.name
+                shop_item.cost_price = cost_val
+            else:
+                shop_item = OtherItem(
+                    category=category,
+                    name=item_name,
+                    company=company,
+                    item_type=item_type,
+                    vendor=vendor.name,
+                    cost_price=cost_val,
+                    sale_price=sale_val,
+                    liters=liters_val,
+                    quantity=0,
+                )
+                db.session.add(shop_item)
+            db.session.flush()
+            _apply_product_sale_price(
+                category, sale_val, company=company, item_type=item_type,
+                name=item_name, cost_val=cost_val, effective_date=entry_day,
+            )
+            shop_item.sale_price = sale_val
+            shop_item.quantity = 0
+            purchase_log = ItemPurchaseLog(
+                category=category,
+                item_name=item_name,
+                company=company,
+                item_type=item_type,
+                vendor=vendor.name,
+                cost_price=cost_val,
+                sale_price=sale_val,
+                quantity=None,
+                liters=liters_val,
+                entry_date=entry_dt,
+                added_by=current_user.id,
+            )
+            db.session.add(purchase_log)
+            link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
+            apply_purchase_vendor_payment(
+                vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+            )
+            db.session.commit()
+            flash(
+                f"Purchase logged: {liters_val:,.2f}L {item_name} "
+                f"(stock now {float(shop_item.liters):,.2f}L).",
+                'success',
+            )
+            return redirect(url_for('inventory.index'))
 
         try:
             qty_val = int(quantity_raw)
@@ -433,6 +508,7 @@ def index():
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
     existing_fuel_names = {ft.name.lower() for ft in fuel_types}
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
+    shop_categories = [category_payload(c) for c in list_active_categories()]
 
     from app.charts_data import inventory_listing_series
 
@@ -449,6 +525,7 @@ def index():
         chart_series=inventory_listing_series(),
         search=search_q,
         needs_default_fuels=needs_default_fuels,
+        shop_categories=shop_categories,
     )
 
 
@@ -521,6 +598,8 @@ def edit_item(item_id):
 @inventory_bp.route('/item/<int:item_id>/delete', methods=['POST'])
 @login_required
 def delete_item(item_id):
+    from app.vendors.service import recalculate_vendor_balance
+
     item = OtherItem.query.get_or_404(item_id)
     name = item.name
     # Detach sales history; keep ledger rows but clear item FK
@@ -528,16 +607,27 @@ def delete_item(item_id):
         {CreditSale.other_item_id: None}, synchronize_session=False
     )
     ItemPriceLog.query.filter_by(other_item_id=item.id).delete(synchronize_session=False)
-    # Cascade matching purchase logs for this shop item
-    ItemPurchaseLog.query.filter(
+
+    purchase_q = ItemPurchaseLog.query.filter(
         ItemPurchaseLog.category == (item.category or 'other'),
         ItemPurchaseLog.item_name == item.name,
         ItemPurchaseLog.company == item.company,
         ItemPurchaseLog.item_type == item.item_type,
-    ).delete(synchronize_session=False)
+    )
+    vendor_ids = {
+        log.vendor_id for log in purchase_q.all() if log.vendor_id
+    }
+    purchase_q.delete(synchronize_session=False)
     db.session.delete(item)
+    db.session.flush()
+
+    for vid in vendor_ids:
+        vendor = Vendor.query.get(vid)
+        if vendor:
+            recalculate_vendor_balance(vendor)
+
     db.session.commit()
-    flash(f'Deleted “{name}” and linked purchase / price logs.', 'success')
+    flash(f'Deleted “{name}” and linked purchase / price logs. Vendor balances recalculated.', 'success')
     return redirect(url_for('inventory.index'))
 
 
@@ -609,11 +699,13 @@ def seed_default_fuels():
 @inventory_bp.route('/fuel/<int:fuel_type_id>/delete', methods=['POST'])
 @login_required
 def delete_fuel(fuel_type_id):
-    """Delete fuel type and cascade related stock / meter / machine rows."""
+    """Delete fuel type and cascade related stock / meter / machine / purchase rows."""
+    from app.vendors.service import recalculate_vendor_balance
+
     fuel = FuelType.query.get_or_404(fuel_type_id)
     name = fuel.name
 
-    # Detach sale history (keep ledger rows, clear fuel FK)
+    # Detach sale history (keep customer ledger rows, clear fuel FK)
     CreditSale.query.filter_by(fuel_type_id=fuel.id).update(
         {CreditSale.fuel_type_id: None}, synchronize_session=False
     )
@@ -628,17 +720,26 @@ def delete_fuel(fuel_type_id):
     MeterReading.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
     Machine.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
 
-    ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).update(
-        {ItemPurchaseLog.fuel_type_id: None}, synchronize_session=False
-    )
+    # Remove fuel purchase batches and rebuild vendor payables
+    fuel_purchases = ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).all()
+    vendor_ids = {log.vendor_id for log in fuel_purchases if log.vendor_id}
+    ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
+
     DailyFuelStock.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
     StockEntry.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
     FuelPrice.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
     Inventory.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
 
     db.session.delete(fuel)
+    db.session.flush()
+
+    for vid in vendor_ids:
+        vendor = Vendor.query.get(vid)
+        if vendor:
+            recalculate_vendor_balance(vendor)
+
     db.session.commit()
-    flash(f'Deleted fuel type “{name}” and linked stock / meters / machines.', 'success')
+    flash(f'Deleted fuel “{name}” with stock, meters, machines, and purchase batches. Vendor balances recalculated.', 'success')
     return redirect(url_for('inventory.index'))
 
 
@@ -696,3 +797,87 @@ def quick_fuel():
         'stock': stock,
         'created': created,
     })
+
+
+@inventory_bp.route('/api/categories', methods=['GET'])
+@login_required
+def api_categories():
+    return jsonify({
+        'ok': True,
+        'categories': [category_payload(c) for c in list_active_categories()],
+    })
+
+
+@inventory_bp.route('/api/categories', methods=['POST'])
+@login_required
+def api_create_category():
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    unit_mode = (data.get('unit_mode') or 'qty').strip().lower()
+    if unit_mode not in ('qty', 'liters'):
+        unit_mode = 'qty'
+    if not name:
+        return jsonify({'ok': False, 'error': 'Category name is required.'}), 400
+
+    key = unique_category_key(name)
+    if key in ('fuel', 'mobile', 'ft_mobile', 'filter', 'other'):
+        key = unique_category_key(f'{name}_custom')
+
+    cat = ShopCategory(
+        key=key,
+        name=name,
+        unit_mode=unit_mode,
+        is_system=False,
+        is_active=True,
+        sort_order=200,
+    )
+    db.session.add(cat)
+    db.session.commit()
+    return jsonify({'ok': True, 'category': category_payload(cat)})
+
+
+@inventory_bp.route('/api/categories/<int:category_id>/options', methods=['POST'])
+@login_required
+def api_add_category_option(category_id):
+    cat = ShopCategory.query.get_or_404(category_id)
+    data = request.get_json(silent=True) or {}
+    kind = (data.get('kind') or '').strip().lower()
+    name = (data.get('name') or '').strip()
+    if kind not in ('company', 'type'):
+        return jsonify({'ok': False, 'error': 'Kind must be company or type.'}), 400
+    if not name:
+        return jsonify({'ok': False, 'error': 'Option name is required.'}), 400
+
+    existing = ShopCategoryOption.query.filter_by(
+        category_id=cat.id, kind=kind, name=name
+    ).first()
+    if existing:
+        return jsonify({'ok': True, 'option': {'id': existing.id, 'kind': kind, 'name': name}, 'created': False})
+
+    opt = ShopCategoryOption(category_id=cat.id, kind=kind, name=name)
+    db.session.add(opt)
+    db.session.commit()
+    return jsonify({'ok': True, 'option': {'id': opt.id, 'kind': kind, 'name': name}, 'created': True})
+
+
+@inventory_bp.route('/api/categories/options/<int:option_id>/delete', methods=['POST'])
+@login_required
+def api_delete_category_option(option_id):
+    opt = ShopCategoryOption.query.get_or_404(option_id)
+    db.session.delete(opt)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@inventory_bp.route('/api/categories/<int:category_id>/delete', methods=['POST'])
+@login_required
+def api_delete_category(category_id):
+    cat = ShopCategory.query.get_or_404(category_id)
+    if cat.is_system:
+        return jsonify({'ok': False, 'error': 'System categories cannot be deleted.'}), 400
+    in_use = OtherItem.query.filter_by(category=cat.key).first()
+    if in_use:
+        return jsonify({'ok': False, 'error': 'Category is used by stock items. Deactivate instead.'}), 400
+    db.session.delete(cat)
+    db.session.commit()
+    return jsonify({'ok': True})
