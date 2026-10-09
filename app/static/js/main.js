@@ -643,7 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.json();
     }
 
-    /* —— Plus-button Register Vendor / Customer (nested modal; parent stays open) —— */
+    /* —— Plus-button Register Vendor / Customer ——
+       Nested open uses a plain overlay (not Bootstrap Modal) so the parent
+       focus-trap cannot block typing / submit. Parent inventory/sale stays open. */
     let ofQuickSelectTarget = null;
 
     function ofAddOptionToSelects(selector, option) {
@@ -696,54 +698,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function ofRestoreParentModal(parentEl) {
-        if (!parentEl) return;
-        parentEl.classList.add('show');
-        parentEl.style.display = 'block';
-        parentEl.removeAttribute('aria-hidden');
-        parentEl.setAttribute('aria-modal', 'true');
-        document.body.classList.add('modal-open');
-        // Keep at least one backdrop under the parent
-        if (!document.querySelector('.modal-backdrop')) {
-            const back = document.createElement('div');
-            back.className = 'modal-backdrop fade show';
-            document.body.appendChild(back);
+    function ofGetNestedBackdrop() {
+        let nb = document.getElementById('ofNestedCreateBackdrop');
+        if (!nb) {
+            nb = document.createElement('div');
+            nb.id = 'ofNestedCreateBackdrop';
+            nb.className = 'of-nested-create-backdrop';
+            nb.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(nb);
         }
+        return nb;
     }
 
-    function ofStackNestedModal(childEl) {
+    function ofCloseQuickCreate(childEl) {
         if (!childEl) return;
-        const z = 1080;
-        childEl.style.zIndex = String(z);
-        setTimeout(() => {
-            const backs = document.querySelectorAll('.modal-backdrop');
-            const last = backs[backs.length - 1];
-            if (last) {
-                last.classList.add('of-nested-backdrop');
-                last.style.zIndex = String(z - 5);
+        const wasNested = childEl.classList.contains('of-nested-open');
+        const parentId = childEl.dataset.ofNestedParent;
+
+        if (wasNested) {
+            childEl.classList.remove('show', 'of-nested-open');
+            childEl.style.display = 'none';
+            childEl.setAttribute('aria-hidden', 'true');
+            childEl.removeAttribute('aria-modal');
+            delete childEl.dataset.ofNestedParent;
+            const nb = document.getElementById('ofNestedCreateBackdrop');
+            if (nb) nb.remove();
+            if (parentId) {
+                const parent = document.getElementById(parentId);
+                if (parent) delete parent.dataset.ofNestedLock;
             }
-        }, 10);
+            return;
+        }
+
+        if (window.bootstrap) {
+            const inst = bootstrap.Modal.getInstance(childEl);
+            if (inst) inst.hide();
+        }
     }
 
     function ofOpenQuickCreateModal(childEl, parentEl) {
-        if (!childEl || !window.bootstrap) return;
+        if (!childEl) return;
+
         if (parentEl) {
-            childEl.dataset.ofNestedParent = parentEl.id || '1';
-            // Block parent from closing while nested register is open
+            // Overlay mode — parent Bootstrap modal stays open with all form data
+            childEl.dataset.ofNestedParent = parentEl.id || '';
             parentEl.dataset.ofNestedLock = '1';
-        } else {
-            delete childEl.dataset.ofNestedParent;
+            childEl.classList.add('show', 'of-nested-open');
+            childEl.style.display = 'block';
+            childEl.setAttribute('aria-hidden', 'false');
+            childEl.setAttribute('aria-modal', 'true');
+            ofGetNestedBackdrop().classList.add('show');
+            setTimeout(() => {
+                const first = childEl.querySelector('input:not([type="hidden"]), select, textarea');
+                if (first) first.focus();
+            }, 30);
+            return;
         }
-        const inst = bootstrap.Modal.getOrCreateInstance(childEl, {
-            backdrop: 'static',
+
+        // Standalone (Vendors / Customers page)
+        delete childEl.dataset.ofNestedParent;
+        if (!window.bootstrap) return;
+        bootstrap.Modal.getOrCreateInstance(childEl, {
+            backdrop: true,
             keyboard: true,
-            focus: false,
-        });
-        inst.show();
-        if (parentEl) ofStackNestedModal(childEl);
+            focus: true,
+        }).show();
     }
 
-    // Plus button: open register modal ON TOP — never close inventory/sale modal
+    // Plus button → nested register overlay (inventory / sales)
     document.addEventListener('click', (e) => {
         const btn = e.target.closest && e.target.closest('[data-of-create-modal]');
         if (!btn) return;
@@ -754,53 +776,48 @@ document.addEventListener('DOMContentLoaded', () => {
         ofQuickSelectTarget = selectSel ? document.querySelector(selectSel) : null;
 
         const child = document.querySelector(btn.getAttribute('data-of-create-modal'));
-        const parent = btn.closest('.modal');
-        ofOpenQuickCreateModal(child, parent && parent.classList.contains('show') ? parent : null);
+        const parent = btn.closest('.modal.show');
+        ofOpenQuickCreateModal(child, parent || null);
     }, true);
 
-    // Prevent parent inventory/sale modal from closing while nested create is open
+    // Cancel / X on nested overlay
+    document.addEventListener('click', (e) => {
+        const dismiss = e.target.closest && e.target.closest('[data-bs-dismiss="modal"]');
+        if (!dismiss) return;
+        const nested = dismiss.closest('.of-quick-create-modal.of-nested-open');
+        if (!nested) return;
+        e.preventDefault();
+        e.stopPropagation();
+        ofCloseQuickCreate(nested);
+    }, true);
+
+    // Esc closes nested overlay only
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const nested = document.querySelector('.of-quick-create-modal.of-nested-open');
+        if (!nested) return;
+        e.preventDefault();
+        e.stopPropagation();
+        ofCloseQuickCreate(nested);
+    }, true);
+
+    // Block parent modal close while nested register is open
     document.addEventListener('hide.bs.modal', (e) => {
         const modal = e.target;
-        if (!modal || !modal.dataset) return;
-        if (modal.dataset.ofNestedLock === '1' && document.querySelector('.of-quick-create-modal.show')) {
+        if (modal && modal.dataset && modal.dataset.ofNestedLock === '1') {
             e.preventDefault();
             e.stopPropagation();
         }
     });
 
-    // After nested create closes: keep parent open + restore scroll lock / backdrop
-    document.addEventListener('hidden.bs.modal', (e) => {
-        const child = e.target;
-        if (!child || !child.classList.contains('of-quick-create-modal')) return;
-
-        const parentId = child.dataset.ofNestedParent;
-        delete child.dataset.ofNestedParent;
-        child.style.zIndex = '';
-
-        document.querySelectorAll('.modal-backdrop.of-nested-backdrop').forEach((b) => b.remove());
-
-        if (!parentId) return;
-        const parent = parentId === '1'
-            ? document.querySelector('.modal.show')
-            : document.getElementById(parentId);
-        if (parent) {
-            delete parent.dataset.ofNestedLock;
-            ofRestoreParentModal(parent);
+    // Stop parent Bootstrap focus-trap from stealing focus while overlay is open
+    document.addEventListener('focusin', (e) => {
+        const nested = document.querySelector('.of-quick-create-modal.of-nested-open');
+        if (!nested) return;
+        if (nested.contains(e.target)) {
+            e.stopImmediatePropagation();
         }
-    });
-
-    document.addEventListener('shown.bs.modal', (e) => {
-        if (e.target && e.target.classList.contains('of-quick-create-modal') && e.target.dataset.ofNestedParent) {
-            ofStackNestedModal(e.target);
-            // Ensure parent is still visible underneath
-            const parentId = e.target.dataset.ofNestedParent;
-            const parent = parentId === '1' ? null : document.getElementById(parentId);
-            if (parent) {
-                parent.classList.add('show');
-                parent.style.display = 'block';
-            }
-        }
-    });
+    }, true);
 
     document.addEventListener('submit', async (e) => {
         const form = e.target;
@@ -842,11 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         'success'
                     );
                 }
-                // Close ONLY the register modal — parent inventory/sale stays open with data
-                const modalEl = form.closest('.modal.of-quick-create-modal') || form.closest('.modal');
-                if (modalEl && window.bootstrap) {
-                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-                }
+                const modalEl = form.closest('.of-quick-create-modal') || form.closest('.modal');
+                ofCloseQuickCreate(modalEl);
                 form.reset();
             } else {
                 window.location.reload();

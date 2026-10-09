@@ -1198,13 +1198,31 @@ select.form-control-custom:disabled {
     line-height: 1;
 }
 
-/* Nested Register Vendor/Customer over inventory/sales modals */
-.modal.of-quick-create-modal.show {
-    z-index: 1080;
+/* Nested Register Vendor/Customer overlay (above inventory/sale; parent stays open) */
+.of-nested-create-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1085;
+    background: rgba(15, 23, 42, 0.45);
 }
 
-.modal-backdrop.of-nested-backdrop {
-    z-index: 1075;
+.modal.of-quick-create-modal.of-nested-open {
+    display: block !important;
+    z-index: 1090;
+    pointer-events: auto;
+}
+
+.modal.of-quick-create-modal.of-nested-open .modal-dialog {
+    pointer-events: auto;
+}
+
+/* Parent modal stays visible but does not steal clicks while register is open */
+.modal.show[data-of-nested-lock="1"] {
+    pointer-events: none;
+}
+
+.modal.show[data-of-nested-lock="1"] .modal-dialog {
+    pointer-events: none;
 }
 
 /* Dropdown panel */
