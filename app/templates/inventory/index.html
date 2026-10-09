@@ -330,24 +330,12 @@
                                 </td>
                                 <td class="text-end">
                                     <div class="table-actions btn-group gap-1 justify-content-end">
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-secondary border-0"
-                                                data-of-receipt
-                                                data-receipt-sub="Purchase Receipt"
-                                                data-receipt-title="Purchase"
-                                                data-receipt-ref="Purchase #{{ log.id }}"
-                                                data-receipt-date="{{ log.entry_date.strftime('%Y-%m-%d %H:%M') if log.entry_date else today }}"
-                                                data-receipt-party-label="Vendor"
-                                                data-receipt-party="{{ log.vendor or '—' }}"
-                                                data-receipt-desc="{{ log.item_name }}{% if log.company %} ({{ log.company }}){% endif %} · {{ log.category }}"
-                                                data-receipt-status="{{ pay_status|upper }}"
-                                                data-receipt-amount="{{ batch | money }}"
-                                                data-receipt-total="{{ batch | money }}"
-                                                data-receipt-paid="{% if pay_status == 'paid' %}{{ batch | money }}{% else %}0.00{% endif %}"
-                                                data-receipt-due="{% if pay_status == 'paid' %}0.00{% else %}{{ batch | money }}{% endif %}"
-                                                title="Print receipt">
+                                        <a href="{{ url_for('receipts.purchase', log_id=log.id) }}"
+                                           class="btn btn-sm btn-outline-secondary border-0"
+                                           title="View receipt"
+                                           target="_blank" rel="noopener">
                                             <i class="bi bi-printer"></i>
-                                        </button>
+                                        </a>
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-secondary border-0 edit-purchase-log-btn"
                                                 data-edit-url="{{ url_for('inventory.edit_purchase_log', log_id=log.id) }}"

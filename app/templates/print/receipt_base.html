@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Receipt{% endblock %} — {{ agency.name if agency else brand_name }}</title>
+  <link rel="icon" href="{{ brand_favicon_url or url_for('static', filename='img/favicon.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=3">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 12px;
+      background: #e8ebe9;
+      font-family: "Courier New", Courier, monospace;
+      color: #111;
+    }
+    .actions {
+      max-width: 320px;
+      margin: 0 auto 12px;
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .actions button {
+      font: inherit;
+      padding: 8px 16px;
+      cursor: pointer;
+      border: 1px solid #333;
+      background: #fff;
+      border-radius: 4px;
+    }
+    .ticket {
+      width: 80mm;
+      max-width: 100%;
+      margin: 0 auto;
+      background: #fff;
+      padding: 12px 10px 18px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.12);
+    }
+    .center { text-align: center; }
+    .logo {
+      display: block;
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      margin: 0 auto 8px;
+    }
+    .company-name {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.4;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .company-meta {
+      margin: 0 0 2px;
+      font-size: 11px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .rule {
+      border: none;
+      border-top: 1px dashed #333;
+      margin: 10px 0;
+    }
+    .meta-row, .line-row, .total-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 3px 0;
+    }
+    .ticket-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      margin: 6px 0;
+      text-transform: uppercase;
+    }
+    .ticket-sub {
+      font-size: 11px;
+      text-align: center;
+      margin: 0 0 4px;
+      color: #444;
+    }
+    .desc {
+      font-size: 12px;
+      margin: 6px 0;
+      word-break: break-word;
+    }
+    .foot {
+      text-align: center;
+      font-size: 11px;
+      margin-top: 10px;
+    }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .actions { display: none !important; }
+      .ticket { box-shadow: none; width: 80mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button type="button" onclick="receiptGoBack()">← Back</button>
+    <button type="button" onclick="window.print()">Print</button>
+  </div>
+
+  <div class="ticket">
+    <div class="center">
+      {% set logo = brand_logo_url %}
+      {% if agency and agency.logo %}
+        {% set logo = url_for('uploaded_file', filename=agency.logo) %}
+      {% endif %}
+      <img class="logo" src="{{ logo }}" alt="">
+      <h1 class="company-name">{{ agency.name if agency else brand_name }}</h1>
+      {% if agency and agency.address %}<p class="company-meta">{{ agency.address }}</p>{% endif %}
+      {% if agency and agency.phone %}<p class="company-meta">{{ agency.phone }}</p>{% endif %}
+      {% if agency and agency.email %}<p class="company-meta">{{ agency.email }}</p>{% endif %}
+    </div>
+    <hr class="rule">
+    {% block receipt_body %}{% endblock %}
+    <hr class="rule">
+    <p class="foot">Thank you · {{ agency.name if agency else brand_name }}</p>
+  </div>
+
+  <script>
+  function receiptGoBack() {
+    if (window.opener && !window.opener.closed) {
+      try { window.opener.focus(); } catch (e) {}
+      window.close();
+      return;
+    }
+    if (document.referrer) {
+      window.location.href = document.referrer;
+      return;
+    }
+    {% if back_url %}
+    window.location.href = {{ back_url|tojson }};
+    {% else %}
+    window.location.href = {{ url_for('dashboard.index')|tojson }};
+    {% endif %}
+  }
+  </script>
+</body>
+</html>

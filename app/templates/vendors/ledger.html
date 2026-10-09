@@ -169,24 +169,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
                         <td class="text-end">
                             <div class="table-actions justify-content-end">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-secondary border-0"
-                                        title="Print receipt"
-                                        data-of-receipt
-                                        data-receipt-sub="Vendor Receipt"
-                                        data-receipt-title="{% if entry.type == 'payment' %}Payment{% else %}Purchase{% endif %}"
-                                        data-receipt-ref="{{ entry.ref_id }}"
-                                        data-receipt-date="{{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '—' }}"
-                                        data-receipt-party-label="Vendor"
-                                        data-receipt-party="{{ vendor.name }}"
-                                        data-receipt-desc="{{ entry.desc }}"
-                                        data-receipt-status="{% if entry.payment_status == 'paid' or entry.type == 'payment' %}PAID{% elif entry.payment_status == 'unpaid' %}UNPAID{% else %}{{ (entry.payment_status or '—')|upper }}{% endif %}"
-                                        data-receipt-amount="{% if entry.debit > 0 %}{{ entry.debit | money }}{% else %}{{ entry.credit | money }}{% endif %}"
-                                        data-receipt-total="{% if entry.debit > 0 %}{{ entry.debit | money }}{% else %}{{ entry.credit | money }}{% endif %}"
-                                        data-receipt-paid="{% if entry.credit > 0 %}{{ entry.credit | money }}{% elif entry.payment_status == 'paid' %}{{ entry.debit | money }}{% else %}0.00{% endif %}"
-                                        data-receipt-due="{{ entry.running_balance | money }}">
+                                {% if entry.type == 'payment' and entry.payment_id %}
+                                <a href="{{ url_for('receipts.vendor_payment', payment_id=entry.payment_id) }}"
+                                   class="btn btn-sm btn-outline-secondary border-0"
+                                   title="View receipt" target="_blank" rel="noopener">
                                     <i class="bi bi-printer"></i>
-                                </button>
+                                </a>
+                                {% elif entry.purchase_log_id %}
+                                <a href="{{ url_for('receipts.purchase', log_id=entry.purchase_log_id) }}"
+                                   class="btn btn-sm btn-outline-secondary border-0"
+                                   title="View receipt" target="_blank" rel="noopener">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                                {% endif %}
                                 {% if entry.can_edit and entry.payment_id %}
                                 <button type="button"
                                         class="btn btn-sm btn-outline-secondary border-0"

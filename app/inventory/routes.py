@@ -6,6 +6,7 @@ from app.models import (
     Sale, Machine, MeterReading, CreditSale, DailyFuelStock, Vendor,
     ShopCategory, ShopCategoryOption,
 )
+from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for
 from app.vendors.service import (
     link_purchase_to_vendor,
@@ -45,7 +46,9 @@ def _inventory_vendor_and_payment():
 
 
 def _find_or_create_shop_item(category, name, company, item_type):
-    query = OtherItem.query.filter_by(category=category, name=name)
+    query = apply_agency_filter(
+        OtherItem.query.filter_by(category=category, name=name), OtherItem
+    )
     if company:
         query = query.filter_by(company=company)
     else:
@@ -58,7 +61,7 @@ def _find_or_create_shop_item(category, name, company, item_type):
 
 
 def _apply_product_sale_price(category, sale_val, company=None, item_type=None, name=None, cost_val=None, effective_date=None):
-    query = OtherItem.query.filter_by(category=category)
+    query = apply_agency_filter(OtherItem.query.filter_by(category=category), OtherItem)
     if company:
         query = query.filter_by(company=company)
     else:
@@ -76,13 +79,13 @@ def _apply_product_sale_price(category, sale_val, company=None, item_type=None, 
         if prev == float(sale_val):
             continue
         item.sale_price = sale_val
-        db.session.add(ItemPriceLog(
+        db.session.add(stamp_agency(ItemPriceLog(
             other_item_id=item.id,
             sale_price=sale_val,
             cost_price=cost_val if cost_val is not None else item.cost_price,
             effective_date=effective_date or datetime.utcnow().date(),
             updated_by=current_user.id,
-        ))
+        )))
         updated += 1
     return updated
 
@@ -95,7 +98,9 @@ def index():
         cost_price = request.form.get('cost_price')
         sale_price = request.form.get('sale_price')
 
-        cat_row = ShopCategory.query.filter_by(key=category, is_active=True).first()
+        cat_row = apply_agency_filter(
+            ShopCategory.query.filter_by(key=category, is_active=True), ShopCategory
+        ).first()
         if not cat_row and category not in ('fuel', 'mobile', 'filter', 'other', 'ft_mobile'):
             flash('Please select a valid item category.', 'danger')
             return redirect(url_for('inventory.index'))
@@ -138,11 +143,15 @@ def index():
                 if not fuel_other_name:
                     flash('Please enter the fuel name.', 'danger')
                     return redirect(url_for('inventory.index'))
-                fuel_type = FuelType.query.filter(
-                    db.func.lower(FuelType.name) == fuel_other_name.lower()
+                fuel_type = apply_agency_filter(
+                    FuelType.query.filter(
+                        db.func.lower(FuelType.name) == fuel_other_name.lower()
+                    ),
+                    FuelType,
                 ).first()
                 if not fuel_type:
                     fuel_type = FuelType(name=fuel_other_name, unit='Liter')
+                    stamp_agency(fuel_type)
                     db.session.add(fuel_type)
                     db.session.flush()
             else:
@@ -150,6 +159,7 @@ def index():
                 if not fuel_type:
                     flash('Fuel type not found.', 'danger')
                     return redirect(url_for('inventory.index'))
+                require_agency_access(fuel_type)
 
             stock_entry = StockEntry(
                 fuel_type_id=fuel_type.id,
@@ -159,11 +169,13 @@ def index():
                 entry_date=entry_dt,
                 added_by=current_user.id
             )
+            stamp_agency(stock_entry)
             db.session.add(stock_entry)
 
             inventory = Inventory.query.filter_by(fuel_type_id=fuel_type.id).first()
             if not inventory:
                 inventory = Inventory(fuel_type_id=fuel_type.id, current_stock_liters=0.0)
+                stamp_agency(inventory)
                 db.session.add(inventory)
             inventory.current_stock_liters = float(inventory.current_stock_liters) + liters_val
             new_stock = float(inventory.current_stock_liters)
@@ -171,13 +183,13 @@ def index():
             # Sale price applies to the whole live stock for this fuel type
             current_rate = fuel_rate_for(fuel_type.id, FuelPrice) or 0.0
             if abs(float(current_rate) - float(sale_val)) > 0.0001 or current_rate <= 0:
-                db.session.add(FuelPrice(
+                db.session.add(stamp_agency(FuelPrice(
                     fuel_type_id=fuel_type.id,
                     price_per_liter=sale_val,
                     effective_date=entry_day,
                     effective_at=entry_dt,
                     updated_by=current_user.id
-                ))
+                )))
 
             # Every inventory add = one purchase log row (batch cost kept separately)
             batch_total = liters_val * cost_val
@@ -193,6 +205,7 @@ def index():
                 entry_date=entry_dt,
                 added_by=current_user.id
             )
+            stamp_agency(purchase_log)
             db.session.add(purchase_log)
             link_purchase_to_vendor(vendor.name, purchase_log, stock_entry, vendor=vendor)
             apply_purchase_vendor_payment(
@@ -251,6 +264,7 @@ def index():
                     liters=liters_val,
                     quantity=0,
                 )
+                stamp_agency(shop_item)
                 db.session.add(shop_item)
 
             db.session.flush()
@@ -279,6 +293,7 @@ def index():
                 entry_date=entry_dt,
                 added_by=current_user.id,
             )
+            stamp_agency(purchase_log)
             db.session.add(purchase_log)
             link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
             apply_purchase_vendor_payment(
@@ -362,6 +377,7 @@ def index():
                     liters=liters_val,
                     quantity=0,
                 )
+                stamp_agency(shop_item)
                 db.session.add(shop_item)
             db.session.flush()
             _apply_product_sale_price(
@@ -384,6 +400,7 @@ def index():
                 entry_date=entry_dt,
                 added_by=current_user.id,
             )
+            stamp_agency(purchase_log)
             db.session.add(purchase_log)
             link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
             apply_purchase_vendor_payment(
@@ -434,6 +451,7 @@ def index():
                 liters=liters_val,
                 quantity=qty_val
             )
+            stamp_agency(shop_item)
             db.session.add(shop_item)
 
         db.session.flush()
@@ -462,6 +480,7 @@ def index():
             entry_date=entry_dt,
             added_by=current_user.id
         )
+        stamp_agency(purchase_log)
         db.session.add(purchase_log)
         link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
         apply_purchase_vendor_payment(
@@ -487,7 +506,7 @@ def index():
         flash(msg, 'success')
         return redirect(url_for('inventory.index'))
 
-    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+    fuel_types = apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all()
     live_stock = {}
     fuel_sale_rates = {}
     fuel_last_costs = {}
@@ -495,8 +514,10 @@ def index():
         live_stock[ft.id] = Inventory.query.filter_by(fuel_type_id=ft.id).first()
         fuel_sale_rates[ft.id] = fuel_rate_for(ft.id, FuelPrice) or 0.0
         last_buy = (
-            ItemPurchaseLog.query
-            .filter_by(category='fuel', fuel_type_id=ft.id)
+            apply_agency_filter(
+                ItemPurchaseLog.query.filter_by(category='fuel', fuel_type_id=ft.id),
+                ItemPurchaseLog,
+            )
             .order_by(ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc())
             .first()
         )
@@ -504,7 +525,9 @@ def index():
 
     search_q = (request.args.get('search') or '').strip()
     stock_page = request.args.get('stock_page', 1)
-    items_q = OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc())
+    items_q = apply_agency_filter(OtherItem.query, OtherItem).order_by(
+        OtherItem.category.asc(), OtherItem.name.asc()
+    )
     if search_q:
         like = f'%{search_q}%'
         items_q = items_q.filter(
@@ -517,13 +540,13 @@ def index():
         )
     shop_items, shop_pagination = paginate(items_q, stock_page, PER_PAGE)
 
-    vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+    vendors = apply_agency_filter(Vendor.query, Vendor).order_by(Vendor.name.asc()).all()
     existing_fuel_names = {ft.name.lower() for ft in fuel_types}
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
     ensure_shop_categories()
     shop_categories = [category_payload(c) for c in list_active_categories()]
 
-    purchase_logs_q = ItemPurchaseLog.query.order_by(
+    purchase_logs_q = apply_agency_filter(ItemPurchaseLog.query, ItemPurchaseLog).order_by(
         ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc()
     )
     if search_q:
@@ -569,6 +592,7 @@ def index():
 def edit_purchase_log(log_id):
     """Edit a purchase batch — updates stock, vendor payment, and payable."""
     log = ItemPurchaseLog.query.get_or_404(log_id)
+    require_agency_access(log)
     try:
         cost_val = float(request.form.get('cost_price') or 0)
         sale_val = float(request.form.get('sale_price') or log.sale_price or 0)
@@ -637,6 +661,7 @@ def edit_purchase_log(log_id):
 @login_required
 def delete_purchase_log(log_id):
     log = ItemPurchaseLog.query.get_or_404(log_id)
+    require_agency_access(log)
     label = f'{log.item_name} (#{log.id})'
     delete_purchase_log_cascade(log)
     db.session.commit()
@@ -648,6 +673,7 @@ def delete_purchase_log(log_id):
 @login_required
 def edit_item(item_id):
     item = OtherItem.query.get_or_404(item_id)
+    require_agency_access(item)
     name = (request.form.get('name') or '').strip()
     vendor = (request.form.get('vendor') or '').strip() or None
     company = (request.form.get('company') or '').strip() or None
@@ -697,13 +723,13 @@ def edit_item(item_id):
             item.liters = liters_val
 
     if prev_sale != sale_val:
-        db.session.add(ItemPriceLog(
+        db.session.add(stamp_agency(ItemPriceLog(
             other_item_id=item.id,
             sale_price=sale_val,
             cost_price=cost_val,
             effective_date=datetime.utcnow().date(),
             updated_by=current_user.id,
-        ))
+        )))
 
     db.session.commit()
     flash(f'Updated {item.name}.', 'success')
@@ -714,6 +740,7 @@ def edit_item(item_id):
 @login_required
 def delete_item(item_id):
     item = OtherItem.query.get_or_404(item_id)
+    require_agency_access(item)
     name = item.name
     # Detach sales history; keep ledger rows but clear item FK
     CreditSale.query.filter_by(other_item_id=item.id).update(
@@ -753,14 +780,18 @@ def delete_item(item_id):
 @login_required
 def edit_fuel(fuel_type_id):
     fuel = FuelType.query.get_or_404(fuel_type_id)
+    require_agency_access(fuel)
     name = (request.form.get('name') or '').strip()
     if not name:
         flash('Fuel name is required.', 'danger')
         return redirect(url_for('inventory.index'))
 
-    conflict = FuelType.query.filter(
-        db.func.lower(FuelType.name) == name.lower(),
-        FuelType.id != fuel.id,
+    conflict = apply_agency_filter(
+        FuelType.query.filter(
+            db.func.lower(FuelType.name) == name.lower(),
+            FuelType.id != fuel.id,
+        ),
+        FuelType,
     ).first()
     if conflict:
         flash(f'Fuel type “{name}” already exists.', 'danger')
@@ -779,6 +810,7 @@ def edit_fuel(fuel_type_id):
     inventory = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
     if not inventory:
         inventory = Inventory(fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0)
+        stamp_agency(inventory)
         db.session.add(inventory)
     inventory.current_stock_liters = stock_val
     inventory.reorder_threshold = threshold_val
@@ -793,17 +825,21 @@ def seed_default_fuels():
     """Create default Petrol and Diesel fuel categories from the UI."""
     created = []
     for name in ('Petrol', 'Diesel'):
-        fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
+        fuel = apply_agency_filter(
+            FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()),
+            FuelType,
+        ).first()
         if fuel:
             continue
         fuel = FuelType(name=name, unit='Liter')
+        stamp_agency(fuel)
         db.session.add(fuel)
         db.session.flush()
-        db.session.add(Inventory(
+        db.session.add(stamp_agency(Inventory(
             fuel_type_id=fuel.id,
             current_stock_liters=0,
             reorder_threshold=0,
-        ))
+        )))
         created.append(name)
 
     db.session.commit()
@@ -822,6 +858,7 @@ def seed_default_fuels():
 def delete_fuel(fuel_type_id):
     """Delete fuel type and cascade related stock / meter / machine / purchase rows."""
     fuel = FuelType.query.get_or_404(fuel_type_id)
+    require_agency_access(fuel)
     name = fuel.name
 
     # Detach sale history (keep customer ledger rows, clear fuel FK)
@@ -886,7 +923,7 @@ def categories():
             opt_row = next((o for o in row.options if o.id == opt['id']), None)
             opt['linked'] = bool(opt_row and option_has_linked_activity(opt_row))
         cats.append(payload)
-    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+    fuel_types = apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all()
     existing_fuel_names = {(ft.name or '').strip().lower() for ft in fuel_types}
     needs_default_fuels = 'petrol' not in existing_fuel_names or 'diesel' not in existing_fuel_names
     company_count = sum(len(c.get('company_options') or []) for c in cats)
@@ -928,6 +965,7 @@ def categories_create():
         is_active=True,
         sort_order=200,
     )
+    stamp_agency(cat)
     db.session.add(cat)
     db.session.commit()
     flash(f'Category “{name}” created. Add companies or types below.', 'success')
@@ -938,6 +976,7 @@ def categories_create():
 @login_required
 def categories_delete(category_id):
     cat = ShopCategory.query.get_or_404(category_id)
+    require_agency_access(cat)
     if cat.is_system:
         flash('System categories cannot be deleted.', 'danger')
         return redirect(url_for('inventory.categories'))
@@ -959,6 +998,7 @@ def categories_delete(category_id):
 @login_required
 def categories_add_option(category_id):
     cat = ShopCategory.query.get_or_404(category_id)
+    require_agency_access(cat)
     kind = (request.form.get('kind') or '').strip().lower()
     name = (request.form.get('name') or '').strip()
     if kind not in ('company', 'type'):
@@ -986,6 +1026,8 @@ def categories_add_option(category_id):
 @login_required
 def categories_delete_option(option_id):
     opt = ShopCategoryOption.query.get_or_404(option_id)
+    cat = opt.category or ShopCategory.query.get(opt.category_id)
+    require_agency_access(cat)
     if option_has_linked_activity(opt):
         flash(
             f'Cannot remove “{opt.name}”. It is already used on inventory stock or purchase logs.',
@@ -1007,19 +1049,23 @@ def categories_add_fuel():
         flash('Fuel type name is required.', 'danger')
         return redirect(url_for('inventory.categories'))
 
-    fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
+    fuel = apply_agency_filter(
+        FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()),
+        FuelType,
+    ).first()
     if fuel:
         flash(f'Fuel type “{fuel.name}” already exists.', 'info')
         return redirect(url_for('inventory.categories'))
 
     fuel = FuelType(name=name, unit='Liter')
+    stamp_agency(fuel)
     db.session.add(fuel)
     db.session.flush()
-    db.session.add(Inventory(
+    db.session.add(stamp_agency(Inventory(
         fuel_type_id=fuel.id,
         current_stock_liters=0,
         reorder_threshold=0,
-    ))
+    )))
     db.session.commit()
     flash(f'Fuel type “{name}” added. It will show in Inventory and Sales.', 'success')
     return redirect(url_for('inventory.categories'))
@@ -1030,7 +1076,7 @@ def categories_add_fuel():
 def api_fuels():
     """Fuel types from inventory — used by Add Inventory dropdown."""
     fuels = []
-    for ft in FuelType.query.order_by(FuelType.name.asc()).all():
+    for ft in apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all():
         inv = Inventory.query.filter_by(fuel_type_id=ft.id).first()
         stock = float(inv.current_stock_liters) if inv else 0.0
         rate = fuel_rate_for(ft.id, FuelPrice) or 0.0
@@ -1053,17 +1099,24 @@ def quick_fuel():
     if not name:
         return jsonify({'ok': False, 'error': 'Fuel name is required'}), 400
 
-    fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
+    fuel = apply_agency_filter(
+        FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()),
+        FuelType,
+    ).first()
     created = False
     if not fuel:
         fuel = FuelType(name=name, unit='Liter')
+        stamp_agency(fuel)
         db.session.add(fuel)
         db.session.flush()
         created = True
+    else:
+        require_agency_access(fuel)
 
     inv = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
     if not inv:
         inv = Inventory(fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0)
+        stamp_agency(inv)
         db.session.add(inv)
 
     db.session.commit()
@@ -1114,6 +1167,7 @@ def api_create_category():
         is_active=True,
         sort_order=200,
     )
+    stamp_agency(cat)
     db.session.add(cat)
     db.session.commit()
     return jsonify({'ok': True, 'category': category_payload(cat)})
@@ -1123,6 +1177,7 @@ def api_create_category():
 @login_required
 def api_add_category_option(category_id):
     cat = ShopCategory.query.get_or_404(category_id)
+    require_agency_access(cat)
     data = request.get_json(silent=True) or {}
     kind = (data.get('kind') or '').strip().lower()
     name = (data.get('name') or '').strip()
@@ -1147,6 +1202,8 @@ def api_add_category_option(category_id):
 @login_required
 def api_delete_category_option(option_id):
     opt = ShopCategoryOption.query.get_or_404(option_id)
+    cat = opt.category or ShopCategory.query.get(opt.category_id)
+    require_agency_access(cat)
     if option_has_linked_activity(opt):
         return jsonify({
             'ok': False,
@@ -1161,6 +1218,7 @@ def api_delete_category_option(option_id):
 @login_required
 def api_delete_category(category_id):
     cat = ShopCategory.query.get_or_404(category_id)
+    require_agency_access(cat)
     if cat.is_system:
         return jsonify({'ok': False, 'error': 'System categories cannot be deleted.'}), 400
     if category_has_linked_activity(cat):

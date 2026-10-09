@@ -3,6 +3,7 @@
 from app.models import (
     db, Vendor, VendorPayment, ItemPurchaseLog, OtherItem, Inventory, StockEntry,
 )
+from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 
 
 AUTO_PAY_NOTE_PREFIX = 'Paid with inventory purchase:'
@@ -27,11 +28,14 @@ def get_or_create_vendor(name):
     if not clean:
         return None
 
-    existing = Vendor.query.filter(db.func.lower(Vendor.name) == clean.lower()).first()
+    existing = apply_agency_filter(
+        Vendor.query.filter(db.func.lower(Vendor.name) == clean.lower()), Vendor
+    ).first()
     if existing:
         return existing
 
     vendor = Vendor(name=clean)
+    stamp_agency(vendor)
     db.session.add(vendor)
     db.session.flush()
     return vendor
@@ -45,6 +49,7 @@ def resolve_vendor(vendor_id=None, vendor_name=None):
         except (TypeError, ValueError):
             vendor = None
         if vendor:
+            require_agency_access(vendor)
             return vendor
     return get_or_create_vendor(vendor_name)
 
@@ -113,6 +118,7 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
                 note=f'{AUTO_PAY_NOTE_PREFIX} {purchase_log.item_name} (batch PKR {total:,.2f})',
                 purchase_log_id=purchase_log.id,
             )
+            stamp_agency(payment)
             db.session.add(payment)
 
     if vendor:
@@ -188,6 +194,7 @@ def apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty):
         inv = Inventory.query.filter_by(fuel_type_id=log.fuel_type_id).first()
         if not inv:
             inv = Inventory(fuel_type_id=log.fuel_type_id, current_stock_liters=0, reorder_threshold=0)
+            stamp_agency(inv)
             db.session.add(inv)
         inv.current_stock_liters = max(0.0, float(inv.current_stock_liters or 0) + d_liters)
         return
@@ -204,7 +211,10 @@ def apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty):
 def _shop_item_for_log(log):
     if log.category == 'fuel':
         return None
-    q = OtherItem.query.filter_by(category=log.category or 'other', name=log.item_name)
+    q = apply_agency_filter(
+        OtherItem.query.filter_by(category=log.category or 'other', name=log.item_name),
+        OtherItem,
+    )
     if log.company is not None:
         q = q.filter_by(company=log.company)
     if log.item_type is not None:
@@ -266,14 +276,14 @@ def sync_auto_payment_for_log(log, payment_status=None, payment_date=None):
     if not log.vendor_id:
         return
     db.session.flush()
-    db.session.add(VendorPayment(
+    db.session.add(stamp_agency(VendorPayment(
         vendor_id=log.vendor_id,
         amount_paid=total,
         payment_date=payment_date or log.entry_date,
         method='Cash',
         note=f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})',
         purchase_log_id=log.id,
-    ))
+    )))
 
 
 def recalculate_vendor_balance(vendor):

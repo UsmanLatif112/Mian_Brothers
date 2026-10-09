@@ -10,6 +10,7 @@ from app.models import (
     db, CashTaken, CreditSale, Customer, DailyCashCount, Expense,
     FuelPrice, FuelType, MeterReading, Payment,
 )
+from app.tenancy import stamp_agency
 from app.utils import PERIOD_CHOICES, compute_period_stats, parse_form_date, parse_period
 
 
@@ -94,13 +95,13 @@ def index():
             )
             return redirect(url_for('account.index', **_filter_args()))
 
-        db.session.add(CashTaken(
+        db.session.add(stamp_agency(CashTaken(
             taken_date=taken_date,
             amount=amount,
             person_name=person_name,
             note=note,
             recorded_by=current_user.id,
-        ))
+        )))
         db.session.flush()
 
         stats = compute_period_stats(taken_date, taken_date, _models_ns())

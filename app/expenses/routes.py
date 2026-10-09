@@ -2,6 +2,7 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app.expenses import expenses_bp
 from app.models import db, Expense
+from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import parse_period, PERIOD_CHOICES, paginate
 from app.services.entries import EntryError, edit_expense, delete_expense
 from datetime import datetime
@@ -43,14 +44,14 @@ def index():
                 flash('Invalid expense date.', 'danger')
                 return redirect(url_for('expenses.index'))
 
-            db.session.add(Expense(
+            db.session.add(stamp_agency(Expense(
                 name=name,
                 description=description,
                 amount=amount,
                 expense_date=expense_date,
                 recorded_by=current_user.id,
                 is_settled=False,
-            ))
+            )))
             db.session.commit()
             flash(f'Expense "{name}" recorded ({amount:,.2f} PKR).', 'success')
             return redirect(url_for('expenses.index', **_filter_args()))
@@ -60,6 +61,7 @@ def index():
             if not expense:
                 flash('Expense not found.', 'danger')
                 return redirect(url_for('expenses.index', **_filter_args()))
+            require_agency_access(expense)
 
             if expense.is_settled:
                 flash('Expense is already settled.', 'warning')
@@ -93,6 +95,7 @@ def index():
             if not expense:
                 flash('Expense not found.', 'danger')
                 return redirect(url_for('expenses.index', **_filter_args()))
+            require_agency_access(expense)
 
             if not expense.is_settled:
                 flash('Expense is not settled.', 'warning')
@@ -114,6 +117,7 @@ def index():
             if not expense:
                 flash('Expense not found.', 'danger')
                 return redirect(url_for('expenses.index', **_filter_args()))
+            require_agency_access(expense)
             try:
                 edit_expense(expense, request.form, current_user_id=current_user.id)
                 db.session.commit()
@@ -126,6 +130,7 @@ def index():
         if action == 'delete':
             expense = Expense.query.get(request.form.get('expense_id'))
             if expense:
+                require_agency_access(expense)
                 delete_expense(expense)
                 db.session.commit()
                 flash('Expense deleted.', 'success')
@@ -137,27 +142,31 @@ def index():
     period, start, end = parse_period(request.args)
 
     total = float(
-        db.session.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(Expense.expense_date >= start, Expense.expense_date <= end)
-        .scalar()
-        or 0
+        apply_agency_filter(
+            db.session.query(func.coalesce(func.sum(Expense.amount), 0))
+            .filter(Expense.expense_date >= start, Expense.expense_date <= end),
+            Expense,
+        ).scalar() or 0
     )
     unsettled_total = float(
-        db.session.query(func.coalesce(func.sum(Expense.amount), 0))
-        .filter(
-            Expense.expense_date >= start,
-            Expense.expense_date <= end,
-            Expense.is_settled.is_(False),
-        )
-        .scalar()
-        or 0
+        apply_agency_filter(
+            db.session.query(func.coalesce(func.sum(Expense.amount), 0))
+            .filter(
+                Expense.expense_date >= start,
+                Expense.expense_date <= end,
+                Expense.is_settled.is_(False),
+            ),
+            Expense,
+        ).scalar() or 0
     )
     settled_total = total - unsettled_total
 
     search_q = (request.args.get('search') or '').strip()
     expenses_q = (
-        Expense.query
-        .filter(Expense.expense_date >= start, Expense.expense_date <= end)
+        apply_agency_filter(
+            Expense.query.filter(Expense.expense_date >= start, Expense.expense_date <= end),
+            Expense,
+        )
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
     )
     if search_q:

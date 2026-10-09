@@ -4,6 +4,9 @@ from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
 from app.models import db, Vendor, VendorPayment, ItemPurchaseLog
+from app.tenancy import (
+    apply_agency_filter, require_agency_access, stamp_agency, is_super_admin,
+)
 from app.utils import paginate, parse_form_date, datetime_from_date
 from app.vendors import vendors_bp
 from app.vendors.service import (
@@ -63,7 +66,9 @@ def api_create():
     if not name:
         return jsonify({'ok': False, 'error': 'Vendor name is required'}), 400
 
-    if Vendor.query.filter(db.func.lower(Vendor.name) == name.lower()).first():
+    if apply_agency_filter(
+        Vendor.query.filter(db.func.lower(Vendor.name) == name.lower()), Vendor
+    ).first():
         return jsonify({'ok': False, 'error': f"Vendor '{name}' already exists."}), 400
 
     prev_payable = 0.0
@@ -83,6 +88,7 @@ def api_create():
         previous_payable=prev_payable if prev_payable > 0 else None,
         current_balance_payable=prev_payable,
     )
+    stamp_agency(vendor)
     db.session.add(vendor)
     db.session.commit()
     return jsonify(_vendor_option_payload(vendor))
@@ -106,7 +112,9 @@ def index():
                 flash('Vendor name is required.', 'danger')
                 return redirect(url_for('vendors.index'))
 
-            if Vendor.query.filter(db.func.lower(Vendor.name) == name.lower()).first():
+            if apply_agency_filter(
+                Vendor.query.filter(db.func.lower(Vendor.name) == name.lower()), Vendor
+            ).first():
                 flash(f"Vendor '{name}' already exists.", 'danger')
                 return redirect(url_for('vendors.index'))
 
@@ -128,6 +136,7 @@ def index():
                 previous_payable=prev_payable if prev_payable > 0 else None,
                 current_balance_payable=prev_payable,
             )
+            stamp_agency(vendor)
             db.session.add(vendor)
             db.session.commit()
             flash(f"Vendor '{name}' registered successfully.", 'success')
@@ -136,14 +145,18 @@ def index():
             vendor_id = request.form.get('vendor_id')
             vendor = Vendor.query.get(vendor_id)
             if vendor:
+                require_agency_access(vendor)
                 new_name = normalize_vendor_name(request.form.get('name'))
                 if not new_name:
                     flash('Vendor name is required.', 'danger')
                     return redirect(url_for('vendors.index'))
 
-                duplicate = Vendor.query.filter(
-                    db.func.lower(Vendor.name) == new_name.lower(),
-                    Vendor.id != vendor.id,
+                duplicate = apply_agency_filter(
+                    Vendor.query.filter(
+                        db.func.lower(Vendor.name) == new_name.lower(),
+                        Vendor.id != vendor.id,
+                    ),
+                    Vendor,
                 ).first()
                 if duplicate:
                     flash(f"Another vendor named '{new_name}' already exists.", 'danger')
@@ -174,6 +187,7 @@ def index():
             if not vendor:
                 flash('Vendor not found.', 'danger')
                 return redirect(url_for('vendors.index'))
+            require_agency_access(vendor)
             if vendor_has_linked_activity(vendor):
                 flash(
                     f'Cannot delete “{vendor.name}”. This vendor already has purchases or payments. '
@@ -191,7 +205,7 @@ def index():
     search_query = request.args.get('search', '').strip()
     status_filter = request.args.get('filter', 'all')
 
-    query = Vendor.query
+    query = apply_agency_filter(Vendor.query, Vendor)
     if search_query:
         query = query.filter(
             Vendor.name.like(f'%{search_query}%')
@@ -230,6 +244,7 @@ def index():
 @login_required
 def ledger(vendor_id):
     vendor = Vendor.query.get_or_404(vendor_id)
+    require_agency_access(vendor)
 
     if request.method == 'POST':
         action = (request.form.get('action') or 'payment').strip().lower()
@@ -286,6 +301,7 @@ def ledger(vendor_id):
             method=method,
             note=note,
         )
+        stamp_agency(payment)
         db.session.add(payment)
         db.session.flush()
         recalculate_vendor_balance(vendor)
@@ -491,12 +507,12 @@ def ledger(vendor_id):
 @login_required
 def sync_balances():
     """Admin utility: rebuild all vendor balances from purchase logs and payments."""
-    if current_user.role != 'admin':
+    if not is_super_admin():
         flash('Only administrators can sync vendor balances.', 'danger')
         return redirect(url_for('vendors.index'))
 
     count = 0
-    for vendor in Vendor.query.all():
+    for vendor in apply_agency_filter(Vendor.query, Vendor).all():
         recalculate_vendor_balance(vendor)
         count += 1
     db.session.commit()

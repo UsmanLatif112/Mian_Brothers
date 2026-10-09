@@ -16,6 +16,10 @@ instance/*.db
 # Database backup dumps
 backups/
 
+# Agency logos / uploaded media
+uploads/
+!uploads/.gitkeep
+
 # Runtime logs (cPanel: tail -f logs/app.log)
 logs/
 !logs/.gitkeep

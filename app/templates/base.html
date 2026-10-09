@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0d9488">
-    <title>{% block title %}Fuel Station Manager{% endblock %}</title>
-    <link rel="icon" href="{{ url_for('static', filename='img/favicon.png') }}?v=3" type="image/png" sizes="512x512">
-    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}?v=3">
+    <title>{% block title %}{{ brand_name or 'OctaneFlow' }}{% endblock %}</title>
+    <link rel="icon" href="{{ brand_favicon_url or url_for('static', filename='img/favicon.png') }}" type="image/png" sizes="512x512">
+    <link rel="apple-touch-icon" href="{{ brand_logo_url or url_for('static', filename='img/apple-touch-icon.png') }}">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=16">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shell.css') }}?v=7">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/journal.css') }}?v=3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=6">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=2">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=13">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=6">
@@ -119,11 +119,11 @@
         <div class="sidebar-brand">
             <a class="sidebar-brand-link" href="{{ url_for('dashboard.index') }}">
                 <span class="brand-mark">
-                    <img src="{{ url_for('static', filename='img/logo.png') }}?v=2" alt="" width="36" height="36">
+                    <img src="{{ brand_logo_url or url_for('static', filename='img/logo.png') }}" alt="" width="36" height="36">
                 </span>
                 <span class="brand-copy">
-                    <span class="brand-text">OctaneFlow</span>
-                    <span class="brand-tag">Station OS</span>
+                    <span class="brand-text">{{ brand_name or 'OctaneFlow' }}</span>
+                    {% if brand_tag %}<span class="brand-tag">{{ brand_tag }}</span>{% endif %}
                 </span>
             </a>
             <button type="button" class="sidebar-close d-lg-none" id="sidebarClose" aria-label="Close menu">
@@ -159,15 +159,15 @@
             <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
                 <i class="bi bi-wallet2"></i><span>Account</span>
             </a>
-            {% if current_user.role == 'admin' %}
+            {% if current_user.role in ('super_admin', 'admin') %}
             <a class="sidebar-link {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}" data-search-label="Pricing">
                 <i class="bi bi-tags"></i><span>Pricing</span>
             </a>
             <a class="sidebar-link {% if request.blueprint == 'backup' %}active{% endif %}" href="{{ url_for('backup.index') }}" data-search-label="Backup">
                 <i class="bi bi-cloud-arrow-up"></i><span>Backup</span>
             </a>
-            <a class="sidebar-link {% if request.endpoint == 'auth.staff_accounts' %}active{% endif %}" href="{{ url_for('auth.staff_accounts') }}" data-search-label="Staff">
-                <i class="bi bi-person-gear"></i><span>Staff</span>
+            <a class="sidebar-link {% if request.endpoint == 'auth.users' %}active{% endif %}" href="{{ url_for('auth.users') }}" data-search-label="Users">
+                <i class="bi bi-person-gear"></i><span>Users</span>
             </a>
             {% endif %}
         </nav>
@@ -216,7 +216,7 @@
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-app shadow border-0 p-2 mt-2" aria-labelledby="userMenu">
                         <li class="px-3 py-2">
                             <small class="d-block user-name">{{ current_user.name }}</small>
-                            <span class="badge badge-custom {% if current_user.role == 'admin' %}badge-admin{% else %}badge-staff{% endif %} user-role-badge">{{ current_user.role | capitalize }}</span>
+                            <span class="badge badge-custom {% if current_user.role in ('super_admin', 'admin') %}badge-admin{% else %}badge-staff{% endif %} user-role-badge">{% if current_user.role == 'super_admin' %}Super Admin{% elif current_user.role == 'admin' %}Admin{% else %}User{% endif %}</span>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
@@ -332,7 +332,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="{{ url_for('static', filename='js/charts.js') }}?v=3"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}?v=4"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}?v=24"></script>
 
     {% block scripts %}{% endblock %}

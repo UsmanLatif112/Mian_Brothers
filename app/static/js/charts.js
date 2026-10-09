@@ -115,11 +115,48 @@
         });
     }
 
-    function doughnutChart(canvas, { labels, values, centerText }) {
+    function renderExternalLegend(container, labels, values, colors) {
+        if (!container) return;
+        const total = (values || []).reduce((a, b) => a + Number(b || 0), 0) || 1;
+        const hasReal = (labels || []).length && !(labels.length === 1 && labels[0] === 'No data');
+        if (!hasReal) {
+            container.innerHTML = '<li class="chart-legend-empty"><span class="chart-legend-dot" style="background:#0d9488"></span><span class="chart-legend-label">No data</span></li>';
+            return;
+        }
+        container.innerHTML = (labels || []).map((label, i) => {
+            const val = Number(values[i] || 0);
+            const pct = ((val / total) * 100).toFixed(0);
+            const color = colors[i % colors.length];
+            return (
+                `<li class="chart-legend-item">` +
+                `<span class="chart-legend-dot" style="background:${color}"></span>` +
+                `<span class="chart-legend-copy">` +
+                `<span class="chart-legend-label">${escapeHtml(label)}</span>` +
+                `<span class="chart-legend-value">${money(val)} · ${pct}%</span>` +
+                `</span></li>`
+            );
+        }).join('');
+    }
+
+    function escapeHtml(str) {
+        return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function doughnutChart(canvas, { labels, values, centerText, legendContainer }) {
         if (!canvas || !global.Chart) return null;
         destroyIfAny(canvas);
         const t = theme();
         const colors = (labels || []).map((_, i) => PALETTE[i % PALETTE.length]);
+        const useExternal = !!legendContainer;
+
+        if (useExternal) {
+            renderExternalLegend(legendContainer, labels, values, colors);
+        }
+
         return new Chart(canvas, {
             type: 'doughnut',
             data: {
@@ -136,17 +173,19 @@
                 maintainAspectRatio: false,
                 cutout: '68%',
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            color: t.tick,
-                            usePointStyle: true,
-                            pointStyle: 'circle',
-                            padding: 12,
-                            boxWidth: 8,
-                            font: { family: t.font, size: 11, weight: '600' },
+                    legend: useExternal
+                        ? { display: false }
+                        : {
+                            position: 'bottom',
+                            labels: {
+                                color: t.tick,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 12,
+                                boxWidth: 8,
+                                font: { family: t.font, size: 11, weight: '600' },
+                            },
                         },
-                    },
                     tooltip: {
                         backgroundColor: t.tooltipBg,
                         titleFont: { family: t.font, weight: '700' },

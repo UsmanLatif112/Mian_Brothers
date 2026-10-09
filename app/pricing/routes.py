@@ -3,13 +3,14 @@ from flask_login import login_required, current_user
 from app.pricing import pricing_bp
 from app.models import db, FuelType, FuelPrice, OtherItem, ItemPriceLog
 from app.decorators import role_required
+from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import parse_form_datetime, fuel_rate_for
 from datetime import datetime
 
 
 @pricing_bp.route('/', methods=['GET', 'POST'])
 @login_required
-@role_required('admin')
+@role_required('super_admin')
 def index():
     if request.method == 'POST':
         item_key = (request.form.get('item_key') or '').strip()
@@ -35,15 +36,16 @@ def index():
             if not fuel_type:
                 flash('Selected fuel type does not exist.', 'danger')
                 return redirect(url_for('pricing.index'))
+            require_agency_access(fuel_type)
 
-            db.session.add(FuelPrice(
+            db.session.add(stamp_agency(FuelPrice(
                 fuel_type_id=fuel_type.id,
                 price_per_liter=price_val,
                 effective_date=effective,
                 effective_at=effective_at,
                 updated_by=current_user.id,
                 created_at=datetime.utcnow(),
-            ))
+            )))
             db.session.commit()
             flash(
                 f"Updated price for {fuel_type.name} to PKR {price_val:,.2f}/{fuel_type.unit} "
@@ -58,9 +60,12 @@ def index():
             if not shop_item:
                 flash('Selected inventory item does not exist.', 'danger')
                 return redirect(url_for('pricing.index'))
+            require_agency_access(shop_item)
 
             # Same product = same category + company + type (each has its own price).
-            query = OtherItem.query.filter_by(category=shop_item.category)
+            query = apply_agency_filter(
+                OtherItem.query.filter_by(category=shop_item.category), OtherItem
+            )
             if shop_item.company:
                 query = query.filter_by(company=shop_item.company)
             else:
@@ -75,14 +80,14 @@ def index():
             updated = 0
             for item in query.all():
                 item.sale_price = price_val
-                db.session.add(ItemPriceLog(
+                db.session.add(stamp_agency(ItemPriceLog(
                     other_item_id=item.id,
                     sale_price=price_val,
                     cost_price=item.cost_price,
                     effective_date=effective,
                     updated_by=current_user.id,
                     created_at=effective_at,
-                ))
+                )))
                 updated += 1
 
             db.session.commit()
@@ -99,8 +104,10 @@ def index():
         return redirect(url_for('pricing.index'))
 
     # GET
-    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
-    shop_items = OtherItem.query.order_by(OtherItem.category.asc(), OtherItem.name.asc()).all()
+    fuel_types = apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all()
+    shop_items = apply_agency_filter(OtherItem.query, OtherItem).order_by(
+        OtherItem.category.asc(), OtherItem.name.asc()
+    ).all()
 
     current_fuel_prices = {}
     for ft in fuel_types:
@@ -108,7 +115,7 @@ def index():
 
     # Unified price history (fuel + shop items)
     price_history = []
-    for record in FuelPrice.query.order_by(
+    for record in apply_agency_filter(FuelPrice.query, FuelPrice).order_by(
         FuelPrice.effective_date.desc(),
         FuelPrice.created_at.desc(),
     ).limit(100).all():
@@ -124,7 +131,9 @@ def index():
             'effective_at': at,
         })
 
-    for record in ItemPriceLog.query.order_by(ItemPriceLog.created_at.desc()).limit(100).all():
+    for record in apply_agency_filter(ItemPriceLog.query, ItemPriceLog).order_by(
+        ItemPriceLog.created_at.desc()
+    ).limit(100).all():
         eff = record.effective_date
         if eff is None and record.created_at:
             eff = record.created_at.date() if hasattr(record.created_at, 'date') else record.created_at

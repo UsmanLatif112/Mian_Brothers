@@ -1,14 +1,19 @@
 {# expects: chart_id, chart_title, chart_subtitle, chart_series, center_title #}
 <section class="page-chart-strip">
     <div class="row g-3">
-        <div class="col-12 col-lg-5 col-xl-4">
-            <article class="chart-card">
-                <div class="chart-card-head">
-                    <h2 class="chart-card-title">{{ chart_title }}</h2>
-                    {% if chart_subtitle %}<p class="chart-card-sub">{{ chart_subtitle }}</p>{% endif %}
-                </div>
-                <div class="chart-card-body">
-                    <div class="chart-canvas-wrap is-pie"><canvas id="{{ chart_id }}"></canvas></div>
+        <div class="col-12 col-lg-6 col-xl-5">
+            <article class="chart-card chart-card--split">
+                <div class="chart-split">
+                    <div class="chart-split-data">
+                        <div class="chart-card-head">
+                            <h2 class="chart-card-title">{{ chart_title }}</h2>
+                            {% if chart_subtitle %}<p class="chart-card-sub">{{ chart_subtitle }}</p>{% endif %}
+                        </div>
+                        <ul class="chart-legend" id="{{ chart_id }}-legend" aria-label="{{ chart_title }} breakdown"></ul>
+                    </div>
+                    <div class="chart-split-viz">
+                        <div class="chart-canvas-wrap is-pie"><canvas id="{{ chart_id }}"></canvas></div>
+                    </div>
                 </div>
             </article>
         </div>
@@ -28,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
         OctaneCharts.doughnutChart(canvas, {
             labels: labels.length ? labels : ['No data'],
             values: labels.length ? values : [1],
+            legendContainer: document.getElementById('{{ chart_id }}-legend'),
             centerText: {
                 title: '{{ center_title or "Total" }}',
                 value: labels.length ? OctaneCharts.money(total) : '—',

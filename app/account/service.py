@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from sqlalchemy import func
 
 from app.models import db, CashTaken, DailyTillBalance
+from app.tenancy import apply_agency_filter, stamp_agency
 
 
 def as_date(value):
@@ -16,13 +17,17 @@ def as_date(value):
 def previous_balance_for_date(day):
     """Use a manual previous balance for this day, otherwise prior remaining."""
     day = as_date(day)
-    current = DailyTillBalance.query.filter_by(balance_date=day).first()
+    current = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
     if current:
         return float(current.previous_balance or 0)
 
     prior = (
-        DailyTillBalance.query
-        .filter(DailyTillBalance.balance_date < day)
+        apply_agency_filter(
+            DailyTillBalance.query.filter(DailyTillBalance.balance_date < day),
+            DailyTillBalance,
+        )
         .order_by(DailyTillBalance.balance_date.desc())
         .first()
     )
@@ -32,17 +37,21 @@ def previous_balance_for_date(day):
 def cash_taken_total(start, end=None):
     end = end or start
     return float(
-        CashTaken.query.with_entities(func.coalesce(func.sum(CashTaken.amount), 0))
-        .filter(CashTaken.taken_date >= start, CashTaken.taken_date <= end)
-        .scalar() or 0
+        apply_agency_filter(
+            CashTaken.query.with_entities(func.coalesce(func.sum(CashTaken.amount), 0))
+            .filter(CashTaken.taken_date >= start, CashTaken.taken_date <= end),
+            CashTaken,
+        ).scalar() or 0
     )
 
 
 def cash_taken_rows(start, end=None):
     end = end or start
     return (
-        CashTaken.query
-        .filter(CashTaken.taken_date >= start, CashTaken.taken_date <= end)
+        apply_agency_filter(
+            CashTaken.query.filter(CashTaken.taken_date >= start, CashTaken.taken_date <= end),
+            CashTaken,
+        )
         .order_by(CashTaken.taken_date.desc(), CashTaken.id.desc())
         .all()
     )
@@ -54,9 +63,12 @@ def upsert_till_balance(day, cash_in_hand, user_id=None):
     previous = previous_balance_for_date(day)
     taken = cash_taken_total(day)
     remaining = float(cash_in_hand or 0) - taken
-    row = DailyTillBalance.query.filter_by(balance_date=day).first()
+    row = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
     if not row:
         row = DailyTillBalance(balance_date=day)
+        stamp_agency(row)
         db.session.add(row)
     row.previous_balance = previous
     row.remaining_balance = remaining
@@ -68,9 +80,12 @@ def upsert_till_balance(day, cash_in_hand, user_id=None):
 def set_previous_balance(day, amount, user_id=None):
     """Set the opening previous balance for a day and keep remaining in sync."""
     day = as_date(day)
-    row = DailyTillBalance.query.filter_by(balance_date=day).first()
+    row = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
     if not row:
         row = DailyTillBalance(balance_date=day)
+        stamp_agency(row)
         db.session.add(row)
     row.previous_balance = float(amount or 0)
     row.remaining_balance = float(amount or 0) - cash_taken_total(day)

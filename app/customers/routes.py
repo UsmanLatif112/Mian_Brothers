@@ -2,6 +2,9 @@ from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from app.customers import customers_bp
 from app.models import db, Customer, Sale, Payment, CreditSale
+from app.tenancy import (
+    apply_agency_filter, require_agency_access, stamp_agency, is_super_admin,
+)
 from app.utils import paginate, parse_form_date, datetime_from_date
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
@@ -86,6 +89,7 @@ def index():
                     credit_limit=limit_val,
                     current_balance_due=0,
                 )
+                stamp_agency(customer)
                 db.session.add(customer)
                 db.session.flush()
             else:
@@ -93,6 +97,7 @@ def index():
                 if not customer:
                     flash('Customer not found.', 'danger')
                     return redirect(url_for('customers.index'))
+                require_agency_access(customer)
                 customer.name = name
                 customer.phone = phone
                 customer.address = address
@@ -127,7 +132,7 @@ def index():
             db.session.flush()
 
             if prev_credit > 0:
-                db.session.add(CreditSale(
+                cs = CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
                     liters=0,
@@ -138,9 +143,11 @@ def index():
                     payment_status='unpaid',
                     remarks='Previous / opening book credit',
                     recorded_by=current_user.id,
-                ))
+                )
+                stamp_agency(cs)
+                db.session.add(cs)
             elif prev_credit < 0:
-                db.session.add(CreditSale(
+                cs = CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
                     liters=0,
@@ -151,7 +158,9 @@ def index():
                     payment_status='paid',
                     remarks='Previous / opening advance',
                     recorded_by=current_user.id,
-                ))
+                )
+                stamp_agency(cs)
+                db.session.add(cs)
 
             db.session.flush()
             recalculate_customer_balance(customer)
@@ -167,6 +176,7 @@ def index():
             if not customer:
                 flash('Customer not found.', 'danger')
                 return redirect(url_for('customers.index'))
+            require_agency_access(customer)
             if customer_has_linked_activity(customer):
                 flash(
                     f'Cannot delete “{customer.name}”. This customer already has sales or payments. '
@@ -185,7 +195,7 @@ def index():
     search_query = request.args.get('search', '').strip()
     status_filter = request.args.get('filter', 'all')  # 'all', 'due', 'clear'
 
-    query = Customer.query
+    query = apply_agency_filter(Customer.query, Customer)
 
     if search_query:
         query = query.filter(
@@ -254,7 +264,8 @@ def index():
 @login_required
 def ledger(customer_id):
     customer = Customer.query.get_or_404(customer_id)
-    
+    require_agency_access(customer)
+
     if request.method == 'POST':
         action = (request.form.get('action') or 'payment').strip().lower()
 
@@ -327,7 +338,7 @@ def ledger(customer_id):
                 return redirect(url_for('customers.ledger', customer_id=customer.id))
 
             if kind == 'advance':
-                db.session.add(CreditSale(
+                cs = CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
                     liters=0,
@@ -338,7 +349,9 @@ def ledger(customer_id):
                     payment_status='paid',
                     remarks=note,
                     recorded_by=current_user.id,
-                ))
+                )
+                stamp_agency(cs)
+                db.session.add(cs)
                 db.session.flush()
                 recalculate_customer_balance(customer)
                 db.session.commit()
@@ -349,7 +362,7 @@ def ledger(customer_id):
                     'success'
                 )
             else:
-                db.session.add(CreditSale(
+                cs = CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
                     liters=0,
@@ -360,7 +373,9 @@ def ledger(customer_id):
                     payment_status='unpaid',
                     remarks=note,
                     recorded_by=current_user.id,
-                ))
+                )
+                stamp_agency(cs)
+                db.session.add(cs)
                 db.session.flush()
                 recalculate_customer_balance(customer)
                 db.session.commit()
@@ -400,6 +415,7 @@ def ledger(customer_id):
             method=method,
             note=note
         )
+        stamp_agency(payment)
         db.session.add(payment)
         db.session.flush()
         recalculate_customer_balance(customer)
@@ -607,12 +623,12 @@ def ledger(customer_id):
 @login_required
 def sync_balances():
     """Rebuild all customer balances from sales + payments (cascade truth)."""
-    if current_user.role != 'admin':
+    if not is_super_admin():
         flash('Only administrators can sync customer balances.', 'danger')
         return redirect(url_for('customers.index'))
 
     count = 0
-    for customer in Customer.query.all():
+    for customer in apply_agency_filter(Customer.query, Customer).all():
         recalculate_customer_balance(customer)
         count += 1
     db.session.commit()

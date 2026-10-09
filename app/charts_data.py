@@ -39,23 +39,30 @@ def fill_daily(dates, bucket):
 def customers_listing_series():
     """Line: daily credit sales vs payments (last 14 days)."""
     from app.models import CreditSale, Payment
+    from app.tenancy import apply_agency_filter
 
     labels, dates, start, end = daily_labels(14)
     sales = defaultdict(float)
     pays = defaultdict(float)
 
-    for e in CreditSale.query.filter(
-        CreditSale.sale_date >= start,
-        CreditSale.sale_date <= end,
-        CreditSale.entry_type == 'sale',
+    for e in apply_agency_filter(
+        CreditSale.query.filter(
+            CreditSale.sale_date >= start,
+            CreditSale.sale_date <= end,
+            CreditSale.entry_type == 'sale',
+        ),
+        CreditSale,
     ).all():
         d = _as_date(e.sale_date)
         if d:
             sales[d] += float(e.amount or 0)
 
-    for p in Payment.query.filter(
-        Payment.payment_date >= datetime.combine(start, datetime.min.time()),
-        Payment.payment_date <= datetime.combine(end, datetime.max.time()),
+    for p in apply_agency_filter(
+        Payment.query.filter(
+            Payment.payment_date >= datetime.combine(start, datetime.min.time()),
+            Payment.payment_date <= datetime.combine(end, datetime.max.time()),
+        ),
+        Payment,
     ).all():
         d = _as_date(p.payment_date)
         if d:
@@ -73,6 +80,7 @@ def customers_listing_series():
 def vendors_listing_series():
     """Line: daily purchases vs vendor payments (last 14 days)."""
     from app.models import ItemPurchaseLog, VendorPayment
+    from app.tenancy import apply_agency_filter
     from app.vendors.service import purchase_log_total
 
     labels, dates, start, end = daily_labels(14)
@@ -81,17 +89,23 @@ def vendors_listing_series():
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end, datetime.max.time())
 
-    for log in ItemPurchaseLog.query.filter(
-        ItemPurchaseLog.entry_date >= start_dt,
-        ItemPurchaseLog.entry_date <= end_dt,
+    for log in apply_agency_filter(
+        ItemPurchaseLog.query.filter(
+            ItemPurchaseLog.entry_date >= start_dt,
+            ItemPurchaseLog.entry_date <= end_dt,
+        ),
+        ItemPurchaseLog,
     ).all():
         d = _as_date(log.entry_date)
         if d:
             buys[d] += float(purchase_log_total(log) or 0)
 
-    for p in VendorPayment.query.filter(
-        VendorPayment.payment_date >= start_dt,
-        VendorPayment.payment_date <= end_dt,
+    for p in apply_agency_filter(
+        VendorPayment.query.filter(
+            VendorPayment.payment_date >= start_dt,
+            VendorPayment.payment_date <= end_dt,
+        ),
+        VendorPayment,
     ).all():
         d = _as_date(p.payment_date)
         if d:
@@ -185,15 +199,19 @@ def journal_listing_series(rows):
 def inventory_listing_series():
     """Line: daily purchase liters/qty last 14 days."""
     from app.models import ItemPurchaseLog
+    from app.tenancy import apply_agency_filter
 
     labels, dates, start, end = daily_labels(14)
     fuel = defaultdict(float)
     shop = defaultdict(float)
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end, datetime.max.time())
-    for log in ItemPurchaseLog.query.filter(
-        ItemPurchaseLog.entry_date >= start_dt,
-        ItemPurchaseLog.entry_date <= end_dt,
+    for log in apply_agency_filter(
+        ItemPurchaseLog.query.filter(
+            ItemPurchaseLog.entry_date >= start_dt,
+            ItemPurchaseLog.entry_date <= end_dt,
+        ),
+        ItemPurchaseLog,
     ).all():
         d = _as_date(log.entry_date)
         if not d:

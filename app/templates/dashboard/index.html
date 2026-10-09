@@ -181,58 +181,88 @@
 </section>
 
 <section class="chart-insight-grid mt-4" aria-label="Insight charts">
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Fuel inventory</h2>
-            <p class="chart-card-sub">Live liters on hand</p>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="pieFuelStock"></canvas></div>
-        </div>
-    </article>
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Other items</h2>
-            <p class="chart-card-sub">Shop &amp; FT stock mix</p>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="pieOtherStock"></canvas></div>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Fuel inventory</h2>
+                    <p class="chart-card-sub">Live liters on hand</p>
+                </div>
+                <ul class="chart-legend" id="legendFuelStock" aria-label="Fuel inventory breakdown"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieFuelStock"></canvas></div>
+            </div>
         </div>
     </article>
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Top 3 profitable</h2>
-            <p class="chart-card-sub">Highest margin items this period</p>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopProfit"></canvas></div>
-        </div>
-    </article>
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Top 5 expenses</h2>
-            <p class="chart-card-sub">Largest cash outs</p>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopExpenses"></canvas></div>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Other items</h2>
+                    <p class="chart-card-sub">Shop &amp; FT stock mix</p>
+                </div>
+                <ul class="chart-legend" id="legendOtherStock" aria-label="Other items breakdown"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieOtherStock"></canvas></div>
+            </div>
         </div>
     </article>
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Top 5 receivables</h2>
-            <p class="chart-card-sub">Customers who owe the most</p>
-        </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopCustomers"></canvas></div>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Top 3 profitable</h2>
+                    <p class="chart-card-sub">Highest margin items this period</p>
+                </div>
+                <ul class="chart-legend" id="legendTopProfit" aria-label="Top profitable breakdown"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieTopProfit"></canvas></div>
+            </div>
         </div>
     </article>
-    <article class="chart-card">
-        <div class="chart-card-head">
-            <h2 class="chart-card-title">Top 5 payables</h2>
-            <p class="chart-card-sub">Vendors we owe the most</p>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Top 5 expenses</h2>
+                    <p class="chart-card-sub">Largest cash outs</p>
+                </div>
+                <ul class="chart-legend" id="legendTopExpenses" aria-label="Top expenses breakdown"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieTopExpenses"></canvas></div>
+            </div>
         </div>
-        <div class="chart-card-body">
-            <div class="chart-canvas-wrap is-pie"><canvas id="pieTopVendors"></canvas></div>
+    </article>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Top 5 receivables</h2>
+                    <p class="chart-card-sub">Customers who owe the most</p>
+                </div>
+                <ul class="chart-legend" id="legendTopCustomers" aria-label="Top receivables breakdown"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieTopCustomers"></canvas></div>
+            </div>
+        </div>
+    </article>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Top 5 payables</h2>
+                    <p class="chart-card-sub">Vendors we owe the most</p>
+                </div>
+                <ul class="chart-legend" id="legendTopVendors" aria-label="Top payables breakdown"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieTopVendors"></canvas></div>
+            </div>
         </div>
     </article>
 </section>
@@ -248,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const insights = OctaneCharts.parseJsonScript('dash-insights-json') || {};
     const empty = { labels: ['No data'], values: [1] };
 
-    function pie(id, data, centerTitle) {
+    function pie(id, legendId, data, centerTitle) {
         const canvas = document.getElementById(id);
         if (!canvas) return;
         const payload = (data && data.labels && data.labels.length) ? data : empty;
@@ -256,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
         OctaneCharts.doughnutChart(canvas, {
             labels: payload.labels,
             values: payload.values,
+            legendContainer: document.getElementById(legendId),
             centerText: {
                 title: centerTitle,
                 value: data && data.labels && data.labels.length ? OctaneCharts.money(total) : '—',
@@ -263,12 +294,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    pie('pieFuelStock', insights.fuel_stock, 'Stock L');
-    pie('pieOtherStock', insights.other_stock, 'Units');
-    pie('pieTopProfit', insights.top_profit, 'Profit');
-    pie('pieTopExpenses', insights.top_expenses, 'Spend');
-    pie('pieTopCustomers', insights.top_customers, 'Due');
-    pie('pieTopVendors', insights.top_vendors, 'Payable');
+    pie('pieFuelStock', 'legendFuelStock', insights.fuel_stock, 'Stock L');
+    pie('pieOtherStock', 'legendOtherStock', insights.other_stock, 'Units');
+    pie('pieTopProfit', 'legendTopProfit', insights.top_profit, 'Profit');
+    pie('pieTopExpenses', 'legendTopExpenses', insights.top_expenses, 'Spend');
+    pie('pieTopCustomers', 'legendTopCustomers', insights.top_customers, 'Due');
+    pie('pieTopVendors', 'legendTopVendors', insights.top_vendors, 'Payable');
 
     const params = new URLSearchParams({
         period: '{{ period }}',

@@ -1,0 +1,21 @@
+{% extends "print/receipt_base.html" %}
+
+{% block title %}{{ title or 'Receipt' }}{% endblock %}
+
+{% block receipt_body %}
+<p class="ticket-sub">{{ subtitle or 'Receipt' }}</p>
+<h2 class="ticket-title">{{ title or 'Receipt' }}</h2>
+
+<div class="meta-row"><span>Ref</span><span>{{ ref or '—' }}</span></div>
+<div class="meta-row"><span>Date</span><span>{{ date or '—' }}</span></div>
+<div class="meta-row"><span>{{ party_label or 'Party' }}</span><span>{{ party or '—' }}</span></div>
+
+<hr class="rule">
+<p class="desc">{{ desc or '—' }}</p>
+<div class="line-row"><span>{{ status or '—' }}</span><span>PKR {{ amount or '0.00' }}</span></div>
+
+<hr class="rule">
+<div class="total-row"><span>Total</span><span>PKR {{ total or '0.00' }}</span></div>
+<div class="total-row"><span>Paid</span><span>PKR {{ paid or '0.00' }}</span></div>
+<div class="total-row"><span>Balance</span><span>PKR {{ due or '0.00' }}</span></div>
+{% endblock %}

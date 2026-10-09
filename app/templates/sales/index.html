@@ -175,25 +175,12 @@
                                 </td>
                                 <td>
                                     <div class="btn-group gap-1">
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm btn-outline-secondary border-0"
-                                            title="Print receipt"
-                                            data-of-receipt
-                                            data-receipt-sub="Sales Receipt"
-                                            data-receipt-title="{{ cs.entry_type|upper }}"
-                                            data-receipt-ref="#{{ cs.id }}"
-                                            data-receipt-date="{{ cs.sale_date }}"
-                                            data-receipt-party-label="Customer"
-                                            data-receipt-party="{{ cs.customer.name if cs.customer else 'Walk-in' }}"
-                                            data-receipt-desc="{{ cs.item_name }}"
-                                            data-receipt-status="{% if over_val > 0 %}OVERPAY{% else %}{{ (cs.payment_status or '')|upper }}{% endif %}"
-                                            data-receipt-amount="{{ cs.amount | money }}"
-                                            data-receipt-total="{{ cs.amount | money }}"
-                                            data-receipt-paid="{% if cs.entry_type == 'sale' %}{{ ((cs.amount_paid or 0)|float + over_val) | money }}{% else %}{{ (cs.amount_paid or 0) | money }}{% endif %}"
-                                            data-receipt-due="{% if over_val > 0 %}0.00{% else %}{{ cs.credit_amount | money }}{% endif %}">
+                                        <a href="{{ url_for('receipts.sale', sale_id=cs.id) }}"
+                                           class="btn btn-sm btn-outline-secondary border-0"
+                                           title="View receipt"
+                                           target="_blank" rel="noopener">
                                             <i class="bi bi-printer"></i>
-                                        </button>
+                                        </a>
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-secondary border-0 edit-period-entry-btn"

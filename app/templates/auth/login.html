@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login — OctaneFlow{% endblock %}
+{% block title %}Login — {{ brand_name or 'OctaneFlow' }}{% endblock %}
 
 {% block content %}
 <div class="auth-page">
@@ -8,9 +8,9 @@
         <div class="card-body card-body-premium p-4 p-md-5">
             <div class="text-center mb-4">
                 <div class="auth-logo">
-                    <img src="{{ url_for('static', filename='img/logo.png') }}?v=2" alt="OctaneFlow" width="64" height="64">
+                    <img src="{{ brand_logo_url or url_for('static', filename='img/logo.png') }}" alt="{{ brand_name or 'OctaneFlow' }}" width="64" height="64">
                 </div>
-                <h1 class="auth-title">Welcome to OctaneFlow</h1>
+                <h1 class="auth-title">Welcome to {{ brand_name or 'OctaneFlow' }}</h1>
                 <p class="text-muted-custom mb-0">Fuel Station Management Control</p>
             </div>
             

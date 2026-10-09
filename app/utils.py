@@ -22,6 +22,7 @@ def earliest_activity_date():
         ItemPurchaseLog, StockEntry, DailyCashCount, VendorPayment,
         CashTaken, DailyTillBalance,
     )
+    from app.tenancy import apply_agency_filter
 
     today = datetime.utcnow().date()
     candidates = []
@@ -38,16 +39,19 @@ def earliest_activity_date():
                 return
         candidates.append(val)
 
-    _add(MeterReading.query.with_entities(func.min(MeterReading.reading_date)).scalar())
-    _add(CreditSale.query.with_entities(func.min(CreditSale.sale_date)).scalar())
-    _add(Expense.query.with_entities(func.min(Expense.expense_date)).scalar())
-    _add(Payment.query.with_entities(func.min(func.date(Payment.payment_date))).scalar())
-    _add(ItemPurchaseLog.query.with_entities(func.min(ItemPurchaseLog.entry_date)).scalar())
-    _add(StockEntry.query.with_entities(func.min(StockEntry.entry_date)).scalar())
-    _add(VendorPayment.query.with_entities(func.min(VendorPayment.payment_date)).scalar())
-    _add(DailyCashCount.query.with_entities(func.min(DailyCashCount.count_date)).scalar())
-    _add(CashTaken.query.with_entities(func.min(CashTaken.taken_date)).scalar())
-    _add(DailyTillBalance.query.with_entities(func.min(DailyTillBalance.balance_date)).scalar())
+    def _min(q, model, col):
+        return apply_agency_filter(q.with_entities(func.min(col)), model).scalar()
+
+    _add(_min(MeterReading.query, MeterReading, MeterReading.reading_date))
+    _add(_min(CreditSale.query, CreditSale, CreditSale.sale_date))
+    _add(_min(Expense.query, Expense, Expense.expense_date))
+    _add(_min(Payment.query, Payment, func.date(Payment.payment_date)))
+    _add(_min(ItemPurchaseLog.query, ItemPurchaseLog, ItemPurchaseLog.entry_date))
+    _add(_min(StockEntry.query, StockEntry, StockEntry.entry_date))
+    _add(_min(VendorPayment.query, VendorPayment, VendorPayment.payment_date))
+    _add(_min(DailyCashCount.query, DailyCashCount, DailyCashCount.count_date))
+    _add(_min(CashTaken.query, CashTaken, CashTaken.taken_date))
+    _add(_min(DailyTillBalance.query, DailyTillBalance, DailyTillBalance.balance_date))
 
     return min(candidates) if candidates else today
 
@@ -199,9 +203,10 @@ def build_fuel_rate_lookup(FuelPrice):
     None: current pump price (latest effective_at <= now).
     """
     from collections import defaultdict
+    from app.tenancy import apply_agency_filter
 
     by_fuel = defaultdict(list)
-    for fp in FuelPrice.query.order_by(FuelPrice.id.asc()).all():
+    for fp in apply_agency_filter(FuelPrice.query, FuelPrice).order_by(FuelPrice.id.asc()).all():
         at = _fuel_price_effective_at(fp)
         if at is None:
             continue
@@ -236,11 +241,15 @@ def fuel_rate_for(fuel_type_id, FuelPrice, as_of_date=None):
     (effective_at <= as_of). Same calendar day can have multiple rates.
     None: current pump price (latest effective_at <= now).
     """
+    from app.tenancy import apply_agency_filter
+
     as_of = _as_plain_datetime(as_of_date)
     if as_of is None:
         as_of = datetime.utcnow().replace(microsecond=0)
 
-    rows = FuelPrice.query.filter_by(fuel_type_id=fuel_type_id).all()
+    rows = apply_agency_filter(
+        FuelPrice.query.filter_by(fuel_type_id=fuel_type_id), FuelPrice
+    ).all()
     if not rows:
         return 0.0
 
@@ -325,14 +334,19 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     DailyCashCount = models.DailyCashCount
     Customer = models.Customer
 
-    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+    from app.tenancy import apply_agency_filter
+
+    fuel_types = apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all()
     rate_as_of = build_fuel_rate_lookup(FuelPrice)
 
     # All meter readings in range — value each row at its reading-date rate
-    meter_rows = MeterReading.query.filter(
-        MeterReading.reading_date >= start,
-        MeterReading.reading_date <= end,
-        MeterReading.closing_reading.isnot(None),
+    meter_rows = apply_agency_filter(
+        MeterReading.query.filter(
+            MeterReading.reading_date >= start,
+            MeterReading.reading_date <= end,
+            MeterReading.closing_reading.isnot(None),
+        ),
+        MeterReading,
     ).all()
     liters_by_fuel = {}
     amount_by_fuel = {}
@@ -365,9 +379,12 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
             diesel_sale += amount
             diesel_liters += liters
 
-    entries = CreditSale.query.filter(
-        CreditSale.sale_date >= start,
-        CreditSale.sale_date <= end,
+    entries = apply_agency_filter(
+        CreditSale.query.filter(
+            CreditSale.sale_date >= start,
+            CreditSale.sale_date <= end,
+        ),
+        CreditSale,
     ).all()
 
     other_sale = 0.0
@@ -466,9 +483,12 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     diesel_total = diesel_cash + diesel_credit
     diesel_total_liters = diesel_cash_liters + diesel_credit_liters
 
-    expenses = Expense.query.filter(
-        Expense.expense_date >= start,
-        Expense.expense_date <= end,
+    expenses = apply_agency_filter(
+        Expense.query.filter(
+            Expense.expense_date >= start,
+            Expense.expense_date <= end,
+        ),
+        Expense,
     ).order_by(Expense.expense_date.desc(), Expense.id.desc()).all()
     expense_total = sum(float(x.amount or 0) for x in expenses)
     unsettled_expense_total = sum(
@@ -477,17 +497,23 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     settled_expense_total = expense_total - unsettled_expense_total
 
     # Money returned to till on settle date (may differ from expense_date).
-    expense_settlements = Expense.query.filter(
-        Expense.is_settled.is_(True),
-        Expense.settled_date.isnot(None),
-        Expense.settled_date >= start,
-        Expense.settled_date <= end,
+    expense_settlements = apply_agency_filter(
+        Expense.query.filter(
+            Expense.is_settled.is_(True),
+            Expense.settled_date.isnot(None),
+            Expense.settled_date >= start,
+            Expense.settled_date <= end,
+        ),
+        Expense,
     ).order_by(Expense.settled_date.desc(), Expense.id.desc()).all()
     expense_return_total = sum(float(x.amount or 0) for x in expense_settlements)
 
-    payments = Payment.query.filter(
-        func.date(Payment.payment_date) >= start,
-        func.date(Payment.payment_date) <= end,
+    payments = apply_agency_filter(
+        Payment.query.filter(
+            func.date(Payment.payment_date) >= start,
+            func.date(Payment.payment_date) <= end,
+        ),
+        Payment,
     ).all()
     payments_total = sum(float(p.amount_paid or 0) for p in payments)
 
@@ -497,27 +523,38 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     purchase_total = 0.0
     purchase_start = datetime.combine(start, time.min)
     purchase_end = datetime.combine(end, time.max)
-    purchase_logs = ItemPurchaseLog.query.filter(
-        ItemPurchaseLog.entry_date >= purchase_start,
-        ItemPurchaseLog.entry_date <= purchase_end,
+    purchase_logs = apply_agency_filter(
+        ItemPurchaseLog.query.filter(
+            ItemPurchaseLog.entry_date >= purchase_start,
+            ItemPurchaseLog.entry_date <= purchase_end,
+        ),
+        ItemPurchaseLog,
     ).order_by(ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc()).all()
     for log in purchase_logs:
         purchase_total += purchase_log_total(log)
 
     # Only fall back to StockEntry if there are no fuel purchase logs at all (legacy)
     legacy_stock_entries = []
-    has_fuel_purchase_log = ItemPurchaseLog.query.filter_by(category='fuel').first() is not None
+    has_fuel_purchase_log = apply_agency_filter(
+        ItemPurchaseLog.query.filter_by(category='fuel'), ItemPurchaseLog
+    ).first() is not None
     if not has_fuel_purchase_log:
-        legacy_stock_entries = StockEntry.query.filter(
-            StockEntry.entry_date >= purchase_start,
-            StockEntry.entry_date <= purchase_end,
+        legacy_stock_entries = apply_agency_filter(
+            StockEntry.query.filter(
+                StockEntry.entry_date >= purchase_start,
+                StockEntry.entry_date <= purchase_end,
+            ),
+            StockEntry,
         ).order_by(StockEntry.entry_date.desc(), StockEntry.id.desc()).all()
         for entry in legacy_stock_entries:
             purchase_total += float(entry.cost_per_liter or 0) * float(entry.liters_added or 0)
 
-    vendor_payments = VendorPayment.query.filter(
-        func.date(VendorPayment.payment_date) >= start,
-        func.date(VendorPayment.payment_date) <= end,
+    vendor_payments = apply_agency_filter(
+        VendorPayment.query.filter(
+            func.date(VendorPayment.payment_date) >= start,
+            func.date(VendorPayment.payment_date) <= end,
+        ),
+        VendorPayment,
     ).order_by(VendorPayment.payment_date.desc(), VendorPayment.id.desc()).all()
     vendor_payments_total = sum(float(p.amount_paid or 0) for p in vendor_payments)
 
@@ -560,21 +597,29 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     cash_taken_amount = cash_taken_total(start, end)
     remaining_balance = cash_in_hand - cash_taken_amount
 
-    cash_counts = DailyCashCount.query.filter(
-        DailyCashCount.count_date >= start,
-        DailyCashCount.count_date <= end,
+    cash_counts = apply_agency_filter(
+        DailyCashCount.query.filter(
+            DailyCashCount.count_date >= start,
+            DailyCashCount.count_date <= end,
+        ),
+        DailyCashCount,
     ).all()
     counted_cash = sum(float(c.cash_in_hand or 0) for c in cash_counts)
     if start == end:
-        day_count = DailyCashCount.query.filter_by(count_date=start).first()
+        day_count = apply_agency_filter(
+            DailyCashCount.query.filter_by(count_date=start), DailyCashCount
+        ).first()
         counted_cash = float(day_count.cash_in_hand) if day_count else None
         cash_variance = (counted_cash - cash_in_hand) if counted_cash is not None else 0.0
     else:
         cash_variance = (counted_cash - cash_in_hand) if cash_counts else 0.0
 
     outstanding = float(
-        Customer.query.with_entities(
-            func.coalesce(func.sum(Customer.current_balance_due), 0)
+        apply_agency_filter(
+            Customer.query.with_entities(
+                func.coalesce(func.sum(Customer.current_balance_due), 0)
+            ),
+            Customer,
         ).scalar() or 0
     )
 

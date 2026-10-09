@@ -1,6 +1,7 @@
 import os
-from flask import Flask, redirect, url_for
-from flask_login import LoginManager
+import shutil
+from flask import Flask, redirect, url_for, send_from_directory
+from flask_login import LoginManager, current_user
 from app.models import db, User
 
 login_manager = LoginManager()
@@ -8,9 +9,23 @@ login_manager.login_view = 'auth.login'
 login_manager.login_message = None
 login_manager.login_message_category = 'warning'
 
+_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+UPLOAD_DIR = os.path.join(_BASE_DIR, 'uploads')
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+def media_url(filename, fallback='img/logo.png'):
+    """URL for an uploaded agency logo, or static fallback."""
+    if filename:
+        path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.isfile(path):
+            return url_for('uploaded_file', filename=filename)
+    return url_for('static', filename=fallback)
+
 
 def create_app():
     app = Flask(__name__)
@@ -18,6 +33,8 @@ def create_app():
     # Load configuration
     from app.config import Config
     app.config.from_object(Config)
+    app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     
     # Initialize extensions
     db.init_app(app)
@@ -38,6 +55,56 @@ def create_app():
             return "PKR 0.00"
 
     app.jinja_env.globals['CURRENCY'] = 'PKR'
+
+    @app.context_processor
+    def inject_branding():
+        brand_name = 'OctaneFlow'
+        brand_tag = 'Station OS'
+        brand_logo = None
+        brand_address = None
+        brand_phone = None
+        brand_email = None
+        agency = None
+        try:
+            from app.models import Agency
+            if current_user.is_authenticated and getattr(current_user, 'agency_id', None):
+                agency = Agency.query.get(current_user.agency_id)
+                if agency:
+                    brand_name = agency.name or brand_name
+                    brand_logo = agency.logo
+                    brand_address = agency.address
+                    brand_phone = agency.phone
+                    brand_email = agency.email
+                    brand_tag = ''
+            elif not current_user.is_authenticated:
+                agency = Agency.query.filter(
+                    Agency.name.ilike('%octane%')
+                ).order_by(Agency.id.asc()).first()
+                if agency is None:
+                    agency = Agency.query.order_by(Agency.id.asc()).first()
+                if agency:
+                    brand_name = agency.name or brand_name
+                    brand_logo = agency.logo
+                    brand_address = agency.address
+                    brand_phone = agency.phone
+                    brand_email = agency.email
+        except Exception:
+            agency = None
+        logo_url = media_url(brand_logo, 'img/logo.png')
+        return {
+            'brand_name': brand_name,
+            'brand_tag': brand_tag,
+            'brand_logo_url': logo_url,
+            'brand_favicon_url': logo_url,
+            'brand_address': brand_address,
+            'brand_phone': brand_phone,
+            'brand_email': brand_email,
+            'current_agency': agency,
+        }
+
+    @app.route('/media/uploads/<path:filename>')
+    def uploaded_file(filename):
+        return send_from_directory(UPLOAD_DIR, filename)
     
     # Register Blueprints
     from app.auth.routes import auth_bp
@@ -52,6 +119,7 @@ def create_app():
     from app.vendors import vendors_bp
     from app.account import account_bp
     from app.journal import journal_bp
+    from app.receipts import receipts_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -65,6 +133,7 @@ def create_app():
     app.register_blueprint(vendors_bp, url_prefix='/vendors')
     app.register_blueprint(expenses_bp, url_prefix='/expenses')
     app.register_blueprint(backup_bp, url_prefix='/backup')
+    app.register_blueprint(receipts_bp, url_prefix='/receipts')
     
     # Root route redirect
     @app.route('/')
@@ -75,6 +144,7 @@ def create_app():
     # price history + missing Other/FT ItemPriceLog rows (idempotent).
     with app.app_context():
         db.create_all()
+        ensure_agency_schema()
         ensure_inventory_schema()
         ensure_sales_schema()
         ensure_credit_sales_schema()
@@ -86,8 +156,10 @@ def create_app():
         ensure_item_price_log_schema()
         ensure_default_fuel_types()
         try:
+            from app.models import Agency
             from app.inventory.categories import ensure_shop_categories
-            ensure_shop_categories()
+            for ag in Agency.query.all():
+                ensure_shop_categories(agency_id=ag.id)
         except Exception as e:
             print(f'shop categories seed skipped: {e}')
         # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
@@ -100,6 +172,167 @@ def create_app():
         # Prefer: PYTHONPATH=. python scripts/migrate_liter_precision.py
         
     return app
+
+
+def ensure_agency_schema():
+    """Create agencies table, add agency_id columns, seed OctaneFlow, migrate roles."""
+    from sqlalchemy import text, inspect
+    from app.models import Agency
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+    is_mysql = str(db.engine.url).startswith('mysql')
+
+    # Create agencies via create_all already; ensure columns if table exists empty
+    if 'agencies' not in tables:
+        db.create_all()
+        inspector = inspect(db.engine)
+        tables = set(inspector.get_table_names())
+
+    tenant_tables = [
+        'users',
+        'fuel_types',
+        'fuel_prices',
+        'inventory',
+        'stock_entries',
+        'machines',
+        'meter_readings',
+        'credit_sales',
+        'expenses',
+        'daily_cash_counts',
+        'cash_taken',
+        'daily_till_balances',
+        'daily_fuel_stocks',
+        'customers',
+        'sales',
+        'payments',
+        'vendors',
+        'vendor_payments',
+        'shop_categories',
+        'other_items',
+        'item_purchase_logs',
+        'item_price_logs',
+    ]
+
+    for table in tenant_tables:
+        if table not in tables:
+            continue
+        cols = {c['name'] for c in inspector.get_columns(table)}
+        if 'agency_id' in cols:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                if is_mysql:
+                    conn.execute(text(
+                        f"ALTER TABLE `{table}` ADD COLUMN `agency_id` INT NULL"
+                    ))
+                else:
+                    conn.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN agency_id INTEGER"
+                    ))
+        except Exception as e:
+            print(f'agency_id add skip {table}: {e}')
+
+    # Seed default OctaneFlow agency (U.Technologies)
+    agency = Agency.query.filter(Agency.name.ilike('%octane%')).first()
+    if agency is None:
+        agency = Agency.query.order_by(Agency.id.asc()).first()
+    if agency is None:
+        logo_name = None
+        src = os.path.join(_BASE_DIR, 'app', 'static', 'img', 'logo.png')
+        if os.path.isfile(src):
+            logo_name = 'octaneflow_logo.png'
+            try:
+                shutil.copy2(src, os.path.join(UPLOAD_DIR, logo_name))
+            except Exception as e:
+                print(f'logo copy skipped: {e}')
+                logo_name = None
+        agency = Agency(
+            name='OctaneFlow',
+            address='U.Technologies',
+            phone='',
+            email='hello@udottechnologies.com',
+            logo=logo_name,
+            is_active=True,
+        )
+        db.session.add(agency)
+        db.session.commit()
+
+    aid = agency.id
+
+    # Migrate roles + attach users
+    for user in User.query.all():
+        changed = False
+        if user.role == 'admin':
+            user.role = 'super_admin'
+            changed = True
+        elif user.role == 'staff':
+            user.role = 'user'
+            changed = True
+        if user.agency_id is None:
+            user.agency_id = aid
+            changed = True
+        if changed:
+            db.session.add(user)
+    db.session.commit()
+
+    # Backfill agency_id on tenant rows
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+    for table in tenant_tables:
+        if table == 'users' or table not in tables:
+            continue
+        cols = {c['name'] for c in inspector.get_columns(table)}
+        if 'agency_id' not in cols:
+            continue
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    f"UPDATE {table} SET agency_id = :aid WHERE agency_id IS NULL"
+                ), {'aid': aid})
+        except Exception as e:
+            print(f'agency backfill skip {table}: {e}')
+
+    # Relax legacy global unique indexes so per-agency names can coexist
+    _drop_legacy_unique_indexes(is_mysql)
+
+
+def _drop_legacy_unique_indexes(is_mysql):
+    """Best-effort drop of old single-column unique indexes that block multi-agency."""
+    from sqlalchemy import text
+
+    # (table, likely index / constraint names)
+    targets = [
+        ('fuel_types', ['name', 'fuel_types_name_key', 'ix_fuel_types_name']),
+        ('vendors', ['name', 'vendors_name_key', 'ix_vendors_name']),
+        ('machines', ['name', 'machines_name_key', 'ix_machines_name']),
+        ('shop_categories', ['key', 'shop_categories_key_key', 'ix_shop_categories_key']),
+        ('inventory', ['fuel_type_id', 'inventory_fuel_type_id_key', 'ix_inventory_fuel_type_id']),
+        ('daily_cash_counts', ['count_date', 'daily_cash_counts_count_date_key']),
+        ('daily_till_balances', ['balance_date', 'daily_till_balances_balance_date_key']),
+    ]
+
+    try:
+        with db.engine.begin() as conn:
+            if is_mysql:
+                for table, names in targets:
+                    for idx in names:
+                        try:
+                            conn.execute(text(f"ALTER TABLE `{table}` DROP INDEX `{idx}`"))
+                        except Exception:
+                            pass
+            else:
+                # SQLite: drop indexes if present
+                for table, names in targets:
+                    for idx in names:
+                        try:
+                            conn.execute(text(f'DROP INDEX IF EXISTS "{idx}"'))
+                        except Exception:
+                            pass
+                    # SQLite auto-named unique: sqlite_autoindex_TABLE_N — leave alone;
+                    # new agencies may still collide on old UNIQUE column constraints.
+    except Exception as e:
+        print(f'unique index drop skipped: {e}')
 
 
 def ensure_liter_precision_schema():
@@ -202,30 +435,88 @@ def ensure_fuel_price_effective_at_schema():
     db.session.commit()
 
 
-def ensure_default_fuel_types():
-    """Ensure Petrol and Diesel fuel types (+ inventory rows) always exist."""
-    from app.models import FuelType, Inventory
+def ensure_default_fuel_types(agency_id=None):
+    """Ensure Petrol and Diesel fuel types (+ inventory rows) exist per agency.
+
+    If a legacy unique index on fuel_types.name blocks a second agency row,
+    reuse the shared FuelType and only create a per-agency Inventory row.
+    """
+    from sqlalchemy.exc import IntegrityError
+    from app.models import FuelType, Inventory, Agency
+
+    if agency_id is not None:
+        agencies = [agency_id]
+    else:
+        agencies = [a.id for a in Agency.query.all()]
+        if not agencies:
+            return
 
     defaults = ('Petrol', 'Diesel')
     created = False
-    for name in defaults:
-        fuel = FuelType.query.filter(db.func.lower(FuelType.name) == name.lower()).first()
-        if fuel is None:
-            fuel = FuelType(name=name, unit='Liter')
-            db.session.add(fuel)
-            db.session.flush()
-            created = True
-        inv = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
-        if inv is None:
-            db.session.add(Inventory(
-                fuel_type_id=fuel.id,
-                current_stock_liters=0,
-                reorder_threshold=0,
-            ))
-            created = True
+    for aid in agencies:
+        for name in defaults:
+            fuel = (
+                FuelType.query
+                .filter(
+                    db.func.lower(FuelType.name) == name.lower(),
+                    FuelType.agency_id == aid,
+                )
+                .first()
+            )
+            if fuel is None:
+                shared = (
+                    FuelType.query
+                    .filter(db.func.lower(FuelType.name) == name.lower())
+                    .order_by(FuelType.id.asc())
+                    .first()
+                )
+                if shared is None:
+                    fuel = FuelType(name=name, unit='Liter', agency_id=aid)
+                    db.session.add(fuel)
+                    try:
+                        db.session.flush()
+                        created = True
+                    except IntegrityError:
+                        db.session.rollback()
+                        fuel = (
+                            FuelType.query
+                            .filter(db.func.lower(FuelType.name) == name.lower())
+                            .first()
+                        )
+                else:
+                    # Share catalog row across agencies (stock is still per-agency)
+                    fuel = shared
+                    if fuel.agency_id is not None and fuel.agency_id != aid:
+                        fuel.agency_id = None  # shared catalog
+                        created = True
+                    elif fuel.agency_id is None:
+                        pass
+                    else:
+                        pass
+            inv = (
+                Inventory.query
+                .filter_by(fuel_type_id=fuel.id, agency_id=aid)
+                .first()
+            )
+            if inv is None:
+                legacy = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
+                if legacy and legacy.agency_id is None:
+                    legacy.agency_id = aid
+                    created = True
+                else:
+                    db.session.add(Inventory(
+                        fuel_type_id=fuel.id,
+                        agency_id=aid,
+                        current_stock_liters=0,
+                        reorder_threshold=0,
+                    ))
+                    created = True
 
     if created:
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
 
 
 def ensure_meter_sale_rate_schema():
@@ -292,7 +583,11 @@ def ensure_price_history_seed():
     seed_day = date(2026, 7, 12)
     revise_day = date(2026, 7, 18)
 
-    user = User.query.filter_by(role='admin').order_by(User.id.asc()).first()
+    user = (
+        User.query.filter(User.role.in_(('super_admin', 'admin')))
+        .order_by(User.id.asc())
+        .first()
+    )
     if user is None:
         user = User.query.order_by(User.id.asc()).first()
     if user is None:

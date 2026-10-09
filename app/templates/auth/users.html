@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Users — {{ brand_name }}{% endblock %}
+
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('auth.users') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search users…" value="{{ search or '' }}" autocomplete="off" aria-label="Search users">
+</form>
+{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Administration</p>
+            <h1 class="page-title">Manage Users</h1>
+        </div>
+        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            <i class="bi bi-person-plus me-2"></i> Add User &amp; Agency
+        </button>
+    </div>
+</header>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-premium">
+            <div class="card-header-premium d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="panel-title mb-0">Users</h2>
+                    <p class="panel-subtitle mb-0">Each user is attached to an agency</p>
+                </div>
+                <span class="badge badge-custom badge-staff">{{ users | length }} total</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Agency</th>
+                            <th>Phone</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="user-avatar">
+                                        {{ user.name[0] | upper }}
+                                    </div>
+                                    <span class="fw-semibold">{{ user.name }}</span>
+                                </div>
+                            </td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.agency.name if user.agency else '—' }}</td>
+                            <td>{{ user.phone or '-' }}</td>
+                            <td>
+                                <span class="badge badge-custom {% if user.role in ('super_admin', 'admin') %}badge-admin{% else %}badge-staff{% endif %}">
+                                    {% if user.role == 'super_admin' %}Super Admin{% elif user.role == 'admin' %}Admin{% else %}User{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-custom {% if user.status == 'active' %}badge-success-custom{% else %}badge-danger-custom{% endif %}">
+                                    {{ user.status | capitalize }}
+                                </span>
+                            </td>
+                            <td>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '—' }}</td>
+                            <td class="text-end">
+                                <div class="btn-group gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary border-0 edit-user-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editUserModal"
+                                            data-id="{{ user.id }}"
+                                            data-name="{{ user.name }}"
+                                            data-email="{{ user.email }}"
+                                            data-phone="{{ user.phone or '' }}"
+                                            data-agency-name="{{ user.agency.name if user.agency else '' }}"
+                                            data-agency-address="{{ user.agency.address if user.agency else '' }}"
+                                            data-agency-phone="{{ user.agency.phone if user.agency else '' }}"
+                                            data-agency-email="{{ user.agency.email if user.agency else '' }}">
+                                        <i class="bi bi-pencil-square" title="Edit"></i>
+                                    </button>
+                                    
+                                    {% if user.id != current_user.id %}
+                                    <form action="{{ url_for('auth.users') }}" method="POST" class="d-inline"
+                                          data-confirm="Are you sure you want to change this user's access?"
+                                          data-confirm-title="Change access"
+                                          data-confirm-btn="Confirm"
+                                          data-confirm-danger="0">
+                                        <input type="hidden" name="action" value="toggle_status">
+                                        <input type="hidden" name="user_id" value="{{ user.id }}">
+                                        <button type="submit" class="btn btn-sm {% if user.status == 'active' %}btn-outline-danger{% else %}btn-outline-success{% endif %} border-0">
+                                            {% if user.status == 'active' %}
+                                            <i class="bi bi-person-x" title="Disable Account"></i>
+                                            {% else %}
+                                            <i class="bi bi-person-check" title="Enable Account"></i>
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- CREATE USER + AGENCY -->
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Add User &amp; Agency</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="create">
+                <div class="modal-body py-0">
+                    <p class="text-muted small mb-3">User account</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="create_name" class="form-label form-label-custom">Username</label>
+                            <input type="text" class="form-control form-control-custom" id="create_name" name="name" required placeholder="John Doe">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create_email" class="form-label form-label-custom">Email</label>
+                            <input type="email" class="form-control form-control-custom" id="create_email" name="email" required placeholder="john@agency.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create_phone" class="form-label form-label-custom">Phone</label>
+                            <input type="text" class="form-control form-control-custom" id="create_phone" name="phone" placeholder="+92…">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create_password" class="form-label form-label-custom">Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control form-control-custom" id="create_password" name="password" required placeholder="••••••••">
+                                <button type="button" class="btn btn-outline-secondary password-toggle" data-target="create_password" aria-label="Show password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <p class="text-muted small mb-3">Agency / company</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="create_agency_name" class="form-label form-label-custom">Company name</label>
+                            <input type="text" class="form-control form-control-custom" id="create_agency_name" name="agency_name" required placeholder="Agency Trading Co.">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create_agency_phone" class="form-label form-label-custom">Company phone</label>
+                            <input type="text" class="form-control form-control-custom" id="create_agency_phone" name="agency_phone" placeholder="+92…">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create_agency_email" class="form-label form-label-custom">Company email</label>
+                            <input type="email" class="form-control form-control-custom" id="create_agency_email" name="agency_email" placeholder="info@agency.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="create_agency_logo" class="form-label form-label-custom">Logo</label>
+                            <input type="file" class="form-control form-control-custom" id="create_agency_logo" name="agency_logo" accept="image/*">
+                            <div class="form-text">Used on sidebar, favicon, and receipts.</div>
+                        </div>
+                        <div class="col-12">
+                            <label for="create_agency_address" class="form-label form-label-custom">Address</label>
+                            <textarea class="form-control form-control-custom" id="create_agency_address" name="agency_address" rows="2" placeholder="Street, city"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Create User &amp; Agency</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT USER + AGENCY -->
+<div class="modal fade" id="editUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Edit User &amp; Agency</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="user_id" id="edit_user_id">
+                <div class="modal-body py-0">
+                    <p class="text-muted small mb-3">User account</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_name" class="form-label form-label-custom">Username</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_name" name="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_email" class="form-label form-label-custom">Email (cannot change)</label>
+                            <input type="email" class="form-control form-control-custom" id="edit_email" readonly disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_phone" class="form-label form-label-custom">Phone</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_phone" name="phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_password" class="form-label form-label-custom">New password (optional)</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control form-control-custom" id="edit_password" name="password" placeholder="••••••••">
+                                <button type="button" class="btn btn-outline-secondary password-toggle" data-target="edit_password" aria-label="Show password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <p class="text-muted small mb-3">Agency / company</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_agency_name" class="form-label form-label-custom">Company name</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_agency_name" name="agency_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_agency_phone" class="form-label form-label-custom">Company phone</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_agency_phone" name="agency_phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_agency_email" class="form-label form-label-custom">Company email</label>
+                            <input type="email" class="form-control form-control-custom" id="edit_agency_email" name="agency_email">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_agency_logo" class="form-label form-label-custom">Replace logo</label>
+                            <input type="file" class="form-control form-control-custom" id="edit_agency_logo" name="agency_logo" accept="image/*">
+                        </div>
+                        <div class="col-12">
+                            <label for="edit_agency_address" class="form-label form-label-custom">Address</label>
+                            <textarea class="form-control form-control-custom" id="edit_agency_address" name="agency_address" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.edit-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
+                document.getElementById('edit_name').value = btn.getAttribute('data-name');
+                document.getElementById('edit_email').value = btn.getAttribute('data-email');
+                document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
+                document.getElementById('edit_agency_name').value = btn.getAttribute('data-agency-name') || '';
+                document.getElementById('edit_agency_address').value = btn.getAttribute('data-agency-address') || '';
+                document.getElementById('edit_agency_phone').value = btn.getAttribute('data-agency-phone') || '';
+                document.getElementById('edit_agency_email').value = btn.getAttribute('data-agency-email') || '';
+                const editPassword = document.getElementById('edit_password');
+                editPassword.value = '';
+                editPassword.type = 'password';
+            });
+        });
+
+        document.querySelectorAll('.password-toggle').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const input = document.getElementById(btn.getAttribute('data-target'));
+                if (!input) return;
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+                btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+            });
+        });
+    });
+</script>
+{% endblock %}

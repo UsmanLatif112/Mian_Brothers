@@ -1,6 +1,7 @@
 """Shared edit/delete for CreditSale, Payment, and Expense with stock + balance side effects."""
 
 from app.models import db, CreditSale, Payment, Expense, Customer, OtherItem
+from app.tenancy import require_agency_access
 from app.utils import parse_form_date, datetime_from_date
 
 
@@ -39,6 +40,7 @@ def restore_sale_stock(cs):
     item = OtherItem.query.get(cs.other_item_id)
     if not item:
         return
+    require_agency_access(item)
     if _is_ft_item(item):
         item.liters = float(item.liters or 0) + qty
     else:
@@ -76,7 +78,10 @@ def delete_credit_sale(cs):
 
     Also removes same-day overpayment Payment / Advance rows created from this sale.
     """
+    require_agency_access(cs)
     customer = Customer.query.get(cs.customer_id) if cs.customer_id else None
+    if customer:
+        require_agency_access(customer)
     et = (cs.entry_type or 'sale').lower()
     restore_sale_stock(cs)
 
@@ -117,7 +122,10 @@ def delete_credit_sale(cs):
 
 def delete_payment(payment):
     """Delete a Payment and recalc customer balance."""
+    require_agency_access(payment)
     customer = Customer.query.get(payment.customer_id)
+    if customer:
+        require_agency_access(customer)
     db.session.delete(payment)
     db.session.flush()
     if customer:
@@ -126,6 +134,7 @@ def delete_payment(payment):
 
 def delete_expense(expense):
     """Delete an Expense (settle fields go with the row)."""
+    require_agency_access(expense)
     db.session.delete(expense)
 
 
@@ -134,6 +143,7 @@ def edit_credit_sale(cs, form):
     Update a CreditSale from form data.
     form: werkzeug MultiDict / request.form-like.
     """
+    require_agency_access(cs)
     et = (cs.entry_type or 'sale').lower()
     entry_date = parse_form_date(form.get('entry_date') or form.get('sale_date'), cs.sale_date)
     note = (form.get('remarks') or form.get('note') or '').strip() or None
@@ -230,6 +240,8 @@ def edit_credit_sale(cs, form):
         raise EntryError('Customer is required when any amount is on credit.')
 
     customer = Customer.query.get(new_customer_id) if new_customer_id else None
+    if customer:
+        require_agency_access(customer)
     if credit_amt > 0 and customer and customer.credit_limit is not None:
         # Approximate check: rebuild would be exact after save; use provisional
         other = float(customer.current_balance_due or 0) - float(cs.credit_amount or 0) + credit_amt
@@ -266,6 +278,7 @@ def edit_credit_sale(cs, form):
 
 def edit_payment(payment, form):
     """Update a Payment and recalc customer balance."""
+    require_agency_access(payment)
     try:
         amt = float(form.get('amount') or form.get('amount_paid'))
         if amt <= 0:
@@ -291,6 +304,7 @@ def edit_payment(payment, form):
 
 def edit_expense(expense, form, current_user_id=None):
     """Update an Expense (including settle fields when settled)."""
+    require_agency_access(expense)
     name = (form.get('name') or '').strip()
     if not name:
         raise EntryError('Expense name is required.')

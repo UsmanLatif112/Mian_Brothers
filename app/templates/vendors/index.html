@@ -49,7 +49,7 @@
             <h2 class="panel-title mb-0">Vendor List</h2>
             <p class="panel-subtitle mb-0">Auto-added when you enter a vendor on inventory purchases</p>
         </div>
-        {% if current_user.role == 'admin' %}
+        {% if current_user.role in ('super_admin', 'admin') %}
         <form action="{{ url_for('vendors.sync_balances') }}" method="POST" class="d-inline">
             <button type="submit" class="btn btn-sm btn-outline-secondary border-0" title="Sync Balances">
                 <i class="bi bi-arrow-repeat me-1"></i><span class="btn-label"> Sync Balances</span>

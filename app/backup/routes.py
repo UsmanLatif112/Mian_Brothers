@@ -225,7 +225,7 @@ def restore_backup_file(filename):
 
 @backup_bp.route('/', methods=['GET'])
 @login_required
-@role_required('admin')
+@role_required('super_admin')
 def index():
     _cleanup_old_backups()
     backups = _list_backups()
@@ -245,7 +245,7 @@ def index():
 
 @backup_bp.route('/create', methods=['POST'])
 @login_required
-@role_required('admin')
+@role_required('super_admin')
 def create():
     try:
         _cleanup_old_backups()
@@ -258,7 +258,7 @@ def create():
 
 @backup_bp.route('/restore', methods=['POST'])
 @login_required
-@role_required('admin')
+@role_required('super_admin')
 def restore():
     filename = (request.form.get('backup_file') or '').strip()
     confirm = (request.form.get('confirm_restore') or '').strip().lower()

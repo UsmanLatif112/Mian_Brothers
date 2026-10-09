@@ -7,6 +7,7 @@ import re
 from sqlalchemy.orm import joinedload
 
 from app.models import db, ShopCategory, ShopCategoryOption, OtherItem, ItemPurchaseLog
+from app.tenancy import apply_agency_filter, stamp_agency
 
 
 SYSTEM_DEFAULTS = [
@@ -59,36 +60,68 @@ def slugify_category(name: str) -> str:
     return raw or 'category'
 
 
-def ensure_shop_categories():
-    """Create tables' seed rows (idempotent). Backfill missing system company/type options."""
+def ensure_shop_categories(agency_id=None):
+    """Create tables' seed rows (idempotent). Backfill missing system company/type options.
+
+    When agency_id is passed (boot / migrate), seed for that agency.
+    Otherwise use the current user's agency scope.
+    If a legacy unique on `key` blocks a second agency row, mark the row shared
+    (agency_id NULL) so all agencies can use the system catalog.
+    """
+    from sqlalchemy.exc import IntegrityError
+
     changed = False
     for spec in SYSTEM_DEFAULTS:
-        cat = ShopCategory.query.filter_by(key=spec['key']).first()
-        if not cat:
-            cat = ShopCategory(
-                key=spec['key'],
-                name=spec['name'],
-                unit_mode=spec['unit_mode'],
-                is_system=True,
-                is_active=True,
-                sort_order=spec['sort_order'],
-            )
-            db.session.add(cat)
-            db.session.flush()
-            changed = True
+        q = ShopCategory.query.filter_by(key=spec['key'])
+        if agency_id is not None:
+            q = q.filter_by(agency_id=agency_id)
         else:
-            if not cat.is_system:
-                cat.is_system = True
-                changed = True
-            if not cat.is_active:
-                cat.is_active = True
-                changed = True
-            if not cat.name:
-                cat.name = spec['name']
-                changed = True
-            if not cat.unit_mode:
-                cat.unit_mode = spec['unit_mode']
-                changed = True
+            q = apply_agency_filter(q, ShopCategory)
+        cat = q.first()
+        if not cat:
+            # Shared / other-agency row with same key (legacy unique)
+            shared = ShopCategory.query.filter_by(key=spec['key']).first()
+            if shared is not None:
+                if shared.agency_id not in (None, agency_id):
+                    shared.agency_id = None
+                    changed = True
+                cat = shared
+            else:
+                cat = ShopCategory(
+                    key=spec['key'],
+                    name=spec['name'],
+                    unit_mode=spec['unit_mode'],
+                    is_system=True,
+                    is_active=True,
+                    sort_order=spec['sort_order'],
+                    agency_id=agency_id,
+                )
+                if agency_id is None:
+                    stamp_agency(cat)
+                db.session.add(cat)
+                try:
+                    db.session.flush()
+                    changed = True
+                except IntegrityError:
+                    db.session.rollback()
+                    cat = ShopCategory.query.filter_by(key=spec['key']).first()
+                    if cat and cat.agency_id not in (None, agency_id):
+                        cat.agency_id = None
+                        changed = True
+        if not cat:
+            continue
+        if not cat.is_system:
+            cat.is_system = True
+            changed = True
+        if not cat.is_active:
+            cat.is_active = True
+            changed = True
+        if not cat.name:
+            cat.name = spec['name']
+            changed = True
+        if not cat.unit_mode:
+            cat.unit_mode = spec['unit_mode']
+            changed = True
 
         for kind, names in (('company', spec['companies']), ('type', spec['types'])):
             for name in names:
@@ -105,13 +138,19 @@ def ensure_shop_categories():
 
 
 def list_active_categories():
-    return (
+    from sqlalchemy import or_
+    from app.tenancy import agency_scope
+
+    q = (
         ShopCategory.query
         .options(joinedload(ShopCategory.options))
         .filter_by(is_active=True)
-        .order_by(ShopCategory.sort_order.asc(), ShopCategory.name.asc())
-        .all()
     )
+    aid = agency_scope()
+    if aid is not None:
+        # Own agency rows + shared system catalog (agency_id NULL)
+        q = q.filter(or_(ShopCategory.agency_id == aid, ShopCategory.agency_id.is_(None)))
+    return q.order_by(ShopCategory.sort_order.asc(), ShopCategory.name.asc()).all()
 
 
 def category_payload(cat: ShopCategory) -> dict:
@@ -140,9 +179,11 @@ def category_payload(cat: ShopCategory) -> dict:
 
 def category_has_linked_activity(cat: ShopCategory) -> bool:
     """True if category key is used by stock or purchase history."""
-    if OtherItem.query.filter_by(category=cat.key).first():
+    if apply_agency_filter(OtherItem.query.filter_by(category=cat.key), OtherItem).first():
         return True
-    if ItemPurchaseLog.query.filter_by(category=cat.key).first():
+    if apply_agency_filter(
+        ItemPurchaseLog.query.filter_by(category=cat.key), ItemPurchaseLog
+    ).first():
         return True
     return False
 
@@ -153,23 +194,35 @@ def option_has_linked_activity(opt: ShopCategoryOption) -> bool:
     if not cat:
         return False
     if opt.kind == 'company':
-        if OtherItem.query.filter_by(category=cat.key, company=opt.name).first():
+        if apply_agency_filter(
+            OtherItem.query.filter_by(category=cat.key, company=opt.name), OtherItem
+        ).first():
             return True
-        if ItemPurchaseLog.query.filter_by(category=cat.key, company=opt.name).first():
+        if apply_agency_filter(
+            ItemPurchaseLog.query.filter_by(category=cat.key, company=opt.name),
+            ItemPurchaseLog,
+        ).first():
             return True
     elif opt.kind == 'type':
-        if OtherItem.query.filter_by(category=cat.key, item_type=opt.name).first():
+        if apply_agency_filter(
+            OtherItem.query.filter_by(category=cat.key, item_type=opt.name), OtherItem
+        ).first():
             return True
-        if ItemPurchaseLog.query.filter_by(category=cat.key, item_type=opt.name).first():
+        if apply_agency_filter(
+            ItemPurchaseLog.query.filter_by(category=cat.key, item_type=opt.name),
+            ItemPurchaseLog,
+        ).first():
             return True
     return False
 
 
 def unique_category_key(base: str) -> str:
     key = slugify_category(base)
-    if not ShopCategory.query.filter_by(key=key).first():
+    if not apply_agency_filter(ShopCategory.query.filter_by(key=key), ShopCategory).first():
         return key
     n = 2
-    while ShopCategory.query.filter_by(key=f'{key}_{n}').first():
+    while apply_agency_filter(
+        ShopCategory.query.filter_by(key=f'{key}_{n}'), ShopCategory
+    ).first():
         n += 1
     return f'{key}_{n}'

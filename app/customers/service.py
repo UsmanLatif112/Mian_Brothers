@@ -1,6 +1,7 @@
 """Customer balance helpers — rebuild due from ledger sources of truth."""
 
 from app.models import db, Customer, CreditSale, Payment, Sale
+from app.tenancy import stamp_agency
 from app.utils import parse_form_date
 
 
@@ -54,11 +55,12 @@ def register_customer(data, recorded_by=None):
         credit_limit=limit_val,
         current_balance_due=0,
     )
+    stamp_agency(customer)
     db.session.add(customer)
     db.session.flush()
 
     if prev_credit > 0:
-        db.session.add(CreditSale(
+        db.session.add(stamp_agency(CreditSale(
             customer_id=customer.id,
             sale_date=entry_date,
             liters=0,
@@ -69,9 +71,9 @@ def register_customer(data, recorded_by=None):
             payment_status='unpaid',
             remarks='Previous / opening book credit',
             recorded_by=recorded_by,
-        ))
+        )))
     elif prev_credit < 0:
-        db.session.add(CreditSale(
+        db.session.add(stamp_agency(CreditSale(
             customer_id=customer.id,
             sale_date=entry_date,
             liters=0,
@@ -82,7 +84,7 @@ def register_customer(data, recorded_by=None):
             payment_status='paid',
             remarks='Previous / opening advance',
             recorded_by=recorded_by,
-        ))
+        )))
 
     db.session.flush()
     recalculate_customer_balance(customer)

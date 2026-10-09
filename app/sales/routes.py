@@ -5,6 +5,7 @@ from app.models import (
     db, FuelType, FuelPrice, Inventory, MeterReading, Customer,
     Machine, CreditSale, OtherItem, Expense, Payment, DailyCashCount
 )
+from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
     paginate, parse_form_date, datetime_from_date, infer_sale_overpayments,
@@ -30,8 +31,10 @@ def _fuel_rate(fuel_type_id, as_of_date=None):
 
 def _machines_for_fuel(fuel_type_id):
     return (
-        Machine.query
-        .filter_by(fuel_type_id=fuel_type_id, is_active=True)
+        apply_agency_filter(
+            Machine.query.filter_by(fuel_type_id=fuel_type_id, is_active=True),
+            Machine,
+        )
         .order_by(Machine.name.asc())
         .all()
     )
@@ -57,16 +60,16 @@ def _apply_sale_overpayment(customer, overpayment, sale_day, item_label, recorde
     advance_amt = max(overpayment - cleared, 0.0)
 
     if cleared > 0:
-        db.session.add(Payment(
+        db.session.add(stamp_agency(Payment(
             customer_id=customer.id,
             amount_paid=cleared,
             payment_date=datetime_from_date(sale_day),
             method='Cash',
             note=f'Overpayment from sale ({item_label}) — cleared due',
-        ))
+        )))
 
     if advance_amt > 0:
-        db.session.add(CreditSale(
+        db.session.add(stamp_agency(CreditSale(
             customer_id=customer.id,
             sale_date=sale_day,
             liters=0,
@@ -77,7 +80,7 @@ def _apply_sale_overpayment(customer, overpayment, sale_day, item_label, recorde
             payment_status='paid',
             remarks=f'Overpayment from sale ({item_label})',
             recorded_by=recorded_by,
-        ))
+        )))
 
     return cleared, advance_amt
 
@@ -139,6 +142,7 @@ def index():
             if not fuel_type:
                 flash('Fuel type not found.', 'danger')
                 return _sales_redirect()
+            require_agency_access(fuel_type)
 
             machines = _machines_for_fuel(fuel_type.id)
             if len(machines) < 1:
@@ -240,7 +244,7 @@ def index():
                         opening, latest.closing_reading
                     ):
                         # Next segment after price change — append
-                        db.session.add(MeterReading(
+                        db.session.add(stamp_agency(MeterReading(
                             machine_id=machine.id,
                             dispenser_nozzle_id=machine.name,
                             fuel_type_id=fuel_type.id,
@@ -252,10 +256,10 @@ def index():
                             recorded_by=current_user.id,
                             closed_by=current_user.id,
                             closed_at=datetime.utcnow(),
-                        ))
+                        )))
                         stock_delta += liters
                     elif not latest:
-                        db.session.add(MeterReading(
+                        db.session.add(stamp_agency(MeterReading(
                             machine_id=machine.id,
                             dispenser_nozzle_id=machine.name,
                             fuel_type_id=fuel_type.id,
@@ -267,7 +271,7 @@ def index():
                             recorded_by=current_user.id,
                             closed_by=current_user.id,
                             closed_at=datetime.utcnow(),
-                        ))
+                        )))
                         stock_delta += liters
                     elif len(readings) == 1:
                         # Legacy single-row replace for the day
@@ -351,6 +355,8 @@ def index():
             if customer_id and not customer:
                 flash('Customer not found.', 'danger')
                 return _sales_redirect()
+            if customer:
+                require_agency_access(customer)
 
             fuel_type = None
             other_item = None
@@ -363,6 +369,7 @@ def index():
                 if not fuel_type:
                     flash('Fuel type not found.', 'danger')
                     return _sales_redirect()
+                require_agency_access(fuel_type)
                 rate = _fuel_rate(fuel_type.id, as_of_date=datetime_from_date(sale_day))
                 item_label = fuel_type.name
                 if not rate:
@@ -373,6 +380,7 @@ def index():
                 if not other_item:
                     flash('Shop item not found.', 'danger')
                     return _sales_redirect()
+                require_agency_access(other_item)
                 if other_item.category == 'ft_mobile':
                     flash('Use the FT Sale card for FT Mobile Oil.', 'warning')
                     return _sales_redirect()
@@ -470,7 +478,7 @@ def index():
                         )
                         return _sales_redirect()
 
-            db.session.add(CreditSale(
+            db.session.add(stamp_agency(CreditSale(
                 customer_id=customer.id if customer else None,
                 fuel_type_id=fuel_type.id if fuel_type else None,
                 other_item_id=other_item.id if other_item else None,
@@ -485,7 +493,7 @@ def index():
                 payment_status=payment_status,
                 remarks=remarks,
                 recorded_by=current_user.id
-            ))
+            )))
             db.session.flush()
 
             cleared_due = 0.0
@@ -552,11 +560,14 @@ def index():
             if customer_id and not customer:
                 flash('Customer not found.', 'danger')
                 return _sales_redirect()
+            if customer:
+                require_agency_access(customer)
 
             other_item = OtherItem.query.get(item_id)
             if not other_item or other_item.category != 'ft_mobile':
                 flash('FT Mobile Oil item not found.', 'danger')
                 return _sales_redirect()
+            require_agency_access(other_item)
 
             rate = float(other_item.sale_price or 0)
             cost_rate = float(other_item.cost_price or 0)
@@ -616,7 +627,7 @@ def index():
 
             other_item.liters = available - liters_val
 
-            db.session.add(CreditSale(
+            db.session.add(stamp_agency(CreditSale(
                 customer_id=customer.id if customer else None,
                 fuel_type_id=None,
                 other_item_id=other_item.id,
@@ -630,7 +641,7 @@ def index():
                 payment_status=payment_status,
                 remarks=remarks or f'FT sale · cost {cost_rate:.2f}/L',
                 recorded_by=current_user.id,
-            ))
+            )))
             db.session.commit()
 
             who = customer.name if customer else 'Walk-in'
@@ -659,18 +670,20 @@ def index():
                 flash(f'Invalid cash amount: {e}', 'danger')
                 return _sales_redirect()
 
-            row = DailyCashCount.query.filter_by(count_date=today).first()
+            row = apply_agency_filter(
+                DailyCashCount.query.filter_by(count_date=today), DailyCashCount
+            ).first()
             if row:
                 row.cash_in_hand = cash_val
                 row.note = note
                 row.recorded_by = current_user.id
             else:
-                db.session.add(DailyCashCount(
+                db.session.add(stamp_agency(DailyCashCount(
                     count_date=today,
                     cash_in_hand=cash_val,
                     note=note,
                     recorded_by=current_user.id,
-                ))
+                )))
             db.session.commit()
             flash(f'Cash in hand for today set to PKR {cash_val:,.2f}.', 'success')
             return _sales_redirect()
@@ -681,6 +694,7 @@ def index():
             if not entry:
                 flash('Entry not found.', 'danger')
                 return _sales_redirect()
+            require_agency_access(entry)
             try:
                 edit_credit_sale(entry, request.form)
                 db.session.commit()
@@ -695,6 +709,7 @@ def index():
             if not entry:
                 flash('Entry not found.', 'danger')
                 return _sales_redirect()
+            require_agency_access(entry)
             try:
                 label = f'{entry.entry_type} #{entry.id}'
                 delete_credit_sale(entry)
@@ -709,14 +724,13 @@ def index():
         return _sales_redirect()
 
     # GET
-    fuel_types = FuelType.query.order_by(FuelType.name.asc()).all()
+    fuel_types = apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all()
     fuel_prices = {ft.id: _fuel_rate(ft.id) or 0.0 for ft in fuel_types}
     machines_by_fuel = {ft.id: _machines_for_fuel(ft.id) for ft in fuel_types}
 
     today_readings = {}
     for r in (
-        MeterReading.query
-        .filter_by(reading_date=today)
+        apply_agency_filter(MeterReading.query.filter_by(reading_date=today), MeterReading)
         .order_by(MeterReading.id.asc())
         .all()
     ):
@@ -724,16 +738,20 @@ def index():
             # Keep latest segment per machine for form prefill
             today_readings[r.machine_id] = r
 
-    customers = Customer.query.order_by(Customer.name.asc()).all()
+    customers = apply_agency_filter(Customer.query, Customer).order_by(Customer.name.asc()).all()
     shop_items = (
-        OtherItem.query
-        .filter(OtherItem.category != 'ft_mobile')
+        apply_agency_filter(
+            OtherItem.query.filter(OtherItem.category != 'ft_mobile'),
+            OtherItem,
+        )
         .order_by(OtherItem.category.asc(), OtherItem.name.asc())
         .all()
     )
     ft_items = (
-        OtherItem.query
-        .filter_by(category='ft_mobile')
+        apply_agency_filter(
+            OtherItem.query.filter_by(category='ft_mobile'),
+            OtherItem,
+        )
         .order_by(OtherItem.name.asc())
         .all()
     )
@@ -753,7 +771,9 @@ def index():
         include_opening_credit=(period == 'all'),
     )
 
-    day_cash = DailyCashCount.query.filter_by(count_date=today).first()
+    day_cash = apply_agency_filter(
+        DailyCashCount.query.filter_by(count_date=today), DailyCashCount
+    ).first()
 
     entries_page = request.args.get('page', 1)
     entry_type = (request.args.get('entry_type') or 'all').strip().lower()
@@ -825,6 +845,7 @@ def quick_customer():
     if not name:
         return jsonify({'ok': False, 'error': 'Name is required'}), 400
     customer = Customer(name=name, phone=phone, current_balance_due=0)
+    stamp_agency(customer)
     db.session.add(customer)
     db.session.commit()
     label = f"{customer.name}{' · ' + customer.phone if customer.phone else ''} (Due: PKR 0.00)"
@@ -838,13 +859,16 @@ def quick_fuel():
     name = (data.get('name') or '').strip()
     if not name:
         return jsonify({'ok': False, 'error': 'Fuel name is required'}), 400
-    for ft in FuelType.query.all():
+    for ft in apply_agency_filter(FuelType.query, FuelType, include_shared=True).all():
         if ft.name.lower() == name.lower():
             return jsonify({'ok': True, 'id': ft.id, 'text': ft.name, 'rate': _fuel_rate(ft.id) or 0})
     fuel = FuelType(name=name, unit='Liter')
+    stamp_agency(fuel)
     db.session.add(fuel)
     db.session.flush()
-    db.session.add(Inventory(fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0))
+    db.session.add(stamp_agency(Inventory(
+        fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0
+    )))
     db.session.commit()
     return jsonify({'ok': True, 'id': fuel.id, 'text': fuel.name, 'rate': 0})
 
@@ -867,6 +891,7 @@ def quick_item():
         cost_price=0,
         quantity=0,
     )
+    stamp_agency(item)
     db.session.add(item)
     db.session.commit()
     text = f"Other — {item.display_name()} (PKR {sale_price:,.2f}) · 0 left"
@@ -890,9 +915,11 @@ def quick_machine():
     fuel = FuelType.query.get(fuel_type_id)
     if not fuel:
         return jsonify({'ok': False, 'error': 'Fuel type not found'}), 404
-    if Machine.query.filter_by(name=name).first():
+    require_agency_access(fuel)
+    if apply_agency_filter(Machine.query.filter_by(name=name), Machine).first():
         return jsonify({'ok': False, 'error': 'Machine name already exists'}), 400
     machine = Machine(name=name, fuel_type_id=fuel.id, is_active=True)
+    stamp_agency(machine)
     db.session.add(machine)
     db.session.commit()
     return jsonify({

@@ -154,25 +154,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
                         <td>
                             <div class="btn-group gap-1">
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-secondary border-0"
-                                    title="Print receipt"
-                                    data-of-receipt
-                                    data-receipt-sub="Customer Receipt"
-                                    data-receipt-title="Ledger"
-                                    data-receipt-ref="{{ entry.ref_id }}"
-                                    data-receipt-date="{{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '—' }}"
-                                    data-receipt-party-label="Customer"
-                                    data-receipt-party="{{ customer.name }}"
-                                    data-receipt-desc="{{ entry.desc }}"
-                                    data-receipt-status="{{ (entry.payment_status or entry.pay_type or '—')|upper }}"
-                                    data-receipt-amount="{% if entry.debit > 0 %}{{ entry.debit | money }}{% else %}{{ entry.credit | money }}{% endif %}"
-                                    data-receipt-total="{% if entry.debit > 0 %}{{ entry.debit | money }}{% else %}{{ entry.credit | money }}{% endif %}"
-                                    data-receipt-paid="{% if entry.credit > 0 %}{{ entry.credit | money }}{% else %}0.00{% endif %}"
-                                    data-receipt-due="{{ entry.running_balance | money }}">
+                                {% if entry.source_type == 'payment' %}
+                                <a href="{{ url_for('receipts.customer_payment', payment_id=entry.source_id) }}"
+                                   class="btn btn-sm btn-outline-secondary border-0"
+                                   title="View receipt" target="_blank" rel="noopener">
                                     <i class="bi bi-printer"></i>
-                                </button>
+                                </a>
+                                {% elif entry.source_type in ('credit_sale', 'legacy_sale') %}
+                                <a href="{{ url_for('receipts.sale', sale_id=entry.source_id) }}"
+                                   class="btn btn-sm btn-outline-secondary border-0"
+                                   title="View receipt" target="_blank" rel="noopener">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                                {% endif %}
                                 {% if entry.can_edit %}
                                 <button
                                     type="button"
