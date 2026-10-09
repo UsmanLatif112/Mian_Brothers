@@ -856,9 +856,43 @@ def build_period_cash_entries(stats):
             other_item=None,
         ))
 
+    AUTO_INV_PAY = 'Paid with inventory purchase:'
+    vendor_payments = list(stats.get('vendor_payments') or [])
+    absorbed_vendor_pay_ids = set()
+
+    def _match_inventory_auto_payment(log, amount):
+        item = (log.item_name or '').strip().lower()
+        for vp in vendor_payments:
+            if vp.id in absorbed_vendor_pay_ids:
+                continue
+            note = (vp.note or '').strip()
+            if not note.startswith(AUTO_INV_PAY):
+                continue
+            if abs(float(vp.amount_paid or 0) - amount) > 0.02:
+                continue
+            if item and item not in note.lower():
+                continue
+            return vp
+        # Amount-only fallback when item text differs slightly
+        for vp in vendor_payments:
+            if vp.id in absorbed_vendor_pay_ids:
+                continue
+            note = (vp.note or '').strip()
+            if note.startswith(AUTO_INV_PAY) and abs(float(vp.amount_paid or 0) - amount) <= 0.02:
+                return vp
+        return None
+
+    # Paid inventory adds → one cash-out journal line per product.
+    # Unpaid inventory stays on the vendor ledger only (no till cash).
     for log in stats.get('purchase_logs') or []:
         amt = purchase_log_total(log)
-        entry_dt = log.entry_date
+        if amt <= 0:
+            continue
+        auto_pay = _match_inventory_auto_payment(log, amt)
+        if not auto_pay:
+            continue
+        absorbed_vendor_pay_ids.add(auto_pay.id)
+        entry_dt = log.entry_date or auto_pay.payment_date
         sale_date = entry_dt.date() if hasattr(entry_dt, 'date') else entry_dt
         vendor = getattr(log, 'vendor_ref', None)
         rows.append(SimpleNamespace(
@@ -872,48 +906,21 @@ def build_period_cash_entries(stats):
             liters=_purchase_log_qty(log),
             amount=amt,
             discount=0,
-            amount_paid=0,
+            amount_paid=amt,
             overpayment=0,
-            credit_amount=amt,
-            other_amount=amt,
-            other_kind='due',
-            payment_status='payable',
-            cash_direction='none',
+            credit_amount=0,
+            other_amount=0,
+            other_kind='none',
+            payment_status='paid',
+            cash_direction='out',
             is_fuel=(log.category == 'fuel'),
             other_item=None,
             purchase_category=log.category,
         ))
 
-    for entry in stats.get('legacy_stock_entries') or []:
-        amt = float(entry.cost_per_liter or 0) * float(entry.liters_added or 0)
-        entry_dt = entry.entry_date
-        sale_date = entry_dt.date() if hasattr(entry_dt, 'date') else entry_dt
-        vendor = getattr(entry, 'vendor_ref', None)
-        fuel_name = entry.fuel_type.name if getattr(entry, 'fuel_type', None) else 'Fuel'
-        rows.append(SimpleNamespace(
-            id=entry.id,
-            sale_date=sale_date,
-            entry_type='purchase',
-            customer=None,
-            vendor=vendor,
-            vendor_name=(vendor.name if vendor else (entry.supplier or '—')),
-            item_name=f"{fuel_name} — {float(entry.liters_added or 0):,.2f} L @ PKR {float(entry.cost_per_liter or 0):,.2f}",
-            liters=float(entry.liters_added or 0),
-            amount=amt,
-            discount=0,
-            amount_paid=0,
-            overpayment=0,
-            credit_amount=amt,
-            other_amount=amt,
-            other_kind='due',
-            payment_status='payable',
-            cash_direction='none',
-            is_fuel=True,
-            other_item=None,
-            purchase_category='fuel',
-        ))
-
-    for vp in stats.get('vendor_payments') or []:
+    for vp in vendor_payments:
+        if vp.id in absorbed_vendor_pay_ids:
+            continue
         pay_dt = vp.payment_date
         sale_date = pay_dt.date() if hasattr(pay_dt, 'date') else pay_dt
         method = (vp.method or 'Cash').strip()

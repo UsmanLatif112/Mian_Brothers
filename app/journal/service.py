@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 # User rules:
 #   IN  — customer settle/payment, customer advance, expense settle
-#   OUT — vendor payment / vendor advance, customer loan, expenses, cash taken
+#   OUT — paid inventory purchase, vendor payment, customer loan, expenses, cash taken
 # Excluded — opening balance, unpaid purchases (payable via vendor ledger), sales lines
 JOURNAL_DIRECTION = {
     'payment': 'in',
@@ -13,6 +13,7 @@ JOURNAL_DIRECTION = {
     'settle': 'in',
     'loan': 'out',
     'expense': 'out',
+    'purchase': 'out',
     'vendor_pay': 'out',
     'cash_taken': 'out',
 }
@@ -24,6 +25,7 @@ JOURNAL_TYPE_LABELS = {
     'settle': 'Expense settle',
     'loan': 'Customer loan',
     'expense': 'Expense',
+    'purchase': 'Inventory purchase',
     'vendor_pay': 'Vendor payment',
     'cash_taken': 'Cash taken',
 }
@@ -33,6 +35,7 @@ TYPE_FILTER_CHOICES = (
     ('payment', 'Customer settle'),
     ('advance', 'Customer advance'),
     ('loan', 'Customer loan'),
+    ('purchase', 'Inventory purchase'),
     ('vendor_pay', 'Vendor payment'),
     ('expense', 'Expense'),
     ('settle', 'Expense settle'),
@@ -53,6 +56,9 @@ def _row_cash_amount(row):
     if not direction:
         return 0.0
     if et in ('payment', 'advance', 'overpay', 'settle'):
+        amt = float(getattr(row, 'amount_paid', 0) or getattr(row, 'amount', 0) or 0)
+    elif et == 'purchase':
+        # Paid inventory only (unpaid never reaches the journal)
         amt = float(getattr(row, 'amount_paid', 0) or getattr(row, 'amount', 0) or 0)
     else:
         amt = float(getattr(row, 'amount', 0) or getattr(row, 'amount_paid', 0) or 0)

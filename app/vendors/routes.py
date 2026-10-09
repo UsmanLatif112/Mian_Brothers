@@ -257,8 +257,8 @@ def ledger(vendor_id):
         VendorPayment.payment_date.asc(), VendorPayment.id.asc()
     ).all()
 
-    # Paid-with-purchase: one statement line (never purchase + payment separately).
-    # Same-minute paid batches for this vendor collapse into a single combined row.
+    # One statement line per product. Paid-with-purchase merges buy + settle
+    # on that same row (no extra payment line). Products are never combined.
     used_payment_ids = set()
 
     def _qty_desc(log):
@@ -271,16 +271,6 @@ def ledger(vendor_id):
         if log.company:
             desc = f"{log.company} {desc}"
         return desc
-
-    def _minute_key(dt):
-        if not dt or dt is datetime.min:
-            return None
-        if hasattr(dt, 'replace'):
-            try:
-                return dt.replace(second=0, microsecond=0)
-            except TypeError:
-                return dt
-        return dt
 
     def _match_auto_payment(log, amount):
         item = (log.item_name or '').strip()
@@ -314,57 +304,33 @@ def ledger(vendor_id):
             'can_edit': True,
         }
 
-    unpaid_rows = []
-    paid_buckets = {}  # minute_key -> list of dicts
-
     for log in purchases:
         amount = purchase_log_total(log)
+        desc = _purchase_desc(log)
         auto_pay = _match_auto_payment(log, amount) if amount > 0 else None
         if auto_pay:
             used_payment_ids.add(auto_pay.id)
-            key = _minute_key(log.entry_date or auto_pay.payment_date) or id(log)
-            paid_buckets.setdefault(key, []).append({
-                'log': log,
-                'amount': amount,
-                'pay': auto_pay,
-                'desc': _purchase_desc(log),
-            })
+            entry = {
+                'date': log.entry_date or auto_pay.payment_date or datetime.min,
+                'type': 'purchase',
+                'desc': f"{desc} · Paid",
+                'debit': amount,
+                'credit': amount,
+                'ref_id': f"Purchase #{log.id}",
+                'pay_type': 'paid',
+            }
+            entry.update(_pay_meta(auto_pay))
+            ledger_entries.append(entry)
         else:
-            unpaid_rows.append({
+            ledger_entries.append({
                 'date': log.entry_date or datetime.min,
                 'type': 'purchase',
-                'desc': _purchase_desc(log),
+                'desc': desc,
                 'debit': amount,
                 'credit': 0.0,
                 'ref_id': f"Purchase #{log.id}",
                 'pay_type': log.category,
             })
-
-    for bucket in paid_buckets.values():
-        total = sum(b['amount'] for b in bucket)
-        first = bucket[0]
-        last = bucket[-1]
-        ids = [str(b['log'].id) for b in bucket]
-        if len(bucket) == 1:
-            desc = f"{first['desc']} · Paid"
-            ref = f"Purchase #{first['log'].id}"
-        else:
-            names = [b['desc'] for b in bucket]
-            desc = f"{' · '.join(names)} · Paid"
-            ref = f"Purchase #{ids[0]}–#{ids[-1]}" if len(ids) > 1 else f"Purchase #{ids[0]}"
-        entry = {
-            'date': first['log'].entry_date or first['pay'].payment_date or datetime.min,
-            'type': 'purchase',
-            'desc': desc,
-            'debit': total,
-            'credit': total,
-            'ref_id': ref,
-            'pay_type': 'paid',
-        }
-        entry.update(_pay_meta(last['pay']))
-        ledger_entries.append(entry)
-
-    ledger_entries.extend(unpaid_rows)
 
     for pay in payments:
         if pay.id in used_payment_ids:

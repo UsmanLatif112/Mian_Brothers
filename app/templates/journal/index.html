@@ -80,7 +80,7 @@
                 <span class="journal-kpi-label">Cash Out</span>
             </div>
             <div class="journal-kpi-value">{{ total_out | money }}</div>
-            <div class="journal-kpi-meta">Vendors · loans · expenses</div>
+            <div class="journal-kpi-meta">Inventory · vendors · loans · expenses</div>
         </article>
         <article class="journal-kpi journal-kpi-net {% if net >= 0 %}is-positive{% else %}is-negative{% endif %}">
             <div class="journal-kpi-top">
@@ -97,6 +97,7 @@
             ('payment', 'Settle'),
             ('advance', 'Advance'),
             ('loan', 'Loan'),
+            ('purchase', 'Inventory'),
             ('vendor_pay', 'Vendor'),
             ('expense', 'Expense'),
             ('settle', 'Exp. settle'),
