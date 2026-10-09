@@ -1,5 +1,6 @@
 {# Register Vendor — reusable (vendors page + inventory quick-add) #}
-<div class="modal fade of-quick-create-modal" id="createVendorModal" tabindex="-1" aria-hidden="true" data-bs-focus="false">
+<div class="modal fade of-quick-create-modal" id="createVendorModal" tabindex="-1" aria-hidden="true"
+     data-bs-focus="false" data-bs-backdrop="static" data-bs-keyboard="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
             <form action="{{ url_for('vendors.index') }}" method="POST"

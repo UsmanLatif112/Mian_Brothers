@@ -1199,8 +1199,12 @@ select.form-control-custom:disabled {
 }
 
 /* Nested Register Vendor/Customer over inventory/sales modals */
-.modal.of-quick-create-modal {
-    z-index: 1065;
+.modal.of-quick-create-modal.show {
+    z-index: 1080;
+}
+
+.modal-backdrop.of-nested-backdrop {
+    z-index: 1075;
 }
 
 /* Dropdown panel */

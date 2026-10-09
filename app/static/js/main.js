@@ -643,15 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.json();
     }
 
-    /* —— Plus-button Register Vendor / Customer (AJAX + TomSelect cascade) —— */
+    /* —— Plus-button Register Vendor / Customer (nested modal; parent stays open) —— */
     let ofQuickSelectTarget = null;
-
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest && e.target.closest('[data-of-select-target]');
-        if (!btn) return;
-        const sel = document.querySelector(btn.getAttribute('data-of-select-target'));
-        ofQuickSelectTarget = sel || null;
-    }, true);
 
     function ofAddOptionToSelects(selector, option) {
         const id = String(option.id);
@@ -703,22 +696,109 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function ofStackQuickModal(modalEl) {
-        if (!modalEl) return;
-        const openCount = document.querySelectorAll('.modal.show').length;
-        if (openCount <= 1) return;
-        const z = 1055 + openCount * 20;
-        modalEl.style.zIndex = String(z);
+    function ofRestoreParentModal(parentEl) {
+        if (!parentEl) return;
+        parentEl.classList.add('show');
+        parentEl.style.display = 'block';
+        parentEl.removeAttribute('aria-hidden');
+        parentEl.setAttribute('aria-modal', 'true');
+        document.body.classList.add('modal-open');
+        // Keep at least one backdrop under the parent
+        if (!document.querySelector('.modal-backdrop')) {
+            const back = document.createElement('div');
+            back.className = 'modal-backdrop fade show';
+            document.body.appendChild(back);
+        }
+    }
+
+    function ofStackNestedModal(childEl) {
+        if (!childEl) return;
+        const z = 1080;
+        childEl.style.zIndex = String(z);
         setTimeout(() => {
             const backs = document.querySelectorAll('.modal-backdrop');
             const last = backs[backs.length - 1];
-            if (last) last.style.zIndex = String(z - 5);
-        }, 0);
+            if (last) {
+                last.classList.add('of-nested-backdrop');
+                last.style.zIndex = String(z - 5);
+            }
+        }, 10);
     }
 
-    document.addEventListener('show.bs.modal', (e) => {
-        if (e.target && e.target.classList.contains('of-quick-create-modal')) {
-            ofStackQuickModal(e.target);
+    function ofOpenQuickCreateModal(childEl, parentEl) {
+        if (!childEl || !window.bootstrap) return;
+        if (parentEl) {
+            childEl.dataset.ofNestedParent = parentEl.id || '1';
+            // Block parent from closing while nested register is open
+            parentEl.dataset.ofNestedLock = '1';
+        } else {
+            delete childEl.dataset.ofNestedParent;
+        }
+        const inst = bootstrap.Modal.getOrCreateInstance(childEl, {
+            backdrop: 'static',
+            keyboard: true,
+            focus: false,
+        });
+        inst.show();
+        if (parentEl) ofStackNestedModal(childEl);
+    }
+
+    // Plus button: open register modal ON TOP — never close inventory/sale modal
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('[data-of-create-modal]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const selectSel = btn.getAttribute('data-of-select-target');
+        ofQuickSelectTarget = selectSel ? document.querySelector(selectSel) : null;
+
+        const child = document.querySelector(btn.getAttribute('data-of-create-modal'));
+        const parent = btn.closest('.modal');
+        ofOpenQuickCreateModal(child, parent && parent.classList.contains('show') ? parent : null);
+    }, true);
+
+    // Prevent parent inventory/sale modal from closing while nested create is open
+    document.addEventListener('hide.bs.modal', (e) => {
+        const modal = e.target;
+        if (!modal || !modal.dataset) return;
+        if (modal.dataset.ofNestedLock === '1' && document.querySelector('.of-quick-create-modal.show')) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    });
+
+    // After nested create closes: keep parent open + restore scroll lock / backdrop
+    document.addEventListener('hidden.bs.modal', (e) => {
+        const child = e.target;
+        if (!child || !child.classList.contains('of-quick-create-modal')) return;
+
+        const parentId = child.dataset.ofNestedParent;
+        delete child.dataset.ofNestedParent;
+        child.style.zIndex = '';
+
+        document.querySelectorAll('.modal-backdrop.of-nested-backdrop').forEach((b) => b.remove());
+
+        if (!parentId) return;
+        const parent = parentId === '1'
+            ? document.querySelector('.modal.show')
+            : document.getElementById(parentId);
+        if (parent) {
+            delete parent.dataset.ofNestedLock;
+            ofRestoreParentModal(parent);
+        }
+    });
+
+    document.addEventListener('shown.bs.modal', (e) => {
+        if (e.target && e.target.classList.contains('of-quick-create-modal') && e.target.dataset.ofNestedParent) {
+            ofStackNestedModal(e.target);
+            // Ensure parent is still visible underneath
+            const parentId = e.target.dataset.ofNestedParent;
+            const parent = parentId === '1' ? null : document.getElementById(parentId);
+            if (parent) {
+                parent.classList.add('show');
+                parent.style.display = 'block';
+            }
         }
     });
 
@@ -762,13 +842,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         'success'
                     );
                 }
-                const modalEl = form.closest('.modal');
+                // Close ONLY the register modal — parent inventory/sale stays open with data
+                const modalEl = form.closest('.modal.of-quick-create-modal') || form.closest('.modal');
                 if (modalEl && window.bootstrap) {
                     bootstrap.Modal.getOrCreateInstance(modalEl).hide();
                 }
                 form.reset();
             } else {
-                // Standalone vendors/customers page — refresh list
                 window.location.reload();
                 return;
             }
