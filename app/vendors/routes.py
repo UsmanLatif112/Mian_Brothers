@@ -231,7 +231,12 @@ def ledger(vendor_id):
         )
         return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
 
+    # Always rebuild stored payable so KPI matches the statement.
+    recalculate_vendor_balance(vendor)
+    db.session.commit()
+
     ledger_entries = []
+    AUTO_PAY_NOTE = 'Paid with inventory purchase:'
 
     if vendor.previous_payable and float(vendor.previous_payable) > 0:
         ledger_entries.append({
@@ -248,42 +253,57 @@ def ledger(vendor_id):
         ItemPurchaseLog.entry_date.asc(), ItemPurchaseLog.id.asc()
     ).all()
 
-    for log in purchases:
-        amount = purchase_log_total(log)
-        if log.category == 'fuel':
-            qty_desc = f"{float(log.liters or 0):,.2f} L"
-        elif log.category == 'ft_mobile':
-            qty_desc = f"{float(log.liters or 0):,.2f} L"
-        else:
-            qty_desc = f"{int(log.quantity or 0)} pcs"
-
-        desc = f"{log.item_name} — {qty_desc} @ PKR {float(log.cost_price or 0):,.2f}"
-        if log.company:
-            desc = f"{log.company} {desc}"
-
-        ledger_entries.append({
-            'date': log.entry_date or datetime.min,
-            'type': 'purchase',
-            'desc': desc,
-            'debit': amount,
-            'credit': 0.0,
-            'ref_id': f"Purchase #{log.id}",
-            'pay_type': log.category,
-        })
-
     payments = VendorPayment.query.filter_by(vendor_id=vendor.id).order_by(
         VendorPayment.payment_date.asc(), VendorPayment.id.asc()
     ).all()
 
-    for pay in payments:
-        ledger_entries.append({
-            'date': pay.payment_date or datetime.min,
-            'type': 'payment',
-            'desc': f"Paid via {pay.method}{f' ({pay.note})' if pay.note else ''}",
-            'debit': 0.0,
-            'credit': float(pay.amount_paid or 0),
-            'ref_id': f"Payment #{pay.id}",
-            'pay_type': pay.method,
+    # Paid-with-purchase: one statement line (never purchase + payment separately).
+    # Same-minute paid batches for this vendor collapse into a single combined row.
+    used_payment_ids = set()
+
+    def _qty_desc(log):
+        if log.category == 'fuel' or log.category == 'ft_mobile':
+            return f"{float(log.liters or 0):,.2f} L"
+        return f"{int(log.quantity or 0)} pcs"
+
+    def _purchase_desc(log):
+        desc = f"{log.item_name} — {_qty_desc(log)} @ PKR {float(log.cost_price or 0):,.2f}"
+        if log.company:
+            desc = f"{log.company} {desc}"
+        return desc
+
+    def _minute_key(dt):
+        if not dt or dt is datetime.min:
+            return None
+        if hasattr(dt, 'replace'):
+            try:
+                return dt.replace(second=0, microsecond=0)
+            except TypeError:
+                return dt
+        return dt
+
+    def _match_auto_payment(log, amount):
+        item = (log.item_name or '').strip()
+        candidates = []
+        for pay in payments:
+            if pay.id in used_payment_ids:
+                continue
+            note = (pay.note or '').strip()
+            if not note.startswith(AUTO_PAY_NOTE):
+                continue
+            if abs(float(pay.amount_paid or 0) - amount) > 0.02:
+                continue
+            candidates.append(pay)
+        if not candidates:
+            return None
+        if item:
+            named = [p for p in candidates if item.lower() in (p.note or '').lower()]
+            if named:
+                return named[0]
+        return candidates[0]
+
+    def _pay_meta(pay):
+        return {
             'payment_id': pay.id,
             'amount': float(pay.amount_paid or 0),
             'method': pay.method or 'Cash',
@@ -292,9 +312,76 @@ def ledger(vendor_id):
                            if pay.payment_date and hasattr(pay.payment_date, 'date')
                            else (pay.payment_date.isoformat() if pay.payment_date else '')),
             'can_edit': True,
-        })
+        }
 
-    ledger_entries.sort(key=lambda x: x['date'] or datetime.min)
+    unpaid_rows = []
+    paid_buckets = {}  # minute_key -> list of dicts
+
+    for log in purchases:
+        amount = purchase_log_total(log)
+        auto_pay = _match_auto_payment(log, amount) if amount > 0 else None
+        if auto_pay:
+            used_payment_ids.add(auto_pay.id)
+            key = _minute_key(log.entry_date or auto_pay.payment_date) or id(log)
+            paid_buckets.setdefault(key, []).append({
+                'log': log,
+                'amount': amount,
+                'pay': auto_pay,
+                'desc': _purchase_desc(log),
+            })
+        else:
+            unpaid_rows.append({
+                'date': log.entry_date or datetime.min,
+                'type': 'purchase',
+                'desc': _purchase_desc(log),
+                'debit': amount,
+                'credit': 0.0,
+                'ref_id': f"Purchase #{log.id}",
+                'pay_type': log.category,
+            })
+
+    for bucket in paid_buckets.values():
+        total = sum(b['amount'] for b in bucket)
+        first = bucket[0]
+        last = bucket[-1]
+        ids = [str(b['log'].id) for b in bucket]
+        if len(bucket) == 1:
+            desc = f"{first['desc']} · Paid"
+            ref = f"Purchase #{first['log'].id}"
+        else:
+            names = [b['desc'] for b in bucket]
+            desc = f"{' · '.join(names)} · Paid"
+            ref = f"Purchase #{ids[0]}–#{ids[-1]}" if len(ids) > 1 else f"Purchase #{ids[0]}"
+        entry = {
+            'date': first['log'].entry_date or first['pay'].payment_date or datetime.min,
+            'type': 'purchase',
+            'desc': desc,
+            'debit': total,
+            'credit': total,
+            'ref_id': ref,
+            'pay_type': 'paid',
+        }
+        entry.update(_pay_meta(last['pay']))
+        ledger_entries.append(entry)
+
+    ledger_entries.extend(unpaid_rows)
+
+    for pay in payments:
+        if pay.id in used_payment_ids:
+            continue
+        entry = {
+            'date': pay.payment_date or datetime.min,
+            'type': 'payment',
+            'desc': f"Paid via {pay.method}{f' ({pay.note})' if pay.note else ''}",
+            'debit': 0.0,
+            'credit': float(pay.amount_paid or 0),
+            'ref_id': f"Payment #{pay.id}",
+            'pay_type': pay.method,
+        }
+        entry.update(_pay_meta(pay))
+        ledger_entries.append(entry)
+
+    ledger_entries.sort(key=lambda x: (x['date'] or datetime.min, x.get('ref_id') or ''))
 
     running_balance = 0.0
     for entry in ledger_entries:
