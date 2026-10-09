@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=5">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=10">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=3">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
     <script>
     /* Resume loader across full page navigations (no blank white wait) */
@@ -32,7 +32,7 @@
 </head>
 <body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
 
-    {# Global CRUD / data-load motion loader #}
+    {# Global loader — orbit car + filling tank (Boltwood-style) #}
     <div class="of-loader" id="ofLoader" aria-hidden="true" role="status">
         <div class="of-loader-veil"></div>
         <div class="of-loader-panel">
@@ -40,7 +40,7 @@
                 <div class="of-loader-orbit"></div>
                 <div class="of-loader-arm">
                     <div class="of-loader-car">
-                        <svg viewBox="0 0 28 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <svg viewBox="0 0 28 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <rect x="3" y="5" width="20" height="6" rx="2" fill="#0f766e"/>
                             <path d="M8 5 L11 2 H17 L20 5" fill="#14b8a6"/>
                             <circle cx="8.5" cy="11" r="2" fill="#1e293b"/>
@@ -49,23 +49,11 @@
                         </svg>
                     </div>
                 </div>
-                <div class="of-loader-core">
-                    <div class="of-loader-pump">
-                        <div class="of-loader-tank">
-                            <div class="of-loader-fuel"></div>
-                        </div>
-                        <div class="of-loader-nozzle">
-                            <div class="of-loader-hose"></div>
-                            <div class="of-loader-nozzle-body"></div>
-                            <div class="of-loader-drip"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="of-loader-card-track">
-                    <div class="of-loader-card"></div>
+                <div class="of-loader-tank">
+                    <div class="of-loader-fuel"></div>
                 </div>
             </div>
-            <p class="of-loader-label" id="ofLoaderLabel">Working…</p>
+            <p class="of-loader-label" id="ofLoaderLabel">Loading…</p>
             <p class="of-loader-sub" id="ofLoaderSub">OctaneFlow</p>
         </div>
     </div>
