@@ -23,25 +23,20 @@ html.of-leaving .of-loader {
     visibility: visible;
 }
 
-/* Soft exit veil on page 1 (no complex motion = no frozen frames on unload) */
+/* Legacy of-leaving kept as full loader (no soft half-veil) */
+html.of-leaving .of-loader {
+    pointer-events: all;
+    opacity: 1;
+    visibility: visible;
+}
 html.of-leaving .of-loader-scene,
 html.of-leaving .of-loader-label,
 html.of-leaving .of-loader-sub,
 html.of-leaving .of-loader-dots {
-    opacity: 0;
+    opacity: 1;
 }
-
-html.of-leaving .of-loader-panel {
-    width: 72px;
-    height: 72px;
-    padding: 0;
-    border-radius: 20px;
-    display: grid;
-    place-items: center;
-}
-
 html.of-leaving .of-loader-pulse {
-    display: block;
+    display: none;
 }
 
 .of-loader-pulse {

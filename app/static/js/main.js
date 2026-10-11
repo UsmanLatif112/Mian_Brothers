@@ -4,8 +4,8 @@
     let shownAt = 0;
     let hideTimer = null;
     let safetyTimer = null;
-    const MIN_MS = 220;
-    const MAX_MS = 8000;
+    const MIN_MS = 280;
+    const MAX_MS = 90000; /* long CRUD / restore must not drop the loader mid-wait */
     const NAV_KEY = 'ofNavLoad';
     const NAV_MSG = 'ofNavMsg';
     const navPendingAtBoot = !!window.__ofNavPending;
@@ -89,17 +89,12 @@
             reveal(message || 'Working…', sub);
         },
         showNav(message) {
+            /* Full animated loader + handoff flag for the next page (no soft half-veil). */
             const msg = message || 'Loading…';
             markNav(msg);
-            // Soft exit veil only on leaving page — full road animation runs on destination
-            // (avoids frozen mid-frame during browser unload).
-            document.documentElement.classList.add('of-loading', 'of-leaving');
-            const node = el();
-            if (node) {
-                node.classList.remove('is-on');
-                node.setAttribute('aria-hidden', 'false');
-                setCopy(msg);
-            }
+            document.documentElement.classList.remove('of-leaving');
+            busy = Math.max(busy, 1);
+            reveal(msg);
         },
         hide(force) {
             if (force) {
@@ -119,6 +114,19 @@
             this.show(message);
             return Promise.resolve(promise).finally(() => this.hide());
         },
+    };
+
+    /** Same-origin navigate with full loader (Turbo when available). */
+    window.ofNavigate = function ofNavigate(url, message) {
+        const msg = message || 'Loading…';
+        if (!url) return;
+        if (window.Turbo && typeof window.Turbo.visit === 'function') {
+            window.ofLoader.show(msg);
+            window.Turbo.visit(url);
+            return;
+        }
+        window.ofLoader.showNav(msg);
+        window.location.href = url;
     };
 
     // Keep in-flight nav loader running until window.load (base.html settles it).
@@ -714,18 +722,17 @@ window.ofBootUi = function ofBootUi() {
         let msg = 'Saving…';
         if (method === 'get' || form.dataset.allowMultiSubmit === '1') msg = 'Loading…';
         if (/delete|remove/.test(action) || actionVal === 'delete') msg = 'Deleting…';
+        if (/restore/.test(action)) msg = 'Restoring…';
         if (form.dataset.busyLabel) msg = form.dataset.busyLabel;
 
         const turboOff = form.getAttribute('data-turbo') === 'false';
         const hasTurbo = !!(window.__ofTurboNav || window.Turbo);
 
-        // Full-page submit (no Turbo / opted out): keep loader across reload
+        // Always full loader. Full-page submits also set nav handoff for the next page.
         if (turboOff || !hasTurbo) {
-            if (method !== 'dialog') window.ofLoader.showNav(msg);
-            else window.ofLoader.show(msg);
+            window.ofLoader.showNav(msg);
             return;
         }
-        // Turbo Drive: show in-app loader immediately (turbo-nav keeps it until page settles)
         window.ofLoader.show(msg);
     }
 
@@ -997,6 +1004,7 @@ window.ofBootUi = function ofBootUi() {
                 ofCloseQuickCreate(modalEl);
                 form.reset();
             } else {
+                if (window.ofLoader) window.ofLoader.showNav('Loading…');
                 window.location.reload();
                 return;
             }
@@ -1172,6 +1180,7 @@ window.ofBootUi = function ofBootUi() {
                                           });
                                           return;
                                       }
+                                      if (window.ofLoader) window.ofLoader.showNav('Loading…');
                                       location.reload();
                                   })
                                   .catch(() => {

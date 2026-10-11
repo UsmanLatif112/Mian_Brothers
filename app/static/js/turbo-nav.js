@@ -1,14 +1,15 @@
 /**
  * Turbo Drive navigation — no full tab refresh.
- * Loader stays alive (no unload freeze). Page boots on turbo:load.
+ * Full animated loader for every visit / CRUD submit until turbo:load.
  */
 (function initTurboNav() {
     if (!window.Turbo) return;
 
-    const MAX_MS = 8000;
+    const MAX_MS = 90000;
     let safetyTimer = null;
     let visitPending = false;
     let submitPending = false;
+    let loaderShown = false;
 
     function clearSafety() {
         if (safetyTimer) {
@@ -22,6 +23,7 @@
         document.documentElement.classList.add('of-loading');
         if (window.ofLoader && typeof window.ofLoader.show === 'function') {
             window.ofLoader.show(msg || 'Loading…');
+            loaderShown = true;
         } else {
             const node = document.getElementById('ofLoader');
             if (node) {
@@ -30,6 +32,7 @@
             }
             const label = document.getElementById('ofLoaderLabel');
             if (label && msg) label.textContent = msg;
+            loaderShown = true;
         }
         clearSafety();
         safetyTimer = setTimeout(() => hideNavLoader(true), MAX_MS);
@@ -39,6 +42,7 @@
         clearSafety();
         visitPending = false;
         submitPending = false;
+        loaderShown = false;
         document.documentElement.classList.remove('of-loading', 'of-leaving');
         if (window.ofLoader && typeof window.ofLoader.hide === 'function') {
             window.ofLoader.hide(!!force);
@@ -57,6 +61,7 @@
         if (el.hasAttribute('data-turbo') && el.getAttribute('data-turbo') === 'false') return;
         if (el.target && el.target !== '_self') return;
         if (el.hasAttribute('download')) return;
+        showNavLoader('Loading…');
     });
 
     document.addEventListener('turbo:before-visit', () => {
@@ -71,7 +76,11 @@
         if (method !== 'GET' && method !== 'HEAD') {
             submitPending = true;
             showNavLoader('Saving…');
-            // Avoid double-count with main.js ofFetch wrapper
+            event.detail.fetchOptions.ofSilent = true;
+        } else if (!loaderShown) {
+            showNavLoader('Loading…');
+            event.detail.fetchOptions.ofSilent = true;
+        } else {
             event.detail.fetchOptions.ofSilent = true;
         }
     });
@@ -89,14 +98,24 @@
         }
     });
 
-    document.addEventListener('turbo:submit-start', () => {
+    document.addEventListener('turbo:submit-start', (event) => {
         submitPending = true;
-        showNavLoader('Saving…');
+        const form = event.target;
+        let msg = 'Saving…';
+        if (form instanceof HTMLFormElement) {
+            const action = (form.getAttribute('action') || '').toLowerCase();
+            const actionField = form.querySelector('[name="action"]');
+            const actionVal = actionField ? String(actionField.value || '') : '';
+            if (/delete|remove/.test(action) || actionVal === 'delete') msg = 'Deleting…';
+            if (/restore/.test(action) || form.dataset.busyLabel === 'Restoring…') msg = 'Restoring…';
+            if (form.dataset.busyLabel) msg = form.dataset.busyLabel;
+            if ((form.getAttribute('method') || 'post').toLowerCase() === 'get') msg = 'Loading…';
+        }
+        showNavLoader(msg);
     });
 
     document.addEventListener('turbo:submit-end', (event) => {
         const ok = !!(event.detail && event.detail.success);
-        // Successful saves usually navigate / re-render — keep loader until turbo:load
         if (ok || visitPending) return;
         hideNavLoader(true);
     });
@@ -106,13 +125,11 @@
     });
 
     document.addEventListener('turbo:visit', () => {
-        // close mobile sidebar if open
         document.body.classList.remove('sidebar-open');
         const backdrop = document.getElementById('sidebarBackdrop');
         if (backdrop) backdrop.hidden = true;
         document.body.style.overflow = '';
     });
 
-    // Prefer Turbo for same-origin navigations; disable full-page showNav handoff
     window.__ofTurboNav = true;
 })();
