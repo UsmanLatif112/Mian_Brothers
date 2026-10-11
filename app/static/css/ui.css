@@ -180,7 +180,7 @@ h1, h2, h3, h4, h5, h6,
 
 .brand-text {
     font-size: 1.15rem;
-    font-weight: 800;
+    font-weight: 600;
     color: #fff !important;
     background: none !important;
     -webkit-text-fill-color: #fff;
@@ -209,7 +209,7 @@ h1, h2, h3, h4, h5, h6,
     border-radius: 13px;
     padding: 0.68rem 0.85rem;
     margin-bottom: 4px;
-    font-weight: 600;
+    font-weight: 500;
     font-size: 0.9rem;
     gap: 0.8rem;
     position: relative;
@@ -241,7 +241,7 @@ h1, h2, h3, h4, h5, h6,
 .sidebar-link.active {
     background: var(--sidebar-link-active-bg);
     color: var(--sidebar-link-active);
-    font-weight: 700;
+    font-weight: 500;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
@@ -299,7 +299,7 @@ h1, h2, h3, h4, h5, h6,
     border: 1px solid var(--border-color);
     background: color-mix(in srgb, var(--bg-color) 75%, #fff);
     font-family: var(--font-ui);
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .topbar-search-input:focus {
@@ -343,7 +343,7 @@ h1, h2, h3, h4, h5, h6,
 
 .page-eyebrow {
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.14em;
     color: var(--accent-blue);
     display: inline-flex;
@@ -362,7 +362,7 @@ h1, h2, h3, h4, h5, h6,
 
 .page-title {
     font-size: clamp(1.6rem, 1.25rem + 1.5vw, 2.15rem);
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1.1;
     color: var(--text-primary);
 }
@@ -370,7 +370,7 @@ h1, h2, h3, h4, h5, h6,
 .page-subtitle {
     font-size: 0.95rem;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 400;
     max-width: 42rem;
 }
 
@@ -431,13 +431,13 @@ h1, h2, h3, h4, h5, h6,
 
 .panel-title {
     font-size: 1.08rem;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .panel-subtitle {
     font-size: 0.8rem;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 400;
 }
 
 /* ---------- KPI / metrics ---------- */
@@ -506,14 +506,14 @@ h1, h2, h3, h4, h5, h6,
 
 .kpi-label {
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.08em;
 }
 
 .kpi-value {
     font-family: var(--font-data);
     font-size: clamp(1rem, 0.9rem + 0.7vw, 1.25rem);
-    font-weight: 700;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.03em;
     position: relative;
@@ -549,7 +549,7 @@ h1, h2, h3, h4, h5, h6,
 .ledger-kpi-value {
     font-family: var(--font-data);
     font-variant-numeric: tabular-nums;
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .stat-card::before {
@@ -594,7 +594,7 @@ h1, h2, h3, h4, h5, h6,
     border: none;
     color: #fff;
     font-family: var(--font-ui);
-    font-weight: 700;
+    font-weight: 500;
     padding: 0.68rem 1.4rem;
     border-radius: 13px;
     box-shadow: 0 8px 22px rgba(13, 148, 136, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
@@ -646,7 +646,7 @@ h1, h2, h3, h4, h5, h6,
     border-radius: 13px !important;
     border-color: var(--border-color) !important;
     color: var(--text-primary) !important;
-    font-weight: 600;
+    font-weight: 500;
     background: var(--card-bg-solid);
 }
 
@@ -660,7 +660,7 @@ h1, h2, h3, h4, h5, h6,
 .table-custom thead th {
     background: var(--table-head-bg);
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.09em;
     color: var(--text-secondary);
     padding: 1rem 1.1rem;
@@ -697,7 +697,7 @@ h1, h2, h3, h4, h5, h6,
 .badge-custom,
 .badge {
     border-radius: 999px !important;
-    font-weight: 700;
+    font-weight: 500;
     font-family: var(--font-ui);
 }
 
@@ -729,7 +729,7 @@ h1, h2, h3, h4, h5, h6,
     background: color-mix(in srgb, var(--bg-color) 50%, #fff);
     min-height: 2.7rem;
     font-family: var(--font-ui);
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .form-control-custom:focus,
@@ -746,7 +746,7 @@ h1, h2, h3, h4, h5, h6,
 
 .form-label-custom {
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -767,7 +767,7 @@ h1, h2, h3, h4, h5, h6,
 }
 
 .modal-title {
-    font-weight: 800 !important;
+    font-weight: 600 !important;
     letter-spacing: -0.03em;
     font-size: 1.2rem !important;
 }
@@ -799,7 +799,7 @@ h1, h2, h3, h4, h5, h6,
 /* ---------- Charts / journal ---------- */
 .chart-card-title {
     font-size: 1.02rem;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .journal-kpi-grid .journal-kpi,
@@ -844,7 +844,7 @@ h1, h2, h3, h4, h5, h6,
 
 .auth-title {
     font-size: 1.6rem;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .auth-page .input-group-text {
@@ -859,7 +859,7 @@ h1, h2, h3, h4, h5, h6,
 
 .btn-dry-action {
     border-radius: 12px;
-    font-weight: 700;
+    font-weight: 500;
     background: linear-gradient(145deg, #e11d48, #be123c);
     color: #fff;
     border: none;
@@ -1028,7 +1028,7 @@ select.form-control-custom:disabled {
     color: var(--text-primary) !important;
     box-shadow: var(--shadow-sm) !important;
     font-family: var(--font-ui) !important;
-    font-weight: 500 !important;
+    font-weight: 400 !important;
     font-size: 0.9rem !important;
     line-height: 1.35 !important;
     cursor: pointer !important;
@@ -1102,7 +1102,7 @@ select.form-control-custom:disabled {
 .ts-wrapper.of-select-search .ts-control > input {
     color: var(--text-primary) !important;
     font-family: var(--font-ui) !important;
-    font-weight: 500 !important;
+    font-weight: 400 !important;
 }
 
 .ts-wrapper.of-select .ts-control .item {
@@ -1137,7 +1137,7 @@ select.form-control-custom:disabled {
     padding: 0.2rem 1.85rem 0.2rem 0.65rem !important;
     border-radius: 10px !important;
     font-size: 0.78rem !important;
-    font-weight: 600 !important;
+    font-weight: 500 !important;
     background-image: none !important;
 }
 
@@ -1274,7 +1274,7 @@ body > .ts-dropdown {
     margin: 0.1rem 0 !important;
     font-family: var(--font-ui) !important;
     font-size: 0.88rem !important;
-    font-weight: 500 !important;
+    font-weight: 400 !important;
     color: var(--text-primary) !important;
     cursor: pointer;
     white-space: nowrap;
@@ -1289,12 +1289,12 @@ body > .ts-dropdown {
 .ts-dropdown .option.selected {
     background: color-mix(in srgb, var(--accent-blue) 16%, transparent) !important;
     color: var(--accent-blue-hover) !important;
-    font-weight: 650 !important;
+    font-weight: 500 !important;
 }
 
 .ts-dropdown .create {
     color: var(--accent-blue) !important;
-    font-weight: 700 !important;
+    font-weight: 500 !important;
 }
 
 .ts-dropdown .no-results {
@@ -1376,7 +1376,7 @@ body > .ts-dropdown {
     box-shadow: none !important;
     color: var(--accent-blue) !important;
     font-family: var(--font-ui);
-    font-weight: 750;
+    font-weight: 600;
     font-size: 0.78rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1484,7 +1484,7 @@ body > .ts-dropdown {
 
 .cat-kpi-row .kpi-label {
     font-size: 0.72rem;
-    font-weight: 650;
+    font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -1493,7 +1493,7 @@ body > .ts-dropdown {
 
 .cat-kpi-row .kpi-value {
     font-size: 1.65rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1.1;
     color: var(--text-primary);
@@ -1576,7 +1576,7 @@ body > .ts-dropdown {
 
 .cat-card-title {
     font-size: 1.08rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.02em;
     color: var(--text-primary);
 }
@@ -1585,20 +1585,20 @@ body > .ts-dropdown {
     margin-top: 0.25rem;
     font-size: 0.8rem;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.4;
 }
 
 .cat-badge-system {
     background: color-mix(in srgb, var(--text-secondary) 14%, transparent) !important;
     color: var(--text-secondary) !important;
-    font-weight: 650;
+    font-weight: 500;
 }
 
 .cat-badge-unit {
     background: color-mix(in srgb, var(--accent-blue) 12%, transparent) !important;
     color: var(--accent-blue) !important;
-    font-weight: 650;
+    font-weight: 500;
 }
 
 .cat-card-delete {
@@ -1621,7 +1621,7 @@ body > .ts-dropdown {
     gap: 0.75rem;
     margin-bottom: 0.65rem;
     font-size: 0.72rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -1636,7 +1636,7 @@ body > .ts-dropdown {
     align-items: center;
     justify-content: center;
     font-size: 0.72rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0;
     background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
     color: var(--accent-blue);
@@ -1658,7 +1658,7 @@ body > .ts-dropdown {
     border: 1px solid color-mix(in srgb, var(--border-color) 90%, transparent);
     background: color-mix(in srgb, var(--bg-color) 55%, var(--card-bg));
     font-size: 0.875rem;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text-primary);
     line-height: 1.2;
 }
@@ -1766,7 +1766,7 @@ body > .ts-dropdown {
 .of-item-type,
 .of-item-type .of-clip,
 .of-item-type .of-clip-cell {
-    font-weight: 450;
+    font-weight: 400;
     font-size: 0.88rem;
     letter-spacing: 0.03em;
     color: var(--text-secondary);
@@ -1832,7 +1832,7 @@ td .of-clip-cell {
     padding: 0.45rem 0.7rem;
     font-family: var(--font-ui);
     font-size: 0.78rem;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.35;
     text-align: left;
     color: #f8fafc;
@@ -1919,7 +1919,7 @@ td .of-clip-cell {
     --bs-btn-padding-x: 0.7rem;
     --bs-btn-font-size: 0.82rem;
     border-radius: 10px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .of-logo-crop {
@@ -1962,7 +1962,7 @@ td .of-clip-cell {
     margin: 0;
     font-family: var(--font-ui);
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .of-logo-crop-sub {
@@ -1997,7 +1997,7 @@ td .of-clip-cell {
 .of-logo-crop-tools .btn {
     min-width: 2.4rem;
     border-radius: 10px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .of-logo-crop-zoom {
@@ -2009,7 +2009,7 @@ td .of-clip-cell {
     background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
     color: var(--text-secondary);
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .of-logo-crop-foot {
@@ -2035,4 +2035,54 @@ td .of-clip-cell {
 
 body.of-logo-crop-open {
     overflow: hidden;
+}
+
+/* ——— Lighter type scale (app-wide) ——— */
+.fw-medium { font-weight: 400 !important; }
+.fw-semibold { font-weight: 500 !important; }
+.fw-bold,
+.fw-bolder { font-weight: 600 !important; }
+
+.page-title,
+.panel-title,
+.modal-title,
+.card-header-premium .panel-title {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.page-eyebrow,
+.panel-subtitle,
+.form-label,
+.form-label-custom {
+    font-weight: 400;
+}
+
+.sidebar-link,
+.sidebar-section-label,
+.nav-link,
+.dropdown-item {
+    font-weight: 500;
+}
+
+.table-custom thead th,
+.table thead th {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.btn,
+.btn-primary-custom,
+.btn-outline-secondary,
+.btn-sm,
+.badge,
+.badge-custom {
+    font-weight: 500;
+}
+
+.form-control,
+.form-control-custom,
+.form-select,
+.of-select .ts-control {
+    font-weight: 400;
 }

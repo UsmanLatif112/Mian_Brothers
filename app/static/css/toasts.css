@@ -91,7 +91,7 @@
 .of-toast-title {
     margin: 0;
     font-size: 0.78rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.02em;
     text-transform: uppercase;
     color: var(--text-muted, #64748b);
@@ -101,7 +101,7 @@
     margin: 0.15rem 0 0;
     font-size: 0.9rem;
     line-height: 1.4;
-    font-weight: 550;
+    font-weight: 400;
 }
 
 .of-toast-close {

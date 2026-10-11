@@ -84,14 +84,14 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 .brand-text {
-    font-weight: 800;
+    font-weight: 600;
     font-size: 1.05rem;
     letter-spacing: -0.03em;
 }
 
 .brand-tag {
     font-size: 0.68rem;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -140,7 +140,7 @@ body.sidebar-open .sidebar-backdrop {
 .sidebar-section-label {
     margin: 0.85rem 0.65rem 0.35rem;
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -159,7 +159,7 @@ body.sidebar-open .sidebar-backdrop {
     border-radius: 10px;
     color: var(--sidebar-link);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 500;
     font-size: 0.92rem;
     transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
@@ -179,7 +179,7 @@ body.sidebar-open .sidebar-backdrop {
 .sidebar-link.active {
     background: var(--sidebar-link-active-bg);
     color: var(--sidebar-link-active);
-    font-weight: 700;
+    font-weight: 500;
     box-shadow: inset 3px 0 0 var(--accent-blue);
 }
 
@@ -195,7 +195,7 @@ body.sidebar-open .sidebar-backdrop {
     font-size: 0.72rem;
     line-height: 1.45;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 400;
     letter-spacing: 0.01em;
 }
 
@@ -213,7 +213,7 @@ body.sidebar-open .sidebar-backdrop {
     display: inline-block;
     margin-top: 0.1rem;
     font-size: 0.78rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--accent-blue);
 }
@@ -292,7 +292,7 @@ body.sidebar-open .sidebar-backdrop {
     padding: 0.35rem 0.65rem;
     border-radius: 8px;
     font-size: 0.75rem;
-    font-weight: 700;
+    font-weight: 500;
     color: var(--text-secondary);
     text-decoration: none;
     white-space: nowrap;
@@ -324,7 +324,7 @@ body.sidebar-open .sidebar-backdrop {
     height: 36px;
     padding: 0.25rem 1.8rem 0.25rem 0.65rem;
     font-size: 0.78rem;
-    font-weight: 600;
+    font-weight: 500;
     border-radius: 10px !important;
 }
 
@@ -349,7 +349,7 @@ body.sidebar-open .sidebar-backdrop {
 
 .topbar-date-sep {
     color: var(--text-secondary);
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .topbar-filter-apply {
@@ -457,7 +457,7 @@ body.sidebar-open .sidebar-backdrop {
     color: var(--text-primary);
     padding: 0 2.4rem 0 2.35rem;
     font-size: 0.9rem;
-    font-weight: 500;
+    font-weight: 400;
     outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
@@ -476,7 +476,7 @@ body.sidebar-open .sidebar-backdrop {
     position: absolute;
     right: 0.65rem;
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     color: var(--text-secondary);
     background: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -507,7 +507,7 @@ body.sidebar-open .sidebar-backdrop {
 .topbar-search-hint {
     margin: 0.15rem 0.5rem 0.4rem;
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -529,7 +529,7 @@ body.sidebar-open .sidebar-backdrop {
     border-radius: 10px;
     color: var(--text-primary);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 500;
     font-size: 0.9rem;
 }
 
@@ -580,7 +580,7 @@ body.sidebar-open .sidebar-backdrop {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 700;
+    font-weight: 500;
     font-size: 0.9rem;
     color: #fff;
     background: linear-gradient(145deg, #0d9488, #14b8a6 55%, #0284c7);
@@ -610,7 +610,7 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 .user-name {
-    font-weight: 700;
+    font-weight: 500;
     font-size: 0.82rem;
     color: var(--text-primary);
 }
@@ -634,7 +634,7 @@ body.sidebar-open .sidebar-backdrop {
 .dropdown-menu-app .dropdown-item {
     color: var(--text-primary);
     font-size: 0.9rem;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .dropdown-menu-app .dropdown-item:hover {
@@ -649,7 +649,7 @@ body.sidebar-open .sidebar-backdrop {
 /* Page polish inside shell */
 .has-app-shell .page-title {
     letter-spacing: -0.03em;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .has-app-shell .card-premium {

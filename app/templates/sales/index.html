@@ -827,11 +827,11 @@
             if (btnMachine.dataset.locked === '1') return;
             const fuelId = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
             if (!fuelId) {
-                alert('Select a fuel type first.');
+                window.ofAlert({ message: 'Select a fuel type first.' });
                 return;
             }
-            const name = prompt('New machine name:');
-            if (!name || !name.trim()) return;
+            const name = await window.ofPrompt('New machine name:', '', { title: 'Add machine' });
+            if (!name || !String(name).trim()) return;
             if (typeof window.lockSubmitButton === 'function') {
                 window.lockSubmitButton(btnMachine, 'Adding...');
             } else {
@@ -841,7 +841,7 @@
                 const res = await fetch('{{ url_for("sales.quick_machine") }}', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: name.trim(), fuel_type_id: fuelId })
+                    body: JSON.stringify({ name: String(name).trim(), fuel_type_id: fuelId })
                 });
                 const data = await res.json();
                 if (typeof window.unlockSubmitButton === 'function') {
@@ -850,17 +850,17 @@
                     btnMachine.disabled = false;
                 }
                 if (!data.ok) {
-                    alert(data.error || 'Could not add machine');
+                    window.ofAlert({ message: data.error || 'Could not add machine' });
                     return;
                 }
-                appendMachineRow(data.fuel_type_id || fuelId, data.id, data.name || data.text || name.trim());
+                appendMachineRow(data.fuel_type_id || fuelId, data.id, data.name || data.text || String(name).trim());
             } catch (err) {
                 if (typeof window.unlockSubmitButton === 'function') {
                     window.unlockSubmitButton(btnMachine);
                 } else {
                     btnMachine.disabled = false;
                 }
-                alert('Could not add machine');
+                window.ofAlert({ message: 'Could not add machine' });
             }
         });
     }
@@ -1046,12 +1046,12 @@
             const pay = paymentStatus?.value || 'unpaid';
             if (isFuelSelected() && !hasCustomer) {
                 e.preventDefault();
-                alert('Customer is required for fuel credit (walk-in not allowed).');
+                window.ofAlert({ message: 'Customer is required for fuel credit (walk-in not allowed).' });
                 return;
             }
             if (isShopSelected() && pay !== 'paid' && !hasCustomer) {
                 e.preventDefault();
-                alert('Customer is required when other items are unpaid.');
+                window.ofAlert({ message: 'Customer is required when other items are unpaid.' });
                 return;
             }
             if ((isFuelSelected() || isShopSelected()) && creditDiscount) {
@@ -1060,12 +1060,12 @@
                 const gross = Number(creditSubtotal?.textContent || 0) || (net + Math.max(disc, 0));
                 if (!(disc >= 0)) {
                     e.preventDefault();
-                    alert('Discount cannot be negative.');
+                    window.ofAlert({ message: 'Discount cannot be negative.' });
                     return;
                 }
                 if (disc > gross + 0.0001) {
                     e.preventDefault();
-                    alert('Discount cannot exceed the sale total.');
+                    window.ofAlert({ message: 'Discount cannot exceed the sale total.' });
                     return;
                 }
             }
@@ -1074,12 +1074,12 @@
                 const paid = Number(amountPaid.value || 0);
                 if (paid < total - 0.01) {
                     e.preventDefault();
-                    alert('For Paid, cash must be at least the sale total. Use Unpaid if cash is not received now.');
+                    window.ofAlert({ message: 'For Paid, cash must be at least the sale total. Use Unpaid if cash is not received now.' });
                     return;
                 }
                 if (paid > total && !hasCustomer) {
                     e.preventDefault();
-                    alert('Customer is required when cash paid exceeds the sale total.');
+                    window.ofAlert({ message: 'Customer is required when cash paid exceeds the sale total.' });
                     return;
                 }
             }
@@ -1190,7 +1190,7 @@
             const pay = ftPay?.value || 'paid';
             if (pay !== 'paid' && !hasCustomer) {
                 e.preventDefault();
-                alert('Customer is required when FT sale is unpaid.');
+                window.ofAlert({ message: 'Customer is required when FT sale is unpaid.' });
                 return;
             }
             if (ftDiscount) {
@@ -1198,12 +1198,12 @@
                 const gross = Number(ftSubtotal?.textContent || 0) || Number(ftSaleTotal?.textContent || 0);
                 if (!(disc >= 0)) {
                     e.preventDefault();
-                    alert('Discount cannot be negative.');
+                    window.ofAlert({ message: 'Discount cannot be negative.' });
                     return;
                 }
                 if (disc > gross + 0.0001) {
                     e.preventDefault();
-                    alert('Discount cannot exceed the sale total.');
+                    window.ofAlert({ message: 'Discount cannot exceed the sale total.' });
                     return;
                 }
             }

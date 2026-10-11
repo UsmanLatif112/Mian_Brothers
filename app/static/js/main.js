@@ -261,9 +261,10 @@
     }
 })();
 
-/* In-app confirm modal — replaces window.confirm() */
+/* In-app confirm / alert / prompt — no browser dialogs */
 (function initOfConfirm() {
     let resolvePromise = null;
+    let mode = 'confirm'; // confirm | alert | prompt
     let modalInstance = null;
 
     function getModal() {
@@ -274,26 +275,27 @@
     }
 
     /**
-     * @param {object|string} opts message string, or { title, message, confirmLabel, cancelLabel, danger, alertOnly }
-     * @returns {Promise<boolean>}
+     * @param {object|string} opts
+     * @returns {Promise<boolean|string|null>}
      */
     window.ofConfirm = function ofConfirm(opts) {
         const options = typeof opts === 'string' ? { message: opts } : (opts || {});
         const title = options.title || 'Confirm';
         const message = options.message || 'Are you sure?';
         const alertOnly = !!options.alertOnly;
+        const isPrompt = !!options.prompt;
         const confirmLabel = options.confirmLabel
-            || (alertOnly ? 'OK' : (options.danger === false ? 'Confirm' : 'Delete'));
+            || (alertOnly || isPrompt ? 'OK' : (options.danger === false ? 'Confirm' : 'Delete'));
         const cancelLabel = options.cancelLabel || 'Cancel';
-        const danger = alertOnly ? false : options.danger !== false;
+        const danger = alertOnly || isPrompt ? false : options.danger !== false;
+
+        mode = isPrompt ? 'prompt' : (alertOnly ? 'alert' : 'confirm');
 
         const ctx = getModal();
         if (!ctx) {
-            if (alertOnly) {
-                window.alert(message);
-                return Promise.resolve(true);
-            }
-            return Promise.resolve(window.confirm(message));
+            if (isPrompt) return Promise.resolve(options.defaultValue || '');
+            if (alertOnly) return Promise.resolve(true);
+            return Promise.resolve(true);
         }
 
         const { el, modal } = ctx;
@@ -301,9 +303,23 @@
         const msgEl = el.querySelector('#ofConfirmMessage');
         const okBtn = el.querySelector('#ofConfirmOk');
         const cancelBtn = el.querySelector('#ofConfirmCancel');
+        const inputWrap = el.querySelector('#ofConfirmInputWrap');
+        const inputEl = el.querySelector('#ofConfirmInput');
 
         if (titleEl) titleEl.textContent = title;
-        if (msgEl) msgEl.textContent = message;
+        if (msgEl) {
+            msgEl.textContent = message || '';
+            msgEl.classList.toggle('d-none', !message);
+            msgEl.classList.toggle('mb-0', !isPrompt);
+        }
+        if (inputWrap && inputEl) {
+            inputWrap.classList.toggle('d-none', !isPrompt);
+            if (isPrompt) {
+                inputEl.value = options.defaultValue != null ? String(options.defaultValue) : '';
+                inputEl.placeholder = options.placeholder || '';
+                setTimeout(() => inputEl.focus(), 200);
+            }
+        }
         if (okBtn) {
             okBtn.textContent = confirmLabel;
             okBtn.className = danger
@@ -333,25 +349,75 @@
         });
     };
 
-    document.addEventListener('DOMContentLoaded', () => {
+    /** Text prompt — resolves to string, or null if cancelled. */
+    window.ofPrompt = function ofPrompt(message, defaultValue, opts) {
+        const options = opts || {};
+        return window.ofConfirm({
+            title: options.title || 'Enter value',
+            message: message || '',
+            prompt: true,
+            defaultValue: defaultValue != null ? defaultValue : '',
+            placeholder: options.placeholder || '',
+            confirmLabel: options.confirmLabel || 'OK',
+            cancelLabel: options.cancelLabel || 'Cancel',
+            danger: false,
+        });
+    };
+
+    function settle(value) {
+        const done = resolvePromise;
+        resolvePromise = null;
+        mode = 'confirm';
+        if (done) done(value);
+    }
+
+    function bindModal() {
         const el = document.getElementById('ofConfirmModal');
-        if (!el) return;
+        if (!el || el.dataset.ofBound === '1') return;
+        el.dataset.ofBound = '1';
         const okBtn = el.querySelector('#ofConfirmOk');
+        const inputEl = el.querySelector('#ofConfirmInput');
         okBtn?.addEventListener('click', () => {
             const ctx = getModal();
-            const done = resolvePromise;
-            resolvePromise = null;
+            let value = true;
+            if (mode === 'prompt') {
+                value = inputEl ? inputEl.value : '';
+            }
+            settle(value);
             ctx?.modal.hide();
-            if (done) done(true);
         });
-        el.addEventListener('hidden.bs.modal', () => {
-            if (resolvePromise) {
-                const done = resolvePromise;
-                resolvePromise = null;
-                done(false);
+        inputEl?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                okBtn?.click();
             }
         });
-    });
+        el.addEventListener('hidden.bs.modal', () => {
+            if (!resolvePromise) return;
+            settle(mode === 'prompt' ? null : false);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindModal, { once: true });
+    } else {
+        bindModal();
+    }
+    document.addEventListener('turbo:load', bindModal);
+
+    // Route native dialogs through in-app UI
+    window.alert = function ofWindowAlert(message) {
+        window.ofAlert({ message: String(message == null ? '' : message) });
+    };
+    window.confirm = function ofWindowConfirm(message) {
+        // Sync API cannot wait — prefer ofConfirm in new code; best-effort reject
+        console.warn('Use ofConfirm() instead of confirm()');
+        return false;
+    };
+    window.prompt = function ofWindowPrompt() {
+        console.warn('Use ofPrompt() instead of prompt()');
+        return null;
+    };
 
     // Forms: data-block-delete="…" blocks submit with alert; data-confirm="…" asks first
     document.addEventListener('submit', (e) => {
@@ -905,7 +971,7 @@ window.ofBootUi = function ofBootUi() {
             const data = await postJson(url, payload);
             if (!data || !data.ok) {
                 if (window.ofToast) window.ofToast(data && data.error ? data.error : 'Could not save', 'danger');
-                else alert((data && data.error) || 'Could not save');
+                else window.ofAlert({ message: (data && data.error) || 'Could not save' });
                 return;
             }
 
@@ -929,7 +995,7 @@ window.ofBootUi = function ofBootUi() {
             }
         } catch (err) {
             if (window.ofToast) window.ofToast('Could not save. Try again.', 'danger');
-            else alert('Could not save. Try again.');
+            else window.ofAlert({ message: 'Could not save. Try again.' });
         } finally {
             delete form.dataset.submitting;
             if (submitBtn) {
@@ -984,23 +1050,29 @@ window.ofBootUi = function ofBootUi() {
                 dropdownParent: dropdownParentFor(el),
                 create: canCreate
                     ? (input, callback) => {
-                          const phone = window.prompt(`Phone for "${input}" (optional):`, '') || '';
-                          postJson(createUrl, { name: input.trim(), phone: phone.trim() })
-                              .then((data) => {
-                                  if (!data.ok) {
-                                      alert(data.error || 'Could not add customer');
+                          window.ofPrompt(`Phone for “${input}” (optional)`, '', { title: 'Add customer' })
+                              .then((phone) => {
+                                  if (phone === null) {
                                       callback();
                                       return;
                                   }
-                                  callback({
-                                      value: String(data.id),
-                                      text: data.text,
-                                      phone: data.phone || '',
-                                  });
-                              })
-                              .catch(() => {
-                                  alert('Could not add customer');
-                                  callback();
+                                  return postJson(createUrl, { name: input.trim(), phone: String(phone).trim() })
+                                      .then((data) => {
+                                          if (!data.ok) {
+                                              window.ofAlert({ message: data.error || 'Could not add customer' });
+                                              callback();
+                                              return;
+                                          }
+                                          callback({
+                                              value: String(data.id),
+                                              text: data.text,
+                                              phone: data.phone || '',
+                                          });
+                                      })
+                                      .catch(() => {
+                                          window.ofAlert({ message: 'Could not add customer' });
+                                          callback();
+                                      });
                               });
                       }
                     : false,
@@ -1023,23 +1095,29 @@ window.ofBootUi = function ofBootUi() {
                 dropdownParent: dropdownParentFor(el),
                 create: canCreate
                     ? (input, callback) => {
-                          const phone = window.prompt(`Phone for "${input}" (optional):`, '') || '';
-                          postJson(createUrl, { name: input.trim(), phone: phone.trim() })
-                              .then((data) => {
-                                  if (!data.ok) {
-                                      alert(data.error || 'Could not add vendor');
+                          window.ofPrompt(`Phone for “${input}” (optional)`, '', { title: 'Add vendor' })
+                              .then((phone) => {
+                                  if (phone === null) {
                                       callback();
                                       return;
                                   }
-                                  callback({
-                                      value: String(data.id),
-                                      text: data.text,
-                                      phone: data.phone || '',
-                                  });
-                              })
-                              .catch(() => {
-                                  alert('Could not add vendor');
-                                  callback();
+                                  return postJson(createUrl, { name: input.trim(), phone: String(phone).trim() })
+                                      .then((data) => {
+                                          if (!data.ok) {
+                                              window.ofAlert({ message: data.error || 'Could not add vendor' });
+                                              callback();
+                                              return;
+                                          }
+                                          callback({
+                                              value: String(data.id),
+                                              text: data.text,
+                                              phone: data.phone || '',
+                                          });
+                                      })
+                                      .catch(() => {
+                                          window.ofAlert({ message: 'Could not add vendor' });
+                                          callback();
+                                      });
                               });
                       }
                     : false,
@@ -1073,7 +1151,7 @@ window.ofBootUi = function ofBootUi() {
                               postJson(createUrl, { name: input.trim() })
                                   .then((data) => {
                                       if (!data.ok) {
-                                          alert(data.error || 'Could not add fuel');
+                                          window.ofAlert({ message: data.error || 'Could not add fuel' });
                                           callback();
                                           return;
                                       }
@@ -1090,31 +1168,37 @@ window.ofBootUi = function ofBootUi() {
                                       location.reload();
                                   })
                                   .catch(() => {
-                                      alert('Could not add fuel');
+                                      window.ofAlert({ message: 'Could not add fuel' });
                                       callback();
                                   });
                               return;
                           }
-                          const priceRaw = window.prompt(`Sale price (PKR) for "${input}":`, '');
-                          const sale_price = parseFloat(priceRaw || '0') || 0;
-                          postJson(createUrl, { name: input.trim(), sale_price })
-                              .then((data) => {
-                                  if (!data.ok) {
-                                      alert(data.error || 'Could not add item');
+                          window.ofPrompt(`Sale price (PKR) for “${input}”`, '', { title: 'Add item' })
+                              .then((priceRaw) => {
+                                  if (priceRaw === null) {
                                       callback();
                                       return;
                                   }
-                                  callback({
-                                      value: data.value,
-                                      text: data.text,
-                                      rate: data.rate,
-                                      unit: 'qty',
-                                      stock: 0,
-                                  });
-                              })
-                              .catch(() => {
-                                  alert('Could not add item');
-                                  callback();
+                                  const sale_price = parseFloat(String(priceRaw) || '0') || 0;
+                                  return postJson(createUrl, { name: input.trim(), sale_price })
+                                      .then((data) => {
+                                          if (!data.ok) {
+                                              window.ofAlert({ message: data.error || 'Could not add item' });
+                                              callback();
+                                              return;
+                                          }
+                                          callback({
+                                              value: data.value,
+                                              text: data.text,
+                                              rate: data.rate,
+                                              unit: 'qty',
+                                              stock: 0,
+                                          });
+                                      })
+                                      .catch(() => {
+                                          window.ofAlert({ message: 'Could not add item' });
+                                          callback();
+                                      });
                               });
                       }
                     : false,

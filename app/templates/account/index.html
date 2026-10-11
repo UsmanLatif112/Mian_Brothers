@@ -279,12 +279,12 @@
             const amount = Number(amountInput.value || 0);
             if (!(amount > 0)) {
                 e.preventDefault();
-                alert('Enter an amount greater than zero.');
+                window.ofAlert({ message: 'Enter an amount greater than zero.' });
                 return;
             }
             if (amount > maxAvailable + 0.01) {
                 e.preventDefault();
-                alert(`Amount cannot exceed available cash (${maxAvailable.toFixed(2)}).`);
+                window.ofAlert({ message: `Amount cannot exceed available cash (${maxAvailable.toFixed(2)}).` });
             }
         });
     }

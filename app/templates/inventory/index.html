@@ -1290,7 +1290,7 @@
         const fail = (msg) => {
             e.preventDefault();
             if (inventoryModalMode === 'edit') setProductFieldsLocked(true);
-            alert(msg);
+            window.ofAlert({ message: msg });
         };
 
         const cat = categorySelect.value;

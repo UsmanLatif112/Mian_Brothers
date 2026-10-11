@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300..700&family=IBM+Plex+Sans:wght@300..700&display=swap');
 
 /* OctaneFlow — Signal base (ui.css completes the look) */
 :root {
@@ -93,13 +93,15 @@ html {
 
 body {
     font-family: var(--font-ui, "Sora", "IBM Plex Sans", system-ui, sans-serif);
+    font-weight: 400;
     background-color: var(--bg-color);
     background-image: var(--bg-accent);
     background-attachment: fixed;
     color: var(--text-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
     min-height: 100vh;
-    line-height: 1.5;
+    line-height: 1.55;
+    letter-spacing: 0.005em;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
 }
@@ -134,7 +136,7 @@ body.has-app-shell {
 
 /* Base Components & Transitions */
 h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text-primary);
 }
 
@@ -294,7 +296,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .navbar-brand-custom {
-    font-weight: 700;
+    font-weight: 500;
     font-size: 1.2rem;
     color: var(--text-primary) !important;
     display: flex;
@@ -325,7 +327,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .nav-link-custom {
     color: var(--text-secondary) !important;
-    font-weight: 500;
+    font-weight: 400;
     padding: 0.45rem 0.85rem !important;
     border-radius: 8px;
     transition: all 0.2s ease;
@@ -341,7 +343,7 @@ h1, h2, h3, h4, h5, h6 {
 .nav-link-custom.active {
     color: var(--text-primary) !important;
     background-color: rgba(13, 148, 136, 0.12);
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .navbar-toggler {
@@ -369,7 +371,7 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
+    font-weight: 500;
     font-size: 0.9rem;
     color: #fff;
     background: linear-gradient(135deg, #64748b, #334155);
@@ -382,7 +384,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .user-name {
-    font-weight: 500;
+    font-weight: 400;
     color: var(--text-primary);
 }
 
@@ -438,7 +440,7 @@ h1, h2, h3, h4, h5, h6 {
     background-color: transparent;
     border-bottom: var(--card-border);
     padding: 1.15rem 1.35rem;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .card-body-premium {
@@ -476,7 +478,7 @@ h1, h2, h3, h4, h5, h6 {
     display: block;
     font-size: 0.68rem;
     letter-spacing: 0.4px;
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: 0.4rem;
     white-space: normal;
     line-height: 1.25;
@@ -515,7 +517,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .metric-unit {
     font-size: 0.8rem;
-    font-weight: 600;
+    font-weight: 500;
     opacity: 0.75;
 }
 
@@ -557,7 +559,7 @@ h1, h2, h3, h4, h5, h6 {
     background: linear-gradient(145deg, #14b8a6 0%, #0d9488 48%, #0f766e 100%);
     border: none;
     color: #ffffff;
-    font-weight: 700;
+    font-weight: 500;
     padding: 0.65rem 1.4rem;
     border-radius: 13px;
     transition: all 0.2s ease;
@@ -596,7 +598,7 @@ input.is-submitting {
 .table-custom thead th {
     background: var(--table-head-bg);
     color: var(--text-secondary);
-    font-weight: 700;
+    font-weight: 500;
     font-size: 0.72rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -613,7 +615,7 @@ input.is-submitting {
     vertical-align: middle;
     border-bottom: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent);
     font-size: 0.9rem;
-    font-weight: 500;
+    font-weight: 400;
     color: var(--text-primary);
 }
 
@@ -660,7 +662,7 @@ input.is-submitting {
 }
 
 .table-custom .btn-sm {
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0.01em;
 }
 
@@ -734,7 +736,7 @@ input.is-submitting {
 /* Badges styling */
 .badge-custom {
     padding: 0.4em 0.8em;
-    font-weight: 600;
+    font-weight: 500;
     border-radius: 999px;
     font-size: 0.75rem;
     letter-spacing: 0.02em;
@@ -754,7 +756,7 @@ input.is-submitting {
     background-color: rgba(107, 114, 128, 0.12);
     color: var(--text-secondary);
     padding: 0.35em 0.65em;
-    font-weight: 600;
+    font-weight: 500;
     border-radius: 999px;
     font-size: 0.72rem;
     text-transform: capitalize;
@@ -769,7 +771,7 @@ input.is-submitting {
     background-color: rgba(239, 68, 68, 0.14);
     color: #ef4444;
     border-radius: 999px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 /* Animations */
@@ -799,7 +801,7 @@ input.is-submitting {
 }
 
 .form-label-custom {
-    font-weight: 500;
+    font-weight: 400;
     margin-bottom: 0.4rem;
     color: var(--text-primary);
 }
@@ -935,7 +937,7 @@ input.is-submitting {
 .page-eyebrow {
     margin: 0 0 0.2rem;
     font-size: 0.7rem;
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--accent-blue);
@@ -944,7 +946,7 @@ input.is-submitting {
 .page-title {
     margin: 0;
     font-size: clamp(1.35rem, 2.5vw, 1.75rem);
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.03em;
     line-height: 1.2;
 }
@@ -1057,7 +1059,7 @@ input.is-submitting {
     min-height: 34px;
     padding: 0.3rem 1.75rem 0.3rem 0.65rem;
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 400;
     border-radius: 8px;
     background-color: var(--card-bg);
     box-shadow: var(--shadow-sm);
@@ -1086,7 +1088,7 @@ input.is-submitting {
 
 .period-date-label {
     font-size: 0.72rem;
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -1152,7 +1154,7 @@ input.is-submitting {
 
 .panel-title {
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.02em;
 }
 
@@ -1164,7 +1166,7 @@ input.is-submitting {
 
 .card-header-premium h5 {
     font-size: 1.05rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.02em;
     margin-bottom: 0;
 }
@@ -1173,7 +1175,7 @@ input.is-submitting {
     color: var(--accent-blue);
     background: transparent;
     border: none;
-    font-weight: 600;
+    font-weight: 500;
     padding: 0.35rem 0.6rem;
     border-radius: 8px;
 }
@@ -1219,7 +1221,7 @@ input.is-submitting {
 .btn-dry-action {
     background: #fff;
     color: var(--danger-text);
-    font-weight: 600;
+    font-weight: 500;
     border: none;
     border-radius: 8px;
     padding: 0.5rem 1rem;
@@ -1291,7 +1293,7 @@ input.is-submitting {
 }
 
 .dash-item-name {
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: 0.2rem;
     line-height: 1.3;
 }
@@ -1309,7 +1311,7 @@ input.is-submitting {
 
 .dash-profit-chip span {
     font-size: 0.65rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -1437,7 +1439,7 @@ a.kpi-card:focus-visible {
 
 .kpi-label {
     font-size: 0.64rem;
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -1446,7 +1448,7 @@ a.kpi-card:focus-visible {
 
 .kpi-value {
     font-size: clamp(0.82rem, 1.2vw, 1rem);
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.02em;
     line-height: 1.15;
     white-space: nowrap;
@@ -1534,7 +1536,7 @@ a.kpi-card:focus-visible {
 .stock-label {
     display: block;
     font-size: 0.72rem;
-    font-weight: 600;
+    font-weight: 500;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -1543,14 +1545,14 @@ a.kpi-card:focus-visible {
 
 .stock-value {
     font-size: clamp(1.35rem, 3vw, 1.75rem);
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.03em;
     line-height: 1.15;
 }
 
 .stock-unit {
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 500;
     opacity: 0.65;
 }
 
@@ -2106,7 +2108,7 @@ a.kpi-card:focus-visible {
 .form-control.form-control-custom {
     min-height: 42px;
     font-size: 0.9rem;
-    font-weight: 500;
+    font-weight: 400;
     box-shadow: var(--shadow-sm);
 }
 
@@ -2141,7 +2143,7 @@ a.kpi-card:focus-visible {
 .btn-outline-primary.border-0,
 .btn-outline-danger.border-0 {
     border-radius: 8px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .btn-outline-secondary.border-0 {
@@ -2188,7 +2190,7 @@ a.kpi-card:focus-visible {
     flex: 1 1 auto;
     border-radius: 8px !important;
     font-size: 0.82rem;
-    font-weight: 600;
+    font-weight: 500;
     padding: 0.45rem 0.7rem;
     white-space: nowrap;
 }
@@ -2293,7 +2295,7 @@ a.kpi-card:focus-visible {
 }
 
 .directory-card-title {
-    font-weight: 650;
+    font-weight: 500;
     font-size: 0.92rem;
     line-height: 1.35;
     color: var(--text-primary);
@@ -2430,7 +2432,7 @@ a.kpi-card:focus-visible {
     border-radius: 8px;
     margin: 0 0.15rem;
     color: var(--text-secondary);
-    font-weight: 600;
+    font-weight: 500;
     font-size: 0.82rem;
     background: transparent;
     min-width: 34px;
@@ -2506,7 +2508,7 @@ a.kpi-card:focus-visible {
 }
 
 .modal-title {
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.02em;
 }
 
@@ -2552,7 +2554,7 @@ a.kpi-card:focus-visible {
 
 .auth-title {
     font-size: 1.45rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.03em;
     margin-bottom: 0.25rem;
 }
@@ -2638,7 +2640,7 @@ a.kpi-card:focus-visible {
 
 .stat-card-label {
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -2647,7 +2649,7 @@ a.kpi-card:focus-visible {
 
 .stat-card-value {
     font-size: clamp(1.1rem, 2.5vw, 1.45rem);
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.02em;
     line-height: 1.2;
 }
@@ -2675,7 +2677,7 @@ a.kpi-card:focus-visible {
 .ts-wrapper.form-control-custom .ts-control,
 .ts-wrapper.single .ts-control {
     box-shadow: var(--shadow-sm);
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .ts-dropdown .option.active {
@@ -2685,7 +2687,7 @@ a.kpi-card:focus-visible {
 
 .ts-dropdown .create {
     color: var(--accent-blue);
-    font-weight: 600;
+    font-weight: 500;
 }
 
 /* Metric cards legacy pages */
@@ -2753,7 +2755,7 @@ a.kpi-card:focus-visible {
 .cash-journal-metric-label {
     display: block;
     font-size: 0.68rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-secondary);
@@ -2767,7 +2769,7 @@ a.kpi-card:focus-visible {
 .cash-journal-metric-value {
     display: block;
     font-size: clamp(0.92rem, 1.35vw, 1.15rem);
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: -0.02em;
     line-height: 1.2;
     white-space: nowrap;
@@ -2807,7 +2809,7 @@ a.kpi-card:focus-visible {
     padding: 0.15rem 0.45rem;
     border-radius: 999px;
     font-size: 0.62rem;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.03em;
     text-transform: uppercase;
     line-height: 1.2;
@@ -3237,7 +3239,7 @@ body.has-app-shell {
 
 .modal .form-label-custom {
     font-size: 0.72rem;
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-secondary);
