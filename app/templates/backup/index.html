@@ -31,34 +31,22 @@
                 <h2 class="panel-title mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Create Backup</h2>
             </div>
             <div class="card-body card-body-premium">
-                {% if is_agency_backup %}
-                <p class="text-muted-custom mb-3">
-                    Saves a JSON copy of <strong>your agency only</strong> (sales, inventory, customers, team, etc.).
-                    Other agencies are never included. Pick a folder on your computer to keep a copy;
-                    the server also keeps files for {{ retention_days }} days.
-                </p>
-                <p class="text-muted-custom small mb-3">
-                    Files are named <code>Agency_{{ agency_id }}_…</code> with the date and time.
-                </p>
-                {% else %}
-                <p class="text-muted-custom mb-3">
-                    Saves a full copy of <strong>all application data</strong> (every agency).
-                    You’ll pick a folder on your computer; a copy is also kept on the server
-                    (last {{ retention_days }} days).
-                </p>
-                <p class="text-muted-custom small mb-3">
-                    Files are named <code>Mianbrothers</code> with the date and time of the backup.
-                </p>
-                {% endif %}
+                <label class="form-label form-label-custom">Save folder</label>
+                <div class="of-backup-folder mb-3" id="backup-folder-box">
+                    <div class="of-backup-folder-path" id="backup-folder-label">No folder selected</div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-backup-folder">
+                        <i class="bi bi-folder2-open me-1"></i>
+                        <span id="btn-backup-folder-text">Choose folder</span>
+                    </button>
+                </div>
                 <button type="button"
                         class="btn btn-primary-custom w-100"
                         id="btn-backup-save"
-                        data-create-url="{{ url_for('backup.create') }}?download=1">
-                    <i class="bi bi-folder2-open me-1"></i> Create &amp; save to folder
+                        data-create-url="{{ url_for('backup.create') }}?download=1"
+                        disabled>
+                    <i class="bi bi-download me-1"></i> Create backup
                 </button>
-                <p class="form-text mt-2 mb-0" id="backup-save-hint">
-                    Chrome / Edge: choose a folder. Other browsers: use the Save dialog.
-                </p>
+                <p class="form-text mt-2 mb-0" id="backup-save-hint">Select a folder first, then create the backup.</p>
             </div>
         </div>
     </div>
@@ -76,11 +64,9 @@
                 <div class="alert alert-warning border-0 mb-3" role="alert">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                     {% if is_agency_backup %}
-                    <strong>Warning:</strong> Restoring will replace <strong>only your agency’s</strong> current data.
-                    Other agencies are not affected. Make a fresh backup first if you are unsure.
+                    Restoring replaces <strong>your agency’s</strong> data only.
                     {% else %}
-                    <strong>Warning:</strong> Restoring will replace <strong>all</strong> current data
-                    (every agency). Your live data will be lost unless you have another backup.
+                    Restoring replaces <strong>all</strong> current data.
                     {% endif %}
                 </div>
 
@@ -101,11 +87,7 @@
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" value="yes" id="confirm_restore" name="confirm_restore" required>
                         <label class="form-check-label" for="confirm_restore">
-                            {% if is_agency_backup %}
-                            I understand my agency’s data will be permanently replaced by this backup.
-                            {% else %}
-                            I understand current data will be permanently replaced by this backup.
-                            {% endif %}
+                            I understand this backup will replace current data.
                         </label>
                     </div>
 
@@ -113,15 +95,10 @@
                         <button type="button" class="btn btn-danger" id="btn-restore-open">
                             <i class="bi bi-arrow-counterclockwise me-1"></i> Confirm &amp; Apply
                         </button>
-                        <a href="{{ url_for('backup.index') }}" class="btn btn-outline-secondary">
-                            Cancel
-                        </a>
                     </div>
                 </form>
                 {% else %}
-                <p class="text-muted-custom mb-0">
-                    No backups available yet. Create a backup first.
-                </p>
+                <p class="text-muted-custom mb-0">No backups yet.</p>
                 {% endif %}
             </div>
         </div>
@@ -135,9 +112,7 @@
             <div class="card-header-premium d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="panel-title mb-0">Available Backups</h2>
-                    <p class="panel-subtitle mb-0">
-                        {% if is_agency_backup %}Your agency · {% endif %}Last {{ retention_days }} days on server
-                    </p>
+                    <p class="panel-subtitle mb-0">Last {{ retention_days }} days</p>
                 </div>
                 <span class="badge badge-custom badge-staff">{{ backups | length }} file{{ 's' if backups | length != 1 else '' }}</span>
             </div>
@@ -188,28 +163,18 @@
         <div class="modal-content">
             <div class="modal-header border-0">
                 <h5 class="modal-title fw-bold text-danger" id="restoreConfirmModalLabel">
-                    <i class="bi bi-exclamation-octagon-fill me-2"></i>
-                    {% if backup_mode == 'agency' %}Restore will erase your agency data{% else %}Restore will erase current data{% endif %}
+                    <i class="bi bi-exclamation-octagon-fill me-2"></i>Confirm restore
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="mb-2">You are about to restore:</p>
-                <p class="fw-semibold mb-3" id="restore-selected-name">—</p>
-                <p class="text-muted-custom mb-0">
-                    {% if backup_mode == 'agency' %}
-                    Your agency’s current records will be deleted and replaced. Other agencies stay unchanged.
-                    If this backup is wrong, restore another agency backup to recover.
-                    {% else %}
-                    All current records will be deleted and replaced. If this backup is wrong or incomplete,
-                    that data may be permanently lost. This cannot be undone except by restoring another backup.
-                    {% endif %}
-                </p>
+                <p class="mb-2">Restore this backup?</p>
+                <p class="fw-semibold mb-0" id="restore-selected-name">—</p>
             </div>
             <div class="modal-footer border-0">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger" id="btn-restore-submit">
-                    {% if backup_mode == 'agency' %}Yes, restore my agency{% else %}Yes, restore full data{% endif %}
+                    {% if backup_mode == 'agency' %}Yes, restore{% else %}Yes, restore{% endif %}
                 </button>
             </div>
         </div>
@@ -218,27 +183,95 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.of-backup-folder {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 14px);
+    background: color-mix(in srgb, var(--card-bg) 90%, var(--accent-blue) 6%);
+}
+.of-backup-folder-path {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.of-backup-folder.is-ready .of-backup-folder-path {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+</style>
 <script>
 (function (fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
     else fn();
 })(function () {
     const createBtn = document.getElementById('btn-backup-save');
+    const folderBtn = document.getElementById('btn-backup-folder');
+    const folderLabel = document.getElementById('backup-folder-label');
+    const folderBtnText = document.getElementById('btn-backup-folder-text');
+    const folderBox = document.getElementById('backup-folder-box');
     const hint = document.getElementById('backup-save-hint');
+    let dirHandle = null;
 
     function toast(msg, kind) {
         if (window.ofToast) window.ofToast(msg, kind || 'info');
         else if (kind === 'danger') alert(msg);
     }
 
-    async function writeBlobToFolder(blob, filename) {
-        /* Prefer directory picker (true “choose folder”), then Save As, then download. */
-        if (window.showDirectoryPicker) {
-            const dir = await window.showDirectoryPicker({ mode: 'readwrite' });
-            const fileHandle = await dir.getFileHandle(filename, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
+    function setFolderUI(name) {
+        if (!folderLabel) return;
+        if (name) {
+            folderLabel.textContent = name;
+            if (folderBtnText) folderBtnText.textContent = 'Change folder';
+            if (folderBox) folderBox.classList.add('is-ready');
+            if (createBtn) createBtn.disabled = false;
+            if (hint) hint.textContent = 'Backup will be saved in the selected folder.';
+        } else {
+            folderLabel.textContent = 'No folder selected';
+            if (folderBtnText) folderBtnText.textContent = 'Choose folder';
+            if (folderBox) folderBox.classList.remove('is-ready');
+            if (createBtn) createBtn.disabled = true;
+            if (hint) hint.textContent = 'Select a folder first, then create the backup.';
+        }
+    }
+
+    async function pickFolder() {
+        if (!window.showDirectoryPicker) {
+            toast('Folder picker needs Chrome or Edge. Use Save dialog after create.', 'warning');
+            /* Allow create without pre-selected folder on unsupported browsers */
+            dirHandle = null;
+            setFolderUI('Save dialog (browser default)');
+            if (createBtn) createBtn.disabled = false;
+            if (hint) hint.textContent = 'Your browser will ask where to save the file.';
+            return;
+        }
+        try {
+            dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            setFolderUI(dirHandle.name || 'Selected folder');
+        } catch (err) {
+            if (err && err.name === 'AbortError') return;
+            toast(err.message || 'Could not open folder picker.', 'danger');
+        }
+    }
+
+    async function writeToDir(blob, filename, handle) {
+        const fileHandle = await handle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+    }
+
+    async function writeBlob(blob, filename) {
+        if (dirHandle) {
+            await writeToDir(blob, filename, dirHandle);
             return 'folder';
         }
         if (window.showSaveFilePicker) {
@@ -291,24 +324,23 @@
         return { blob, filename };
     }
 
-    async function saveFromUrl(url, method) {
-        if (window.ofLoader) window.ofLoader.show('Creating backup…');
+    async function saveFromUrl(url, method, requireFolder) {
+        if (requireFolder && !dirHandle && window.showDirectoryPicker) {
+            toast('Choose a folder first.', 'warning');
+            return;
+        }
+        if (window.ofLoader) window.ofLoader.show(method === 'POST' ? 'Creating backup…' : 'Saving…');
         try {
             const { blob, filename } = await fetchBackupBlob(url, method);
-            if (window.ofLoader) {
-                window.ofLoader.hide(true);
-                window.ofLoader.show('Choose folder…');
-            }
-            const mode = await writeBlobToFolder(blob, filename);
+            const mode = await writeBlob(blob, filename);
             if (window.ofLoader) window.ofLoader.hide(true);
             if (mode === 'folder') {
-                toast(`Backup saved to your folder as ${filename}`, 'success');
+                toast(`Saved ${filename} to ${dirHandle.name || 'folder'}`, 'success');
             } else if (mode === 'file') {
-                toast(`Backup saved as ${filename}`, 'success');
+                toast(`Saved ${filename}`, 'success');
             } else {
-                toast(`Download started: ${filename}. Pick the folder in the Save dialog.`, 'success');
+                toast(`Download started: ${filename}`, 'success');
             }
-            /* Refresh list so the new server copy appears */
             if (method === 'POST') {
                 setTimeout(() => { window.location.href = '{{ url_for("backup.index") }}'; }, 600);
             }
@@ -322,20 +354,34 @@
         }
     }
 
+    if (folderBtn) folderBtn.addEventListener('click', pickFolder);
+
     if (createBtn) {
-        if (!window.showDirectoryPicker && !window.showSaveFilePicker && hint) {
-            hint.textContent = 'Your browser will open a Save dialog — choose the folder there.';
+        if (!window.showDirectoryPicker && hint) {
+            hint.textContent = 'Click Choose folder, then Create backup (Save dialog).';
+            createBtn.disabled = false;
         }
         createBtn.addEventListener('click', () => {
             const url = createBtn.getAttribute('data-create-url');
-            if (url) saveFromUrl(url, 'POST');
+            if (url) saveFromUrl(url, 'POST', true);
         });
     }
 
     document.querySelectorAll('.btn-backup-download').forEach((btn) => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             const url = btn.getAttribute('data-url');
-            if (url) saveFromUrl(url, 'GET');
+            if (!url) return;
+            if (!dirHandle && window.showDirectoryPicker) {
+                try {
+                    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                    setFolderUI(dirHandle.name || 'Selected folder');
+                } catch (err) {
+                    if (err && err.name === 'AbortError') return;
+                    toast(err.message || 'Could not open folder.', 'danger');
+                    return;
+                }
+            }
+            saveFromUrl(url, 'GET', false);
         });
     });
 

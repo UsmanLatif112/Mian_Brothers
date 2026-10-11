@@ -17,10 +17,7 @@
             <p class="page-eyebrow">Stock</p>
             <h1 class="page-title">Inventory Control</h1>
         </div>
-        <div class="page-header-actions d-flex flex-wrap gap-2">
-            <a href="{{ url_for('purchasing.index') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-cart-plus me-1"></i><span class="btn-label"> Purchasing</span>
-            </a>
+        <div class="page-header-actions">
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn" title="Add Inventory">
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Inventory</span>
             </button>
@@ -155,7 +152,7 @@
                                 <div class="directory-card-meta">
                                     <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span>
                                     {% if item.company %}<span class="of-clip" data-of-tip="{{ item.company }}">{{ item.company }}</span>{% endif %}
-                                    {% if item.item_type %}<span class="of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
+                                    {% if item.item_type %}<span class="of-item-type of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
                                 </div>
                                 <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}{% if item.category == 'ft_mobile' and item.liters is not none %} · {{ '{:,.2f}'.format(item.liters) }} L{% elif item.category != 'ft_mobile' %} · Qty {{ item.quantity }}{% endif %}">
                                     Vendor: {{ item.vendor or '—' }}
@@ -229,7 +226,7 @@
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span></td>
                                 <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ item.name }}">{{ item.name }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.company or '-' }}">{{ item.company or '-' }}</span></td>
-                                <td><span class="of-clip-cell" data-of-tip="{{ item.item_type or '-' }}">{{ item.item_type or '-' }}</span></td>
+                                <td class="of-item-type"><span class="of-clip-cell" data-of-tip="{{ item.item_type or '-' }}">{{ item.item_type or '-' }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.vendor or '-' }}">{{ item.vendor or '-' }}</span></td>
                                 <td>{{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
                                 <td>{{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>

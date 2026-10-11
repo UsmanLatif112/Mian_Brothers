@@ -477,6 +477,10 @@ def create():
 
         flash(f'{scope_label} backup created: {filename}', 'success')
     except Exception as exc:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         if request.headers.get('X-Requested-With') == 'OFBackup':
             return jsonify(ok=False, error=str(exc)), 500
         flash(f'Backup failed: {exc}', 'danger')

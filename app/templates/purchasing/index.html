@@ -59,9 +59,6 @@
             <p class="page-eyebrow">Supply</p>
             <h1 class="page-title">Purchasing</h1>
         </div>
-        <a href="{{ url_for('inventory.index') }}" class="btn btn-primary-custom">
-            <i class="bi bi-plus-circle me-1"></i> Add Inventory
-        </a>
     </div>
     <div class="page-header-meta">
         <span class="period-range-badge"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
@@ -200,8 +197,7 @@
                             <tr>
                                 <td colspan="9" class="empty-state text-center py-4">
                                     <div class="empty-state-icon"><i class="bi bi-cart-plus"></i></div>
-                                    <p class="text-muted-custom mb-2">No purchases for this filter.</p>
-                                    <a href="{{ url_for('inventory.index') }}" class="btn btn-sm btn-primary-custom">Add Inventory</a>
+                                    <p class="text-muted-custom mb-0">No purchases for this filter.</p>
                                 </td>
                             </tr>
                         {% endif %}

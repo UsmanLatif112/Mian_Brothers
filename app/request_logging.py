@@ -73,7 +73,16 @@ def setup_request_logging(app):
         user = '-'
         try:
             from flask_login import current_user
-            if current_user.is_authenticated:
+            from app.models import db
+            try:
+                authenticated = bool(current_user.is_authenticated)
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                authenticated = False
+            if authenticated:
                 user = f"{current_user.id}:{getattr(current_user, 'name', '') or current_user.get_id()}"
         except Exception:
             pass

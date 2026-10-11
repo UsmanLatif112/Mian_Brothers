@@ -15,7 +15,18 @@ UPLOAD_DIR = os.path.join(_BASE_DIR, 'uploads')
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    """Load user; recover if a prior request left the DB session invalid."""
+    try:
+        return db.session.get(User, int(user_id))
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            return db.session.get(User, int(user_id))
+        except Exception:
+            return None
 
 
 def media_url(filename, fallback='img/logo.png'):
@@ -144,13 +155,38 @@ def create_app():
     app.register_blueprint(receipts_bp, url_prefix='/receipts')
 
     @app.before_request
+    def _recover_db_session():
+        """Clear a leftover invalid transaction so login/queries can proceed."""
+        try:
+            # Touch the connection; PendingRollbackError → rollback + fresh use
+            db.session.connection()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.remove()
+            except Exception:
+                pass
+
+    @app.before_request
     def enforce_module_access():
         """Team members may only open modules their agency admin granted."""
         from flask_login import current_user as cu
         from flask import request as req, flash as flash_msg
         from app.tenancy import module_for_endpoint, can_access_module as _can
 
-        if not cu.is_authenticated:
+        try:
+            authenticated = bool(cu.is_authenticated)
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return None
+
+        if not authenticated:
             return None
         endpoint = req.endpoint or ''
         if endpoint.startswith('static') or endpoint in ('auth.login', 'auth.logout', 'uploaded_file', 'root'):
@@ -169,7 +205,20 @@ def create_app():
         if _can('account'):
             return redirect(url_for('account.index'))
         return redirect(url_for('auth.logout'))
-    
+
+    @app.teardown_request
+    def _teardown_db_session(exc):
+        """Always clear the session after a request (especially after errors)."""
+        try:
+            if exc is not None:
+                db.session.rollback()
+        except Exception:
+            pass
+        try:
+            db.session.remove()
+        except Exception:
+            pass
+
     # Root route redirect
     @app.route('/')
     def root():
@@ -297,6 +346,8 @@ def ensure_agency_schema():
 
     # Ensure team-member module grants column
     if 'users' in tables:
+        # Re-inspect after possible earlier alters
+        inspector = inspect(db.engine)
         user_cols = {c['name'] for c in inspector.get_columns('users')}
         if 'allowed_modules' not in user_cols:
             try:
@@ -311,23 +362,37 @@ def ensure_agency_schema():
                         ))
             except Exception as e:
                 print(f'allowed_modules add skip: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
     # Migrate legacy roles + attach users (do NOT force admin → super_admin;
     # admin is the agency-owner role).
-    for user in User.query.all():
-        changed = False
-        if user.role == 'staff':
-            user.role = 'user'
-            changed = True
-        if user.agency_id is None and user.role != 'super_admin':
-            user.agency_id = aid
-            changed = True
-        if user.role == 'user' and not getattr(user, 'allowed_modules', None):
-            user.allowed_modules = '*'
-            changed = True
-        if changed:
-            db.session.add(user)
-    db.session.commit()
+    try:
+        inspector = inspect(db.engine)
+        user_cols = {c['name'] for c in inspector.get_columns('users')} if 'users' in inspector.get_table_names() else set()
+        has_allowed = 'allowed_modules' in user_cols
+        for user in User.query.all():
+            changed = False
+            if user.role == 'staff':
+                user.role = 'user'
+                changed = True
+            if user.agency_id is None and user.role != 'super_admin':
+                user.agency_id = aid
+                changed = True
+            if has_allowed and user.role == 'user' and not getattr(user, 'allowed_modules', None):
+                user.allowed_modules = '*'
+                changed = True
+            if changed:
+                db.session.add(user)
+        db.session.commit()
+    except Exception as e:
+        print(f'user role/agency migrate skip: {e}')
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
     # Backfill agency_id on tenant rows
     inspector = inspect(db.engine)

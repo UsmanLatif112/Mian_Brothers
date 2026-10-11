@@ -1762,6 +1762,21 @@ body > .ts-dropdown {
 }
 
 /* Truncate long names/details + app tooltip (no scrollers) */
+/* Oil type labels (Full, Bottle, …) — lighter, cooler weight */
+.of-item-type,
+.of-item-type .of-clip,
+.of-item-type .of-clip-cell {
+    font-weight: 450;
+    font-size: 0.88rem;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+}
+
+.directory-card-meta .of-item-type {
+    font-weight: 400;
+    opacity: 0.92;
+}
+
 .of-clip,
 .of-clip-cell {
     overflow: hidden;
