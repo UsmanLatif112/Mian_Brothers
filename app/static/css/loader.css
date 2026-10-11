@@ -1,4 +1,4 @@
-/* OctaneFlow loader — card + fuel pump (Uiverse road-style). Animates only while .is-on */
+/* OctaneFlow loader — cool card + fuel pump. Destination page animates; leave page is a soft veil only. */
 
 html.of-loading,
 html.of-loading body {
@@ -16,161 +16,260 @@ html.of-loading body {
     visibility: hidden;
 }
 
-.of-loader.is-on {
+.of-loader.is-on,
+html.of-leaving .of-loader {
     pointer-events: all;
     opacity: 1;
     visibility: visible;
 }
 
+/* Soft exit veil on page 1 (no complex motion = no frozen frames on unload) */
+html.of-leaving .of-loader-scene,
+html.of-leaving .of-loader-label,
+html.of-leaving .of-loader-sub,
+html.of-leaving .of-loader-dots {
+    opacity: 0;
+}
+
+html.of-leaving .of-loader-panel {
+    width: 72px;
+    height: 72px;
+    padding: 0;
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+}
+
+html.of-leaving .of-loader-pulse {
+    display: block;
+}
+
+.of-loader-pulse {
+    display: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #5eead4, #0d9488 55%, #0f766e);
+    box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45);
+    animation: ofPulse 1.1s ease-out infinite;
+}
+
 .of-loader-veil {
     position: absolute;
     inset: 0;
-    background: color-mix(in srgb, var(--body-bg, #eef3f8) 52%, rgba(15, 28, 46, 0.34));
+    background:
+        radial-gradient(ellipse 70% 50% at 50% 40%, rgba(13, 148, 136, 0.18), transparent 60%),
+        color-mix(in srgb, #0f1c2e 42%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 [data-theme="dark"] .of-loader-veil {
-    background: rgba(2, 8, 18, 0.78);
+    background:
+        radial-gradient(ellipse 70% 50% at 50% 40%, rgba(20, 184, 166, 0.16), transparent 60%),
+        rgba(2, 8, 18, 0.82);
 }
 
 .of-loader-panel {
     position: relative;
     z-index: 1;
-    width: min(260px, calc(100vw - 2.5rem));
-    padding: 1.35rem 1.15rem 1.1rem;
-    border-radius: 18px;
-    background: var(--card-bg, #eef3f8);
-    border: 1px solid color-mix(in srgb, var(--border-color, #e2e8f0) 80%, transparent);
-    box-shadow: 0 18px 40px rgba(15, 28, 46, 0.14);
+    width: min(280px, calc(100vw - 2.5rem));
+    padding: 1.5rem 1.25rem 1.25rem;
+    border-radius: 22px;
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(238, 243, 248, 0.94));
+    border: 1px solid rgba(15, 28, 46, 0.08);
+    box-shadow:
+        0 0 0 1px rgba(13, 148, 136, 0.08),
+        0 22px 48px rgba(15, 28, 46, 0.18),
+        0 0 60px rgba(13, 148, 136, 0.12);
     text-align: center;
+    overflow: hidden;
+}
+
+.of-loader-panel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -40%;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+    transform: skewX(-18deg);
+    pointer-events: none;
+}
+
+.of-loader.is-on .of-loader-panel::before {
+    animation: ofShine 2.2s ease-in-out infinite;
+}
+
+[data-theme="dark"] .of-loader-panel {
+    background: linear-gradient(165deg, #151d2c, #101826);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow:
+        0 0 0 1px rgba(20, 184, 166, 0.12),
+        0 22px 48px rgba(0, 0, 0, 0.45),
+        0 0 50px rgba(13, 148, 136, 0.1);
 }
 
 .of-loader-label {
-    margin: 0.85rem 0 0;
-    font-size: 0.95rem;
-    font-weight: 700;
+    margin: 0.95rem 0 0;
+    font-size: 0.98rem;
+    font-weight: 750;
+    letter-spacing: -0.01em;
     color: var(--text-primary, #0f1c2e);
 }
 
 .of-loader-sub {
     margin: 0.2rem 0 0;
-    font-size: 0.78rem;
-    font-weight: 500;
+    font-size: 0.76rem;
+    font-weight: 560;
     color: var(--text-secondary, #4a5d73);
 }
 
-/* —— Scene (Uiverse-style road) —— */
-.of-road-loader {
-    width: fit-content;
-    height: fit-content;
-    display: flex;
-    align-items: center;
+.of-loader-dots {
+    display: inline-flex;
+    gap: 0.28rem;
+    margin-top: 0.7rem;
     justify-content: center;
+}
+
+.of-loader-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #0d9488;
+    opacity: 0.3;
+}
+
+.of-loader.is-on .of-loader-dots span:nth-child(1) { animation: ofDot 1s ease-in-out infinite 0s; }
+.of-loader.is-on .of-loader-dots span:nth-child(2) { animation: ofDot 1s ease-in-out infinite 0.18s; }
+.of-loader.is-on .of-loader-dots span:nth-child(3) { animation: ofDot 1s ease-in-out infinite 0.36s; }
+
+/* —— Scene —— */
+.of-loader-scene {
+    width: 220px;
+    height: 118px;
     margin: 0 auto;
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    background:
+        linear-gradient(180deg, rgba(13, 148, 136, 0.08), transparent 55%),
+        linear-gradient(180deg, #e8eef5 0%, #dce5f0 100%);
+}
+
+[data-theme="dark"] .of-loader-scene {
+    background:
+        linear-gradient(180deg, rgba(20, 184, 166, 0.1), transparent 55%),
+        linear-gradient(180deg, #0f172a 0%, #111827 100%);
 }
 
 .of-truckWrapper {
-    width: 210px;
-    height: 112px;
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
     align-items: center;
     justify-content: flex-end;
+    padding-bottom: 14px;
     overflow: hidden;
 }
 
 .of-truckBody {
-    width: 128px;
-    height: fit-content;
-    margin-bottom: 6px;
+    width: 122px;
+    margin-bottom: 5px;
     will-change: transform;
+    filter: drop-shadow(0 6px 8px rgba(15, 28, 46, 0.18));
 }
 
 .of-cardsvg {
     display: block;
-    width: 128px;
+    width: 122px;
     height: auto;
 }
 
 .of-truckTires {
-    width: 128px;
-    height: fit-content;
+    width: 122px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 14px 0 16px;
+    padding: 0 12px 0 14px;
     position: absolute;
-    bottom: 0;
+    bottom: 12px;
     z-index: 2;
 }
 
 .of-tiresvg {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     display: block;
 }
 
 .of-road {
     width: 100%;
-    height: 2px;
-    background-color: #1e293b;
-    position: relative;
-    bottom: 0;
-    align-self: flex-end;
+    height: 3px;
+    background: linear-gradient(90deg, #1e293b, #334155, #1e293b);
+    position: absolute;
+    bottom: 12px;
     border-radius: 3px;
     z-index: 1;
 }
 
-.of-road::before {
+.of-road::before,
+.of-road::after {
     content: "";
     position: absolute;
-    width: 22px;
     height: 100%;
     background-color: #1e293b;
     right: -50%;
     border-radius: 3px;
-    border-left: 10px solid #eef3f8;
+}
+
+.of-road::before {
+    width: 24px;
+    border-left: 10px solid #e8eef5;
 }
 
 .of-road::after {
-    content: "";
-    position: absolute;
     width: 12px;
-    height: 100%;
-    background-color: #1e293b;
-    right: -65%;
-    border-radius: 3px;
-    border-left: 4px solid #eef3f8;
-}
-
-.of-fuelPump {
-    position: absolute;
-    bottom: 2px;
-    right: -90%;
-    height: 86px;
-    width: auto;
-    z-index: 0;
-    will-change: transform;
+    right: -68%;
+    border-left: 4px solid #e8eef5;
 }
 
 [data-theme="dark"] .of-road::before,
 [data-theme="dark"] .of-road::after {
-    border-left-color: #121826;
+    border-left-color: #0f172a;
 }
 
-/* Animations only while visible — avoids frozen CSS timelines */
+.of-fuelPump {
+    position: absolute;
+    bottom: 14px;
+    right: -85%;
+    height: 78px;
+    width: auto;
+    z-index: 0;
+    will-change: transform;
+    filter: drop-shadow(0 4px 6px rgba(15, 28, 46, 0.2));
+}
+
+/* Destination animations only */
 .of-loader.is-on .of-truckBody {
-    animation: ofCardBounce 1s linear infinite;
+    animation: ofCardBounce 0.9s ease-in-out infinite;
 }
 
 .of-loader.is-on .of-road::before,
 .of-loader.is-on .of-road::after,
 .of-loader.is-on .of-fuelPump {
-    animation: ofRoadScroll 1.4s linear infinite;
+    animation: ofRoadScroll 1.25s linear infinite;
 }
 
 .of-loader.is-on .of-tiresvg {
-    animation: ofTireSpin 0.7s linear infinite;
+    animation: ofTireSpin 0.55s linear infinite;
+}
+
+.of-loader.is-on .of-fuelPump .of-pump-glow {
+    animation: ofPumpGlow 1.2s ease-in-out infinite;
 }
 
 @keyframes ofCardBounce {
@@ -180,7 +279,7 @@ html.of-loading body {
 
 @keyframes ofRoadScroll {
     0% { transform: translate3d(0, 0, 0); }
-    100% { transform: translate3d(-350px, 0, 0); }
+    100% { transform: translate3d(-340px, 0, 0); }
 }
 
 @keyframes ofTireSpin {
@@ -188,12 +287,36 @@ html.of-loading body {
     to { transform: rotate(360deg); }
 }
 
+@keyframes ofPumpGlow {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+@keyframes ofDot {
+    0%, 100% { opacity: 0.25; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-3px); }
+}
+
+@keyframes ofShine {
+    0% { left: -40%; }
+    55%, 100% { left: 120%; }
+}
+
+@keyframes ofPulse {
+    0% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.5); transform: scale(1); }
+    70% { box-shadow: 0 0 0 16px rgba(13, 148, 136, 0); transform: scale(1.05); }
+    100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); transform: scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .of-loader.is-on .of-truckBody,
     .of-loader.is-on .of-road::before,
     .of-loader.is-on .of-road::after,
     .of-loader.is-on .of-fuelPump,
-    .of-loader.is-on .of-tiresvg {
+    .of-loader.is-on .of-tiresvg,
+    .of-loader.is-on .of-loader-dots span,
+    .of-loader.is-on .of-loader-panel::before,
+    .of-loader-pulse {
         animation: none !important;
     }
 }

@@ -63,6 +63,7 @@
         if (safetyTimer) clearTimeout(safetyTimer);
         hideTimer = null;
         safetyTimer = null;
+        document.documentElement.classList.remove('of-leaving');
         paint(false);
     }
 
@@ -90,7 +91,15 @@
         showNav(message) {
             const msg = message || 'Loading…';
             markNav(msg);
-            reveal(msg);
+            // Soft exit veil only on leaving page — full road animation runs on destination
+            // (avoids frozen mid-frame during browser unload).
+            document.documentElement.classList.add('of-loading', 'of-leaving');
+            const node = el();
+            if (node) {
+                node.classList.remove('is-on');
+                node.setAttribute('aria-hidden', 'false');
+                setCopy(msg);
+            }
         },
         hide(force) {
             if (force) {

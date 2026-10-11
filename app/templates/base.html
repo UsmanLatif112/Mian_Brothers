@@ -17,10 +17,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=7">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=2">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=15">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=7">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=8">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
     <script>
-    /* Resume nav loader across full-page navigations; keep running until page load */
+    /* Nav handoff: page 1 marks flag; page 2 runs cool loader until DOM ready */
     (function () {
         var KEY = 'ofNavLoad';
         var MSG = 'ofNavMsg';
@@ -41,7 +41,7 @@
         window.__ofNavMsg = navMsg;
         window.__ofClearLoader = function (force) {
             window.__ofNavPending = false;
-            document.documentElement.classList.remove('of-loading');
+            document.documentElement.classList.remove('of-loading', 'of-leaving');
             var node = document.getElementById('ofLoader');
             if (node) {
                 node.classList.remove('is-on');
@@ -56,14 +56,14 @@
 </head>
 <body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
 
-    {# Global loader — rolling card + fuel pump (keeps animating until page load) #}
+    {# Global loader — cool card + fuel pump (full motion only on destination page) #}
     <div class="of-loader" id="ofLoader" aria-hidden="true" role="status">
         <div class="of-loader-veil"></div>
         <div class="of-loader-panel">
-            <div class="of-road-loader" aria-hidden="true">
+            <span class="of-loader-pulse" aria-hidden="true"></span>
+            <div class="of-loader-scene" aria-hidden="true">
                 <div class="of-truckWrapper">
                     <div class="of-truckBody">
-                        {# Card on wheels #}
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 198 93" class="of-cardsvg">
                             <rect stroke-width="3" stroke="#0f172a" fill="#0d9488" rx="10" height="70" width="150" y="8" x="12"></rect>
                             <rect stroke-width="2" stroke="#0f172a" fill="#14b8a6" rx="6" height="38" width="118" y="22" x="28"></rect>
@@ -84,15 +84,14 @@
                         </svg>
                     </div>
                     <div class="of-road"></div>
-                    {# Fuel pump instead of street light #}
                     <svg class="of-fuelPump" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 120" fill="none" aria-hidden="true">
                         <rect x="14" y="28" width="36" height="78" rx="4" fill="#0f766e" stroke="#0f172a" stroke-width="2.5"/>
-                        <rect x="20" y="36" width="24" height="18" rx="2" fill="#ccfbf1" stroke="#0f172a" stroke-width="2"/>
+                        <rect class="of-pump-glow" x="20" y="36" width="24" height="18" rx="2" fill="#5eead4" stroke="#0f172a" stroke-width="2"/>
                         <rect x="22" y="40" width="8" height="4" rx="1" fill="#0d9488"/>
                         <rect x="34" y="40" width="8" height="4" rx="1" fill="#0d9488"/>
                         <rect x="24" y="62" width="16" height="28" rx="2" fill="#134e4a" stroke="#0f172a" stroke-width="2"/>
                         <path d="M50 44h8c2 0 4 2 4 4v22c0 3-2 5-5 5h-3" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none"/>
-                        <circle cx="54" cy="78" r="4" fill="#e11d48" stroke="#0f172a" stroke-width="2"/>
+                        <circle class="of-pump-glow" cx="54" cy="78" r="4" fill="#e11d48" stroke="#0f172a" stroke-width="2"/>
                         <rect x="10" y="104" width="44" height="8" rx="2" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
                         <rect x="26" y="12" width="12" height="18" rx="2" fill="#f59e0b" stroke="#0f172a" stroke-width="2"/>
                         <rect x="30" y="4" width="4" height="10" rx="1" fill="#0f172a"/>
@@ -101,6 +100,7 @@
             </div>
             <p class="of-loader-label" id="ofLoaderLabel">Loading…</p>
             <p class="of-loader-sub" id="ofLoaderSub">{{ brand_name or 'OctaneFlow' }}</p>
+            <div class="of-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div>
         </div>
     </div>
     <script>
@@ -108,8 +108,10 @@
         var node = document.getElementById('ofLoader');
         var fromNav = !!window.__ofNavPending;
         var cleared = false;
+        var shownAt = Date.now();
         function kick(n) {
             if (!n) return;
+            document.documentElement.classList.remove('of-leaving');
             n.classList.remove('is-on');
             void n.offsetWidth;
             n.classList.add('is-on');
@@ -120,18 +122,22 @@
             cleared = true;
             window.__ofClearLoader(true);
         }
+        function settleAfterMin() {
+            var wait = Math.max(0, 420 - (Date.now() - shownAt));
+            setTimeout(settle, wait);
+        }
         if (fromNav && node) {
             var label = document.getElementById('ofLoaderLabel');
             if (label) label.textContent = window.__ofNavMsg || 'Loading…';
             kick(node);
-            /* Keep animating until the page finishes loading (not a short timeout) */
-            if (document.readyState === 'complete') {
-                setTimeout(settle, 180);
+            /* Clear when DOM is ready (not waiting on charts/images = no stuck feel) */
+            if (document.readyState === 'interactive' || document.readyState === 'complete') {
+                settleAfterMin();
             } else {
-                window.addEventListener('load', function () { setTimeout(settle, 180); }, { once: true });
+                document.addEventListener('DOMContentLoaded', settleAfterMin, { once: true });
             }
-            /* Safety: never hang forever */
-            setTimeout(settle, 8000);
+            /* Safety */
+            setTimeout(settle, 5000);
         }
     })();
     </script>
@@ -357,7 +363,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=5"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=26"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=27"></script>
 
     {% block scripts %}{% endblock %}
 </body>
