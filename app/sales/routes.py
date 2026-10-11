@@ -909,10 +909,13 @@ def quick_item():
 def quick_machine():
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
-    fuel_type_id = data.get('fuel_type_id')
+    try:
+        fuel_type_id = int(data.get('fuel_type_id') or 0)
+    except (TypeError, ValueError):
+        fuel_type_id = 0
     if not name or not fuel_type_id:
         return jsonify({'ok': False, 'error': 'Machine name and fuel type are required'}), 400
-    fuel = FuelType.query.get(fuel_type_id)
+    fuel = apply_agency_filter(FuelType.query.filter_by(id=fuel_type_id), FuelType).first()
     if not fuel:
         return jsonify({'ok': False, 'error': 'Fuel type not found'}), 404
     require_agency_access(fuel)

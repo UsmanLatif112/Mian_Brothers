@@ -1198,7 +1198,7 @@ select.form-control-custom:disabled {
     line-height: 1;
 }
 
-/* Nested Register Vendor/Customer overlay (above inventory/sale; parent stays open) */
+/* Nested Register Vendor/Customer / Add Machine overlay (above inventory/sale; parent stays open) */
 .of-nested-create-backdrop {
     position: fixed;
     inset: 0;
@@ -1210,6 +1210,11 @@ select.form-control-custom:disabled {
     display: block !important;
     z-index: 1090;
     pointer-events: auto;
+}
+
+/* Confirm / prompt above Meter Sale (and other open modals) */
+#ofConfirmModal.of-confirm-stacked {
+    z-index: 1110 !important;
 }
 
 .modal.of-quick-create-modal.of-nested-open .modal-dialog {

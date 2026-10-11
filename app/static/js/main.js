@@ -360,6 +360,23 @@
             cancelBtn.classList.toggle('d-none', alertOnly);
         }
 
+        // Stack above any open Bootstrap / nested modal (e.g. Meter Sale)
+        let maxZ = 1055;
+        document.querySelectorAll('.modal.show, .modal.of-nested-open, .of-nested-create-backdrop').forEach((m) => {
+            if (m === el) return;
+            const z = parseInt(window.getComputedStyle(m).zIndex, 10);
+            if (!Number.isNaN(z) && z > maxZ) maxZ = z;
+        });
+        el.style.zIndex = String(maxZ + 20);
+        el.classList.add('of-confirm-stacked');
+        const onShown = () => {
+            el.removeEventListener('shown.bs.modal', onShown);
+            const backs = document.querySelectorAll('.modal-backdrop');
+            const back = backs[backs.length - 1];
+            if (back) back.style.zIndex = String(maxZ + 10);
+        };
+        el.addEventListener('shown.bs.modal', onShown);
+
         return new Promise((resolve) => {
             resolvePromise = resolve;
             modal.show();
@@ -422,6 +439,8 @@
             }
         });
         el.addEventListener('hidden.bs.modal', () => {
+            el.classList.remove('of-confirm-stacked');
+            el.style.zIndex = '';
             if (!resolvePromise) return;
             settle(mode === 'prompt' ? null : false);
         });

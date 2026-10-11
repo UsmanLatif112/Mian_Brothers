@@ -614,6 +614,31 @@
     </div>
 </div>
 
+{# Add Machine (nested over Meter Sale) #}
+<div class="modal fade of-quick-create-modal" id="addMachineModal" tabindex="-1" aria-labelledby="addMachineModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <form id="add-machine-form" autocomplete="off">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="addMachineModalLabel">Add machine</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <label class="form-label form-label-custom" for="add_machine_name">Machine name</label>
+                    <input type="text" class="form-control form-control-custom" id="add_machine_name"
+                           name="name" placeholder="e.g. Pump 1" required maxlength="100" autocomplete="off">
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-3" id="add-machine-submit">
+                        <i class="bi bi-plus-lg me-1"></i> Add
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {# Edit Period Entry #}
 <div class="modal fade" id="editPeriodEntryModal" tabindex="-1" aria-labelledby="editPeriodEntryModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -763,16 +788,40 @@
     });
 
     const btnMachine = document.getElementById('btn-add-machine');
-    const appendMachineRow = (fuelId, machineId, machineName) => {
+    const addMachineModal = document.getElementById('addMachineModal');
+    const addMachineForm = document.getElementById('add-machine-form');
+    const addMachineName = document.getElementById('add_machine_name');
+
+    const fuelLabel = (fuelId) => {
+        if (!fuelSelect) return 'Fuel';
+        const opt = fuelSelect.querySelector(`option[value="${fuelId}"]`);
+        if (!opt) return 'Fuel';
+        return (opt.textContent || 'Fuel').replace(/\s*\(.*$/, '').trim() || 'Fuel';
+    };
+
+    const ensureMachineBlock = (fuelId) => {
         let block = document.querySelector(`.machine-block[data-fuel="${fuelId}"]`);
-        if (!block) {
-            // Fuel type exists in select but block missing (edge case) — reload once
-            if (window.ofReload) window.ofReload('Loading…');
-            else location.reload();
-            return;
-        }
+        if (block) return block;
+        const body = document.querySelector('#meter-sale-form .modal-body');
+        const summary = document.getElementById('meter-summary');
+        block = document.createElement('div');
+        block.className = 'machine-block d-none';
+        block.dataset.fuel = String(fuelId);
+        const title = document.createElement('h6');
+        title.className = 'fw-bold mb-3';
+        title.textContent = `${fuelLabel(fuelId)} Machines`;
+        const row = document.createElement('div');
+        row.className = 'row g-3 mb-2';
+        block.appendChild(title);
+        block.appendChild(row);
+        if (summary && summary.parentNode) summary.parentNode.insertBefore(block, summary);
+        else if (body) body.appendChild(block);
+        return block;
+    };
+
+    const appendMachineRow = (fuelId, machineId, machineName) => {
+        const block = ensureMachineBlock(fuelId);
         const rowHost = block.querySelector('.row.g-3.mb-2') || block;
-        // Remove empty-state message if present
         rowHost.querySelectorAll('.col-12').forEach((col) => {
             if (col.textContent.includes('No machines')) col.remove();
         });
@@ -812,7 +861,6 @@
         col.querySelectorAll('.meter-open, .meter-close').forEach((el) => {
             el.addEventListener('input', recalcTotals);
         });
-        // Enable inputs if this fuel block is currently visible
         const fuelIdSel = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
         const active = String(fuelIdSel) === String(fuelId);
         block.classList.toggle('d-none', !active);
@@ -823,44 +871,94 @@
         recalcTotals();
     };
 
+    const openAddMachineModal = () => {
+        if (!addMachineModal) return;
+        const parent = document.getElementById('meterSaleModal');
+        if (parent && parent.classList.contains('show')) {
+            addMachineModal.dataset.ofNestedParent = parent.id;
+            parent.dataset.ofNestedLock = '1';
+            addMachineModal.classList.add('show', 'of-nested-open');
+            addMachineModal.style.display = 'block';
+            addMachineModal.setAttribute('aria-hidden', 'false');
+            addMachineModal.setAttribute('aria-modal', 'true');
+            let nb = document.getElementById('ofNestedCreateBackdrop');
+            if (!nb) {
+                nb = document.createElement('div');
+                nb.id = 'ofNestedCreateBackdrop';
+                nb.className = 'of-nested-create-backdrop';
+                document.body.appendChild(nb);
+            }
+            nb.classList.add('show');
+        } else if (window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(addMachineModal).show();
+        }
+        if (addMachineName) {
+            addMachineName.value = '';
+            setTimeout(() => addMachineName.focus(), 40);
+        }
+    };
+
+    const closeAddMachineModal = () => {
+        if (!addMachineModal) return;
+        const dismiss = addMachineModal.querySelector('[data-bs-dismiss="modal"]');
+        if (dismiss) dismiss.click();
+        else if (window.bootstrap) bootstrap.Modal.getInstance(addMachineModal)?.hide();
+    };
+
     if (btnMachine) {
-        btnMachine.addEventListener('click', async () => {
-            if (btnMachine.dataset.locked === '1') return;
+        btnMachine.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const fuelId = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
             if (!fuelId) {
                 window.ofAlert({ message: 'Select a fuel type first.' });
                 return;
             }
-            const name = await window.ofPrompt('New machine name:', '', { title: 'Add machine' });
-            if (!name || !String(name).trim()) return;
-            if (typeof window.lockSubmitButton === 'function') {
-                window.lockSubmitButton(btnMachine, 'Adding...');
-            } else {
-                btnMachine.disabled = true;
+            openAddMachineModal();
+        });
+    }
+
+    if (addMachineForm) {
+        addMachineForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const fuelId = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
+            const name = (addMachineName && addMachineName.value || '').trim();
+            if (!fuelId) {
+                window.ofAlert({ message: 'Select a fuel type first.' });
+                return;
             }
+            if (!name) {
+                window.ofAlert({ message: 'Enter a machine name.' });
+                return;
+            }
+            const submitBtn = document.getElementById('add-machine-submit');
+            if (submitBtn && window.lockSubmitButton) window.lockSubmitButton(submitBtn, 'Adding…');
+            if (window.ofLoader) window.ofLoader.show('Adding machine…');
             try {
                 const res = await fetch('{{ url_for("sales.quick_machine") }}', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: String(name).trim(), fuel_type_id: fuelId })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, fuel_type_id: fuelId }),
+                    ofSilent: true,
                 });
                 const data = await res.json();
-                if (typeof window.unlockSubmitButton === 'function') {
-                    window.unlockSubmitButton(btnMachine);
-                } else {
-                    btnMachine.disabled = false;
-                }
+                if (window.ofLoader) window.ofLoader.hide(true);
+                if (submitBtn && window.unlockSubmitButton) window.unlockSubmitButton(submitBtn);
                 if (!data.ok) {
                     window.ofAlert({ message: data.error || 'Could not add machine' });
                     return;
                 }
-                appendMachineRow(data.fuel_type_id || fuelId, data.id, data.name || data.text || String(name).trim());
+                appendMachineRow(
+                    data.fuel_type_id || fuelId,
+                    data.id,
+                    data.name || data.text || name
+                );
+                closeAddMachineModal();
+                if (window.ofToast) window.ofToast(`Machine “${data.name || name}” added`, 'success');
             } catch (err) {
-                if (typeof window.unlockSubmitButton === 'function') {
-                    window.unlockSubmitButton(btnMachine);
-                } else {
-                    btnMachine.disabled = false;
-                }
+                if (window.ofLoader) window.ofLoader.hide(true);
+                if (submitBtn && window.unlockSubmitButton) window.unlockSubmitButton(submitBtn);
                 window.ofAlert({ message: 'Could not add machine' });
             }
         });
