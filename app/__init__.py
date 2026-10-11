@@ -91,6 +91,7 @@ def create_app():
         except Exception:
             agency = None
         logo_url = media_url(brand_logo, 'img/logo.png')
+        from app.tenancy import is_super_admin
         return {
             'brand_name': brand_name,
             'brand_tag': brand_tag,
@@ -100,6 +101,7 @@ def create_app():
             'brand_phone': brand_phone,
             'brand_email': brand_email,
             'current_agency': agency,
+            'is_super_admin': is_super_admin(),
         }
 
     @app.route('/media/uploads/<path:filename>')

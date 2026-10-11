@@ -243,14 +243,14 @@
                                 <td style="font-size: 0.85rem;" class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{% if log.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ log.category }}{% endif %}</span></td>
                                 <td class="fw-semibold">
-                                    {{ log.item_name }}
+                                    <span class="of-clip-cell" data-of-tip="{{ log.item_name }}{% if log.company %} · {{ log.company }}{% endif %}{% if log.item_type %} · {{ log.item_type }}{% endif %}">{{ log.item_name }}</span>
                                     {% if log.company %}
-                                        <small class="text-muted-custom d-block">{{ log.company }}{% if log.item_type %} · {{ log.item_type }}{% endif %}</small>
+                                        <small class="text-muted-custom d-block of-clip" data-of-tip="{{ log.company }}{% if log.item_type %} · {{ log.item_type }}{% endif %}">{{ log.company }}{% if log.item_type %} · {{ log.item_type }}{% endif %}</small>
                                     {% elif log.item_type %}
-                                        <small class="text-muted-custom d-block">{{ log.item_type }}</small>
+                                        <small class="text-muted-custom d-block of-clip" data-of-tip="{{ log.item_type }}">{{ log.item_type }}</small>
                                     {% endif %}
                                 </td>
-                                <td>{{ log.vendor or '-' }}</td>
+                                <td><span class="of-clip-cell" data-of-tip="{{ log.vendor or '-' }}">{{ log.vendor or '-' }}</span></td>
                                 <td class="fw-bold">
                                     {% if log.category in ('fuel', 'ft_mobile') %}
                                         {{ "{:,.2f}".format(log.liters or 0) }} L

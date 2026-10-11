@@ -82,8 +82,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
-    max-height: 148px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
 }
 
 .chart-legend-item,
@@ -107,6 +107,7 @@
     flex-direction: column;
     gap: 0.05rem;
     min-width: 0;
+    flex: 1 1 auto;
 }
 
 .chart-legend-label {
@@ -114,7 +115,11 @@
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.25;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    display: block;
 }
 
 .chart-legend-value {
@@ -122,6 +127,9 @@
     font-weight: 600;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .chart-legend-empty .chart-legend-label {

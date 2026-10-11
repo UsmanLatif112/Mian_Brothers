@@ -1,13 +1,14 @@
-/* Global motion loader — orbit + fill; nav resume is handled in base.html (early clear) */
+/* Global motion loader — card + fuel pump; nav resume kept until window.load */
 (function initOfLoader() {
     let busy = 0;
     let shownAt = 0;
     let hideTimer = null;
     let safetyTimer = null;
     const MIN_MS = 220;
-    const MAX_MS = 6000;
+    const MAX_MS = 8000;
     const NAV_KEY = 'ofNavLoad';
     const NAV_MSG = 'ofNavMsg';
+    const navPendingAtBoot = !!window.__ofNavPending;
 
     function el() {
         return document.getElementById('ofLoader');
@@ -17,11 +18,11 @@
         const label = document.getElementById('ofLoaderLabel');
         const subEl = document.getElementById('ofLoaderSub');
         if (label && message) label.textContent = message;
-        if (subEl) subEl.textContent = sub || 'OctaneFlow';
+        if (subEl) subEl.textContent = sub || (subEl.textContent || 'OctaneFlow');
     }
 
     function kickMotion(node) {
-        /* Restart CSS keyframes so car/tank never resume from a paused hidden timeline */
+        /* Restart CSS keyframes so motion never resumes from a paused hidden timeline */
         node.classList.remove('is-on');
         void node.offsetWidth;
         node.classList.add('is-on');
@@ -89,7 +90,6 @@
         showNav(message) {
             const msg = message || 'Loading…';
             markNav(msg);
-            // Nav overlay is not reference-counted — next page always force-clears
             reveal(msg);
         },
         hide(force) {
@@ -112,9 +112,17 @@
         },
     };
 
-    // Never re-show the nav loader here (that froze animation while Chart.js parsed).
-    // Always hard-clear leftovers; in-page CRUD uses show()/hide() after this.
-    forceOff();
+    // Keep in-flight nav loader running until window.load (base.html settles it).
+    // Only clear leftovers on a normal open / refresh.
+    if (!navPendingAtBoot) {
+        forceOff();
+    } else {
+        const node = el();
+        if (node && !node.classList.contains('is-on')) {
+            reveal(window.__ofNavMsg || 'Loading…');
+        }
+        armSafety();
+    }
 
     // Only mutate requests show loader by default (GET polling must not hang UI)
     const nativeFetch = window.fetch.bind(window);
@@ -154,12 +162,18 @@
         window.ofLoader.showNav('Loading…');
     }, true);
 
-    window.addEventListener('pageshow', () => {
-        forceOff();
+    window.addEventListener('pageshow', (ev) => {
+        // bfcache only — do not kill an active nav loader (busy may still be 0)
+        if (ev.persisted) forceOff();
     });
 
     window.addEventListener('load', () => {
-        if (busy === 0) forceOff();
+        // Nav settle is owned by base.html; only clear CRUD leftovers here
+        if (!window.__ofNavPending && busy === 0) {
+            setTimeout(() => {
+                if (!window.__ofNavPending && busy === 0) forceOff();
+            }, 180);
+        }
     }, { once: true });
 })();
 
@@ -1215,4 +1229,76 @@ document.addEventListener('DOMContentLoaded', () => {
             due: btn.getAttribute('data-receipt-due'),
         });
     });
+})();
+
+/* Truncated text → app Bootstrap tooltips (no scrollers) */
+(function initOfTips() {
+    const tips = new WeakMap();
+
+    function isTruncated(el) {
+        if (!el) return false;
+        return el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+    }
+
+    function tipText(el) {
+        return (
+            el.getAttribute('data-of-tip')
+            || el.getAttribute('data-bs-title')
+            || el.getAttribute('title')
+            || (el.textContent || '').trim()
+        );
+    }
+
+    function disposeTip(el) {
+        const existing = tips.get(el) || (window.bootstrap?.Tooltip?.getInstance?.(el));
+        if (existing) {
+            try { existing.dispose(); } catch (_) { /* ignore */ }
+        }
+        tips.delete(el);
+    }
+
+    function wireOne(el) {
+        if (!el || !window.bootstrap?.Tooltip) return;
+        const text = tipText(el);
+        if (!text) return;
+        el.classList.add('of-clip');
+        if (!el.getAttribute('data-of-tip') && !el.getAttribute('data-bs-title')) {
+            el.setAttribute('data-of-tip', text);
+        }
+        // Prefer app tip attr; drop native title to avoid double tooltips
+        if (el.hasAttribute('title')) el.removeAttribute('title');
+
+        disposeTip(el);
+        if (!isTruncated(el) && !el.hasAttribute('data-of-tip-force')) return;
+
+        const instance = new bootstrap.Tooltip(el, {
+            title: text,
+            container: 'body',
+            placement: el.getAttribute('data-bs-placement') || 'top',
+            trigger: 'hover focus',
+            customClass: 'of-app-tooltip',
+        });
+        tips.set(el, instance);
+    }
+
+    function refresh(root) {
+        const scope = root && root.querySelectorAll ? root : document;
+        const nodes = scope.querySelectorAll(
+            '.of-clip, .of-clip-cell, .chart-legend-label, .directory-card-title, .journal-desc, [data-of-tip]'
+        );
+        nodes.forEach(wireOne);
+    }
+
+    window.ofTipsRefresh = refresh;
+
+    function boot() {
+        refresh(document);
+        window.addEventListener('resize', () => refresh(document));
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
+    }
 })();

@@ -127,15 +127,19 @@
             const val = Number(values[i] || 0);
             const pct = ((val / total) * 100).toFixed(0);
             const color = colors[i % colors.length];
+            const tip = `${label} — ${money(val)} (${pct}%)`;
             return (
                 `<li class="chart-legend-item">` +
                 `<span class="chart-legend-dot" style="background:${color}"></span>` +
                 `<span class="chart-legend-copy">` +
-                `<span class="chart-legend-label">${escapeHtml(label)}</span>` +
+                `<span class="chart-legend-label of-clip" data-of-tip="${escapeHtml(tip)}">${escapeHtml(label)}</span>` +
                 `<span class="chart-legend-value">${money(val)} · ${pct}%</span>` +
                 `</span></li>`
             );
         }).join('');
+        if (typeof global.ofTipsRefresh === 'function') {
+            global.ofTipsRefresh(container);
+        }
     }
 
     function escapeHtml(str) {

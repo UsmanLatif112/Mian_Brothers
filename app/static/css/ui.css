@@ -1439,6 +1439,35 @@ body > .ts-dropdown {
     min-height: 2.55rem;
 }
 
+/* Password show/hide eye inside seamless input groups */
+.input-group:not(.has-validation) > .password-toggle {
+    flex: 0 0 auto;
+    z-index: 2;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    padding: 0.45rem 0.85rem !important;
+    min-width: 2.6rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.input-group:not(.has-validation) > .password-toggle:hover,
+.input-group:not(.has-validation) > .password-toggle:focus {
+    color: var(--accent-blue) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.input-group:not(.has-validation) > .password-toggle i {
+    font-size: 1rem;
+    pointer-events: none;
+}
+
 /* Space for › caret on all Tom Select controls */
 .ts-wrapper.of-select .ts-control,
 .ts-wrapper.form-control-custom .ts-control,
@@ -1730,4 +1759,82 @@ body > .ts-dropdown {
     .cat-add-form .btn {
         width: 100%;
     }
+}
+
+/* Truncate long names/details + app tooltip (no scrollers) */
+.of-clip,
+.of-clip-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    vertical-align: bottom;
+}
+
+.of-clip {
+    display: inline-block;
+}
+
+.of-clip-cell {
+    display: block;
+    max-width: 14rem;
+}
+
+td .of-clip,
+td .of-clip-cell {
+    max-width: min(14rem, 100%);
+}
+
+.directory-card-title.of-clip,
+.directory-card-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    -webkit-box-orient: unset;
+}
+
+.directory-card-meta span,
+.directory-card-submeta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.journal-desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 18rem;
+}
+
+/* App tooltip skin (Bootstrap) */
+.tooltip.of-app-tooltip .tooltip-inner {
+    max-width: 280px;
+    padding: 0.45rem 0.7rem;
+    font-family: var(--font-ui);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: left;
+    color: #f8fafc;
+    background: #0f1c2e;
+    border-radius: 10px;
+    box-shadow: var(--shadow-md);
+}
+
+.tooltip.of-app-tooltip .tooltip-arrow::before {
+    border-top-color: #0f1c2e;
+}
+
+[data-theme="dark"] .tooltip.of-app-tooltip .tooltip-inner {
+    background: #1e293b;
+    color: #f1f5f9;
+}
+
+[data-theme="dark"] .tooltip.of-app-tooltip .tooltip-arrow::before {
+    border-top-color: #1e293b;
 }

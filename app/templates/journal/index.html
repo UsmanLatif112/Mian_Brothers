@@ -160,8 +160,8 @@
                                 <span class="badge badge-custom {% if row.payment_status == 'paid' %}badge-success-custom{% elif row.payment_status == 'overpay' %}badge-staff{% elif row.payment_status == 'partial' %}badge-staff{% else %}badge-danger-custom{% endif %} text-uppercase ms-1">{{ row.payment_status }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ row.party }}</td>
-                            <td><div class="journal-desc">{{ row.item_name }}</div></td>
+                            <td><span class="of-clip-cell" data-of-tip="{{ row.party }}">{{ row.party }}</span></td>
+                            <td><div class="journal-desc of-clip" data-of-tip="{{ row.item_name }}">{{ row.item_name }}</div></td>
                             <td class="text-end fw-bold journal-amt-{{ row.cash_direction }}">
                                 {% if row.cash_direction == 'out' %}−{% endif %}{{ row.amount | money }}
                             </td>

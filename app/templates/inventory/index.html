@@ -148,13 +148,13 @@
                     <article class="directory-card">
                         <div class="directory-card-main">
                             <div class="directory-card-info">
-                                <div class="directory-card-title">{{ item.name }}</div>
+                                <div class="directory-card-title of-clip" data-of-tip="{{ item.name }}">{{ item.name }}</div>
                                 <div class="directory-card-meta">
                                     <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span>
-                                    {% if item.company %}<span>{{ item.company }}</span>{% endif %}
-                                    {% if item.item_type %}<span>{{ item.item_type }}</span>{% endif %}
+                                    {% if item.company %}<span class="of-clip" data-of-tip="{{ item.company }}">{{ item.company }}</span>{% endif %}
+                                    {% if item.item_type %}<span class="of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
                                 </div>
-                                <div class="directory-card-submeta">
+                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}{% if item.category == 'ft_mobile' and item.liters is not none %} · {{ '{:,.2f}'.format(item.liters) }} L{% elif item.category != 'ft_mobile' %} · Qty {{ item.quantity }}{% endif %}">
                                     Vendor: {{ item.vendor or '—' }}
                                     · Cost {{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}
                                     · Sale {{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}
@@ -224,10 +224,10 @@
                             {% for item in shop_items %}
                             <tr>
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span></td>
-                                <td class="fw-semibold">{{ item.name }}</td>
-                                <td>{{ item.company or '-' }}</td>
-                                <td>{{ item.item_type or '-' }}</td>
-                                <td>{{ item.vendor or '-' }}</td>
+                                <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ item.name }}">{{ item.name }}</span></td>
+                                <td><span class="of-clip-cell" data-of-tip="{{ item.company or '-' }}">{{ item.company or '-' }}</span></td>
+                                <td><span class="of-clip-cell" data-of-tip="{{ item.item_type or '-' }}">{{ item.item_type or '-' }}</span></td>
+                                <td><span class="of-clip-cell" data-of-tip="{{ item.vendor or '-' }}">{{ item.vendor or '-' }}</span></td>
                                 <td>{{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
                                 <td>{{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
                                 <td class="fw-bold">{% if item.liters is not none %}{{ "{:,.2f}".format(item.liters) }} L{% else %}-{% endif %}</td>
@@ -310,7 +310,7 @@
                             <tr>
                                 <td class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') if log.entry_date else '—' }}</td>
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{{ log.category }}</span></td>
-                                <td class="fw-semibold">{{ log.item_name }}{% if log.company %} <span class="text-muted-custom">({{ log.company }})</span>{% endif %}</td>
+                                <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ log.item_name }}{% if log.company %} ({{ log.company }}){% endif %}">{{ log.item_name }}{% if log.company %} <span class="text-muted-custom">({{ log.company }})</span>{% endif %}</span></td>
                                 <td>{{ log.vendor or '—' }}</td>
                                 <td>{{ log.cost_price | money }}</td>
                                 <td>

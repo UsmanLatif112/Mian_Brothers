@@ -65,7 +65,7 @@
                             {% for record in price_history %}
                             <tr>
                                 <td><span class="badge badge-custom bg-secondary text-uppercase">{{ record.category }}</span></td>
-                                <td class="fw-semibold">{{ record.item_name }}</td>
+                                <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ record.item_name }}">{{ record.item_name }}</span></td>
                                 <td class="fw-bold text-success">{{ record.price | money }}{% if record.unit and record.unit != 'unit' %} / {{ record.unit }}{% endif %}</td>
                                 <td>{% if record.effective_at %}{{ record.effective_at.strftime('%Y-%m-%d %H:%M') }}{% elif record.effective_date %}{{ record.effective_date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
                                 <td>{{ record.updated_by }}</td>

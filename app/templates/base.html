@@ -14,13 +14,13 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=16">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shell.css') }}?v=7">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/journal.css') }}?v=3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}?v=7">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/thermal.css') }}?v=2">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=13">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v=15">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=7">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=1">
     <script>
-    /* Resume nav loader across full-page navigations; clear ASAP (do not wait for main.js) */
+    /* Resume nav loader across full-page navigations; keep running until page load */
     (function () {
         var KEY = 'ofNavLoad';
         var MSG = 'ofNavMsg';
@@ -32,7 +32,6 @@
         } catch (e) {}
         if (fromNav) {
             document.documentElement.classList.add('of-loading');
-            /* Consume flag immediately so refresh / late scripts cannot re-hang */
             try {
                 sessionStorage.removeItem(KEY);
                 sessionStorage.removeItem(MSG);
@@ -48,7 +47,6 @@
                 node.classList.remove('is-on');
                 node.setAttribute('aria-hidden', 'true');
             }
-            /* Only force ofLoader when explicitly requested (nav settle), not mid-CRUD */
             if (force && window.ofLoader && typeof window.ofLoader.hide === 'function') {
                 window.ofLoader.hide(true);
             }
@@ -58,38 +56,58 @@
 </head>
 <body class="{% if current_user.is_authenticated %}has-app-shell{% else %}no-navbar{% endif %}">
 
-    {# Global loader — spinning car orbit + tank fill (motion only while .is-on) #}
+    {# Global loader — rolling card + fuel pump (keeps animating until page load) #}
     <div class="of-loader" id="ofLoader" aria-hidden="true" role="status">
         <div class="of-loader-veil"></div>
         <div class="of-loader-panel">
-            <div class="of-loader-stage" aria-hidden="true">
-                <div class="of-loader-spin">
-                    <div class="of-loader-car">
-                        <svg viewBox="0 0 28 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <rect x="3" y="5" width="20" height="6" rx="2" fill="#0f766e"/>
-                            <path d="M8 5 L11 2 H17 L20 5" fill="#14b8a6"/>
-                            <circle cx="8.5" cy="11" r="2" fill="#1e293b"/>
-                            <circle cx="19.5" cy="11" r="2" fill="#1e293b"/>
-                            <rect x="12" y="3.2" width="5" height="2.2" rx="0.6" fill="#ccfbf1"/>
+            <div class="of-road-loader" aria-hidden="true">
+                <div class="of-truckWrapper">
+                    <div class="of-truckBody">
+                        {# Card on wheels #}
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 198 93" class="of-cardsvg">
+                            <rect stroke-width="3" stroke="#0f172a" fill="#0d9488" rx="10" height="70" width="150" y="8" x="12"></rect>
+                            <rect stroke-width="2" stroke="#0f172a" fill="#14b8a6" rx="6" height="38" width="118" y="22" x="28"></rect>
+                            <rect stroke-width="2" stroke="#0f172a" fill="#ccfbf1" rx="3" height="14" width="52" y="34" x="44"></rect>
+                            <path stroke-width="2.5" stroke="#0f172a" fill="#f59e0b" d="M162 28h22c1.2 0 2.2.8 2.6 1.9l8.4 24.2c.2.5.3 1 .3 1.6V78c0 1.7-1.3 3-3 3h-30c-1.7 0-3-1.3-3-3V31c0-1.7 1.3-3 3-3z"></path>
+                            <rect stroke-width="2" stroke="#0f172a" fill="#fef08a" rx="1" height="8" width="6" y="58" x="178"></rect>
+                            <rect stroke-width="2" stroke="#0f172a" fill="#0f172a" rx="1" height="10" width="4" y="74" x="186"></rect>
                         </svg>
                     </div>
-                </div>
-                <div class="of-loader-fill">
-                    <div class="of-loader-nozzle" aria-hidden="true"></div>
-                    <div class="of-loader-drop" aria-hidden="true"></div>
-                    <div class="of-loader-tank">
-                        <div class="of-loader-fuel"></div>
+                    <div class="of-truckTires">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 30 30" class="of-tiresvg">
+                            <circle stroke-width="3" stroke="#0f172a" fill="#0f172a" r="13.5" cy="15" cx="15"></circle>
+                            <circle fill="#e2e8f0" r="7" cy="15" cx="15"></circle>
+                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 30 30" class="of-tiresvg">
+                            <circle stroke-width="3" stroke="#0f172a" fill="#0f172a" r="13.5" cy="15" cx="15"></circle>
+                            <circle fill="#e2e8f0" r="7" cy="15" cx="15"></circle>
+                        </svg>
                     </div>
+                    <div class="of-road"></div>
+                    {# Fuel pump instead of street light #}
+                    <svg class="of-fuelPump" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 120" fill="none" aria-hidden="true">
+                        <rect x="14" y="28" width="36" height="78" rx="4" fill="#0f766e" stroke="#0f172a" stroke-width="2.5"/>
+                        <rect x="20" y="36" width="24" height="18" rx="2" fill="#ccfbf1" stroke="#0f172a" stroke-width="2"/>
+                        <rect x="22" y="40" width="8" height="4" rx="1" fill="#0d9488"/>
+                        <rect x="34" y="40" width="8" height="4" rx="1" fill="#0d9488"/>
+                        <rect x="24" y="62" width="16" height="28" rx="2" fill="#134e4a" stroke="#0f172a" stroke-width="2"/>
+                        <path d="M50 44h8c2 0 4 2 4 4v22c0 3-2 5-5 5h-3" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none"/>
+                        <circle cx="54" cy="78" r="4" fill="#e11d48" stroke="#0f172a" stroke-width="2"/>
+                        <rect x="10" y="104" width="44" height="8" rx="2" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>
+                        <rect x="26" y="12" width="12" height="18" rx="2" fill="#f59e0b" stroke="#0f172a" stroke-width="2"/>
+                        <rect x="30" y="4" width="4" height="10" rx="1" fill="#0f172a"/>
+                    </svg>
                 </div>
             </div>
             <p class="of-loader-label" id="ofLoaderLabel">Loading…</p>
-            <p class="of-loader-sub" id="ofLoaderSub">OctaneFlow</p>
+            <p class="of-loader-sub" id="ofLoaderSub">{{ brand_name or 'OctaneFlow' }}</p>
         </div>
     </div>
     <script>
     (function () {
         var node = document.getElementById('ofLoader');
         var fromNav = !!window.__ofNavPending;
+        var cleared = false;
         function kick(n) {
             if (!n) return;
             n.classList.remove('is-on');
@@ -97,17 +115,23 @@
             n.classList.add('is-on');
             n.setAttribute('aria-hidden', 'false');
         }
+        function settle() {
+            if (cleared) return;
+            cleared = true;
+            window.__ofClearLoader(true);
+        }
         if (fromNav && node) {
             var label = document.getElementById('ofLoaderLabel');
             if (label) label.textContent = window.__ofNavMsg || 'Loading…';
             kick(node);
-            /* Clear after first paint — never wait on Chart.js / main.js */
-            requestAnimationFrame(function () {
-                requestAnimationFrame(function () {
-                    setTimeout(function () { window.__ofClearLoader(true); }, 320);
-                });
-            });
-            setTimeout(function () { window.__ofClearLoader(true); }, 1000);
+            /* Keep animating until the page finishes loading (not a short timeout) */
+            if (document.readyState === 'complete') {
+                setTimeout(settle, 180);
+            } else {
+                window.addEventListener('load', function () { setTimeout(settle, 180); }, { once: true });
+            }
+            /* Safety: never hang forever */
+            setTimeout(settle, 8000);
         }
     })();
     </script>
@@ -159,7 +183,7 @@
             <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
                 <i class="bi bi-wallet2"></i><span>Account</span>
             </a>
-            {% if current_user.role in ('super_admin', 'admin') %}
+            {% if is_super_admin or current_user.role in ('super_admin', 'admin') %}
             <a class="sidebar-link {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}" data-search-label="Pricing">
                 <i class="bi bi-tags"></i><span>Pricing</span>
             </a>
@@ -332,8 +356,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="{{ url_for('static', filename='js/charts.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=24"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=26"></script>
 
     {% block scripts %}{% endblock %}
 </body>

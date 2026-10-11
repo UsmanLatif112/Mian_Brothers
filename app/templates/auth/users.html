@@ -146,8 +146,8 @@
                         <div class="col-md-6">
                             <label for="create_password" class="form-label form-label-custom">Password</label>
                             <div class="input-group">
-                                <input type="password" class="form-control form-control-custom" id="create_password" name="password" required placeholder="••••••••">
-                                <button type="button" class="btn btn-outline-secondary password-toggle" data-target="create_password" aria-label="Show password">
+                                <input type="password" class="form-control form-control-custom" id="create_password" name="password" required placeholder="••••••••" autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary password-toggle" data-password-target="create_password" aria-label="Show password">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
@@ -218,8 +218,8 @@
                         <div class="col-md-6">
                             <label for="edit_password" class="form-label form-label-custom">New password (optional)</label>
                             <div class="input-group">
-                                <input type="password" class="form-control form-control-custom" id="edit_password" name="password" placeholder="••••••••">
-                                <button type="button" class="btn btn-outline-secondary password-toggle" data-target="edit_password" aria-label="Show password">
+                                <input type="password" class="form-control form-control-custom" id="edit_password" name="password" placeholder="••••••••" autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary password-toggle" data-password-target="edit_password" aria-label="Show password">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
@@ -264,6 +264,19 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        function resetPasswordToggle(inputId) {
+            const input = document.getElementById(inputId);
+            const btn = document.querySelector('.password-toggle[data-password-target="' + inputId + '"]');
+            if (input) {
+                input.value = '';
+                input.setAttribute('type', 'password');
+            }
+            if (btn) {
+                btn.setAttribute('aria-label', 'Show password');
+                btn.innerHTML = '<i class="bi bi-eye"></i>';
+            }
+        }
+
         document.querySelectorAll('.edit-user-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
@@ -274,21 +287,22 @@
                 document.getElementById('edit_agency_address').value = btn.getAttribute('data-agency-address') || '';
                 document.getElementById('edit_agency_phone').value = btn.getAttribute('data-agency-phone') || '';
                 document.getElementById('edit_agency_email').value = btn.getAttribute('data-agency-email') || '';
-                const editPassword = document.getElementById('edit_password');
-                editPassword.value = '';
-                editPassword.type = 'password';
+                resetPasswordToggle('edit_password');
             });
         });
 
-        document.querySelectorAll('.password-toggle').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const input = document.getElementById(btn.getAttribute('data-target'));
-                if (!input) return;
-                const show = input.type === 'password';
-                input.type = show ? 'text' : 'password';
-                btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-                btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-            });
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.password-toggle');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const targetId = btn.getAttribute('data-password-target') || btn.getAttribute('data-target');
+            const input = targetId ? document.getElementById(targetId) : null;
+            if (!input) return;
+            const show = (input.getAttribute('type') || input.type) === 'password';
+            input.setAttribute('type', show ? 'text' : 'password');
+            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
         });
     });
 </script>
