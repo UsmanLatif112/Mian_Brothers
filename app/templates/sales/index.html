@@ -922,7 +922,9 @@
         addMachineForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const fuelId = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
+            let fuelId = fuelSelect && (fuelSelect.tomselect ? fuelSelect.tomselect.getValue() : fuelSelect.value);
+            if (Array.isArray(fuelId)) fuelId = fuelId[0];
+            fuelId = parseInt(fuelId, 10) || 0;
             const name = (addMachineName && addMachineName.value || '').trim();
             if (!fuelId) {
                 window.ofAlert({ message: 'Select a fuel type first.' });

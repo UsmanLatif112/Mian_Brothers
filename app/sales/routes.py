@@ -909,13 +909,21 @@ def quick_item():
 def quick_machine():
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
+    raw_fuel = data.get('fuel_type_id')
+    if isinstance(raw_fuel, (list, tuple)):
+        raw_fuel = raw_fuel[0] if raw_fuel else None
     try:
-        fuel_type_id = int(data.get('fuel_type_id') or 0)
+        fuel_type_id = int(raw_fuel or 0)
     except (TypeError, ValueError):
         fuel_type_id = 0
     if not name or not fuel_type_id:
         return jsonify({'ok': False, 'error': 'Machine name and fuel type are required'}), 400
-    fuel = apply_agency_filter(FuelType.query.filter_by(id=fuel_type_id), FuelType).first()
+    # Same scope as Meter Sale dropdown (agency + shared catalog fuels)
+    fuel = apply_agency_filter(
+        FuelType.query.filter_by(id=fuel_type_id),
+        FuelType,
+        include_shared=True,
+    ).first()
     if not fuel:
         return jsonify({'ok': False, 'error': 'Fuel type not found'}), 404
     require_agency_access(fuel)
