@@ -255,7 +255,14 @@ def create_app():
         ensure_expenses_schema()
         ensure_till_schema()
         ensure_item_price_log_schema()
-        ensure_default_fuel_types()
+        try:
+            ensure_default_fuel_types()
+        except Exception as e:
+            print(f'default fuels seed skipped: {e}')
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         try:
             from app.models import Agency
             from app.inventory.categories import ensure_shop_categories
@@ -263,6 +270,10 @@ def create_app():
                 ensure_shop_categories(agency_id=ag.id)
         except Exception as e:
             print(f'shop categories seed skipped: {e}')
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
         # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
         ensure_meter_sale_rate_schema()
         ensure_fuel_price_effective_at_schema()
@@ -457,7 +468,7 @@ def ensure_agency_schema():
 
 def _drop_legacy_unique_indexes(is_mysql):
     """Best-effort drop of old single-column unique indexes that block multi-agency."""
-    from sqlalchemy import text
+    from sqlalchemy import text, inspect
 
     # (table, likely index / constraint names)
     targets = [
@@ -479,18 +490,51 @@ def _drop_legacy_unique_indexes(is_mysql):
                             conn.execute(text(f"ALTER TABLE `{table}` DROP INDEX `{idx}`"))
                         except Exception:
                             pass
+                # Discover leftover UNIQUE indexes on inventory.fuel_type_id alone
+                try:
+                    rows = conn.execute(text("SHOW INDEX FROM `inventory` WHERE Non_unique = 0")).mappings().all()
+                    by_key = {}
+                    for row in rows:
+                        key = row.get('Key_name')
+                        if not key or key == 'PRIMARY':
+                            continue
+                        by_key.setdefault(key, []).append(row.get('Column_name'))
+                    for key, cols in by_key.items():
+                        if cols == ['fuel_type_id']:
+                            try:
+                                conn.execute(text(f"ALTER TABLE `inventory` DROP INDEX `{key}`"))
+                                print(f'Dropped legacy unique index inventory.{key}')
+                            except Exception:
+                                pass
+                except Exception as e:
+                    print(f'inventory unique scan skipped: {e}')
             else:
-                # SQLite: drop indexes if present
                 for table, names in targets:
                     for idx in names:
                         try:
                             conn.execute(text(f'DROP INDEX IF EXISTS "{idx}"'))
                         except Exception:
                             pass
-                    # SQLite auto-named unique: sqlite_autoindex_TABLE_N — leave alone;
-                    # new agencies may still collide on old UNIQUE column constraints.
     except Exception as e:
         print(f'unique index drop skipped: {e}')
+
+    # Ensure composite unique exists for inventory (agency_id, fuel_type_id)
+    try:
+        if is_mysql:
+            inspector = inspect(db.engine)
+            if 'inventory' in inspector.get_table_names():
+                uniques = {tuple(u.get('column_names') or []) for u in inspector.get_unique_constraints('inventory')}
+                if ('agency_id', 'fuel_type_id') not in uniques and ('fuel_type_id', 'agency_id') not in uniques:
+                    with db.engine.begin() as conn:
+                        try:
+                            conn.execute(text(
+                                "ALTER TABLE `inventory` "
+                                "ADD UNIQUE KEY `uq_inventory_agency_fuel` (`agency_id`, `fuel_type_id`)"
+                            ))
+                        except Exception:
+                            pass
+    except Exception as e:
+        print(f'inventory composite unique skipped: {e}')
 
 
 def ensure_liter_precision_schema():
@@ -596,8 +640,8 @@ def ensure_fuel_price_effective_at_schema():
 def ensure_default_fuel_types(agency_id=None):
     """Ensure Petrol and Diesel fuel types (+ inventory rows) exist per agency.
 
-    If a legacy unique index on fuel_types.name blocks a second agency row,
-    reuse the shared FuelType and only create a per-agency Inventory row.
+    Safe with legacy UNIQUE(inventory.fuel_type_id): never insert a second
+    inventory row for the same fuel_type_id.
     """
     from sqlalchemy.exc import IntegrityError
     from app.models import FuelType, Inventory, Agency
@@ -611,70 +655,79 @@ def ensure_default_fuel_types(agency_id=None):
 
     defaults = ('Petrol', 'Diesel')
     created = False
-    for aid in agencies:
-        for name in defaults:
-            fuel = (
-                FuelType.query
-                .filter(
-                    db.func.lower(FuelType.name) == name.lower(),
-                    FuelType.agency_id == aid,
-                )
-                .first()
-            )
-            if fuel is None:
-                shared = (
-                    FuelType.query
-                    .filter(db.func.lower(FuelType.name) == name.lower())
-                    .order_by(FuelType.id.asc())
-                    .first()
-                )
-                if shared is None:
-                    fuel = FuelType(name=name, unit='Liter', agency_id=aid)
-                    db.session.add(fuel)
-                    try:
-                        db.session.flush()
-                        created = True
-                    except IntegrityError:
-                        db.session.rollback()
-                        fuel = (
+
+    try:
+        with db.session.no_autoflush:
+            for aid in agencies:
+                for name in defaults:
+                    fuel = (
+                        FuelType.query
+                        .filter(
+                            db.func.lower(FuelType.name) == name.lower(),
+                            FuelType.agency_id == aid,
+                        )
+                        .first()
+                    )
+                    if fuel is None:
+                        shared = (
                             FuelType.query
                             .filter(db.func.lower(FuelType.name) == name.lower())
+                            .order_by(FuelType.id.asc())
                             .first()
                         )
-                else:
-                    # Share catalog row across agencies (stock is still per-agency)
-                    fuel = shared
-                    if fuel.agency_id is not None and fuel.agency_id != aid:
-                        fuel.agency_id = None  # shared catalog
-                        created = True
-                    elif fuel.agency_id is None:
-                        pass
-                    else:
-                        pass
-            inv = (
-                Inventory.query
-                .filter_by(fuel_type_id=fuel.id, agency_id=aid)
-                .first()
-            )
-            if inv is None:
-                legacy = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
-                if legacy and legacy.agency_id is None:
-                    legacy.agency_id = aid
-                    created = True
-                else:
-                    db.session.add(Inventory(
-                        fuel_type_id=fuel.id,
-                        agency_id=aid,
-                        current_stock_liters=0,
-                        reorder_threshold=0,
-                    ))
-                    created = True
+                        if shared is None:
+                            fuel = FuelType(name=name, unit='Liter', agency_id=aid)
+                            db.session.add(fuel)
+                            try:
+                                db.session.flush()
+                                created = True
+                            except IntegrityError:
+                                db.session.rollback()
+                                fuel = (
+                                    FuelType.query
+                                    .filter(db.func.lower(FuelType.name) == name.lower())
+                                    .order_by(FuelType.id.asc())
+                                    .first()
+                                )
+                        else:
+                            fuel = shared
+                            if fuel.agency_id is not None and fuel.agency_id != aid:
+                                fuel.agency_id = None  # shared catalog
+                                created = True
 
-    if created:
-        try:
+                    if fuel is None:
+                        continue
+
+                    # Any existing inventory for this fuel (legacy unique is on fuel_type_id)
+                    inv = (
+                        Inventory.query
+                        .filter_by(fuel_type_id=fuel.id)
+                        .order_by(Inventory.id.asc())
+                        .first()
+                    )
+                    if inv is None:
+                        db.session.add(Inventory(
+                            fuel_type_id=fuel.id,
+                            agency_id=aid,
+                            current_stock_liters=0,
+                            reorder_threshold=0,
+                        ))
+                        created = True
+                    elif inv.agency_id is None:
+                        inv.agency_id = aid
+                        created = True
+                    # else: row already exists — do not insert again
+
+        if created:
             db.session.commit()
-        except IntegrityError:
+    except IntegrityError:
+        db.session.rollback()
+    except Exception as e:
+        try:
             db.session.rollback()
+        except Exception:
+            pass
+        print(f'ensure_default_fuel_types skipped: {e}')
 
 
 def ensure_meter_sale_rate_schema():
