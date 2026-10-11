@@ -31,15 +31,22 @@
                 <h2 class="panel-title mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>Create Backup</h2>
             </div>
             <div class="card-body card-body-premium">
-                <p class="text-muted-custom mb-3">
-                    Creates a JSON backup on the server and downloads a copy to your device.
-                </p>
+                <label class="form-label form-label-custom">Save folder</label>
+                <div class="of-backup-folder mb-3" id="backup-folder-box">
+                    <div class="of-backup-folder-path" id="backup-folder-label">No folder selected</div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-backup-folder">
+                        <i class="bi bi-folder2-open me-1"></i>
+                        <span id="btn-backup-folder-text">Choose folder</span>
+                    </button>
+                </div>
                 <button type="button"
                         class="btn btn-primary-custom w-100"
                         id="btn-backup-save"
-                        data-create-url="{{ url_for('backup.create') }}?download=1">
-                    <i class="bi bi-download me-1"></i> Create &amp; download backup
+                        data-create-url="{{ url_for('backup.create') }}?download=1"
+                        disabled>
+                    <i class="bi bi-download me-1"></i> Create backup
                 </button>
+                <p class="form-text mt-2 mb-0" id="backup-save-hint">Select a folder first, then create the backup.</p>
             </div>
         </div>
     </div>
@@ -116,7 +123,7 @@
                             <th>Backup Name</th>
                             <th>Created</th>
                             <th>Size</th>
-                            <th class="text-end">Download</th>
+                            <th class="text-end">Save copy</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -127,12 +134,13 @@
                                 <td>{{ b.created.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                                 <td>{{ b.size_kb }} KB</td>
                                 <td class="text-end">
-                                    <a href="{{ url_for('backup.download', filename=b.filename) }}"
-                                       class="btn btn-sm btn-outline-secondary border-0"
-                                       download
-                                       title="Download">
-                                        <i class="bi bi-download"></i>
-                                    </a>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary border-0 btn-backup-download"
+                                            data-url="{{ url_for('backup.download', filename=b.filename) }}"
+                                            data-filename="{{ b.filename }}"
+                                            title="Save to folder">
+                                        <i class="bi bi-folder-symlink"></i>
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -175,19 +183,95 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.of-backup-folder {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 14px);
+    background: color-mix(in srgb, var(--card-bg) 90%, var(--accent-blue) 6%);
+}
+.of-backup-folder-path {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.of-backup-folder.is-ready .of-backup-folder-path {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+</style>
 <script>
 (function (fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
     else fn();
 })(function () {
     const createBtn = document.getElementById('btn-backup-save');
+    const folderBtn = document.getElementById('btn-backup-folder');
+    const folderLabel = document.getElementById('backup-folder-label');
+    const folderBtnText = document.getElementById('btn-backup-folder-text');
+    const folderBox = document.getElementById('backup-folder-box');
+    const hint = document.getElementById('backup-save-hint');
+    let dirHandle = null;
 
     function toast(msg, kind) {
         if (window.ofToast) window.ofToast(msg, kind || 'info');
         else window.ofAlert({ message: msg });
     }
 
-    function triggerDownload(blob, filename) {
+    function setFolderUI(name) {
+        if (!folderLabel) return;
+        if (name) {
+            folderLabel.textContent = name;
+            if (folderBtnText) folderBtnText.textContent = 'Change folder';
+            if (folderBox) folderBox.classList.add('is-ready');
+            if (createBtn) createBtn.disabled = false;
+            if (hint) hint.textContent = 'Backup will be saved in the selected folder.';
+        } else {
+            folderLabel.textContent = 'No folder selected';
+            if (folderBtnText) folderBtnText.textContent = 'Choose folder';
+            if (folderBox) folderBox.classList.remove('is-ready');
+            if (createBtn) createBtn.disabled = true;
+            if (hint) hint.textContent = 'Select a folder first, then create the backup.';
+        }
+    }
+
+    async function pickFolder() {
+        if (!window.showDirectoryPicker) {
+            window.ofAlert({
+                title: 'Folder picker unavailable',
+                message: 'Folder save needs Chrome or Edge. Use a download instead.',
+            });
+            return;
+        }
+        try {
+            dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            setFolderUI(dirHandle.name || 'Selected folder');
+        } catch (err) {
+            if (err && err.name === 'AbortError') return;
+            toast(err.message || 'Could not open folder picker.', 'danger');
+        }
+    }
+
+    async function writeToDir(blob, filename, handle) {
+        const fileHandle = await handle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+    }
+
+    async function writeBlob(blob, filename) {
+        if (dirHandle) {
+            await writeToDir(blob, filename, dirHandle);
+            return 'folder';
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -196,6 +280,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return 'download';
     }
 
     async function fetchBackupBlob(url, method) {
@@ -224,23 +309,64 @@
         return { blob, filename };
     }
 
-    if (createBtn) {
-        createBtn.addEventListener('click', async () => {
-            const url = createBtn.getAttribute('data-create-url');
-            if (!url) return;
-            if (window.ofLoader) window.ofLoader.show('Creating backup…');
-            try {
-                const { blob, filename } = await fetchBackupBlob(url, 'POST');
-                triggerDownload(blob, filename);
-                if (window.ofLoader) window.ofLoader.hide(true);
+    async function saveFromUrl(url, method, requireFolder) {
+        if (requireFolder && !dirHandle) {
+            toast('Choose a folder first.', 'warning');
+            return;
+        }
+        if (window.ofLoader) window.ofLoader.show(method === 'POST' ? 'Creating backup…' : 'Saving…');
+        try {
+            const { blob, filename } = await fetchBackupBlob(url, method);
+            const mode = await writeBlob(blob, filename);
+            if (window.ofLoader) window.ofLoader.hide(true);
+            if (mode === 'folder') {
+                toast(`Saved ${filename} to ${dirHandle.name || 'folder'}`, 'success');
+            } else {
                 toast(`Download started: ${filename}`, 'success');
-                setTimeout(() => { window.location.href = '{{ url_for("backup.index") }}'; }, 700);
-            } catch (err) {
-                if (window.ofLoader) window.ofLoader.hide(true);
-                toast(err.message || 'Could not create backup.', 'danger');
             }
+            if (method === 'POST') {
+                setTimeout(() => { window.location.href = '{{ url_for("backup.index") }}'; }, 600);
+            }
+        } catch (err) {
+            if (window.ofLoader) window.ofLoader.hide(true);
+            if (err && err.name === 'AbortError') {
+                toast('Save cancelled.', 'warning');
+                return;
+            }
+            toast(err.message || 'Could not save backup.', 'danger');
+        }
+    }
+
+    if (folderBtn) folderBtn.addEventListener('click', pickFolder);
+
+    if (createBtn) {
+        createBtn.addEventListener('click', () => {
+            const url = createBtn.getAttribute('data-create-url');
+            if (url) saveFromUrl(url, 'POST', true);
         });
     }
+
+    document.querySelectorAll('.btn-backup-download').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const url = btn.getAttribute('data-url');
+            if (!url) return;
+            if (!dirHandle) {
+                if (!window.showDirectoryPicker) {
+                    saveFromUrl(url, 'GET', false);
+                    return;
+                }
+                try {
+                    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                    setFolderUI(dirHandle.name || 'Selected folder');
+                } catch (err) {
+                    if (err && err.name === 'AbortError') return;
+                    toast(err.message || 'Could not open folder.', 'danger');
+                    return;
+                }
+            }
+            saveFromUrl(url, 'GET', false);
+        });
+    });
 
     const form = document.getElementById('restore-form');
     if (!form) return;

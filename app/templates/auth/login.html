@@ -11,7 +11,7 @@
                     <img src="{{ brand_logo_url or url_for('static', filename='img/logo.png') }}" alt="{{ brand_name or 'OctaneFlow' }}" width="64" height="64">
                 </div>
                 <h1 class="auth-title">Welcome to {{ brand_name or 'OctaneFlow' }}</h1>
-                <p class="text-muted-custom mb-0">Fuel Station Management Control</p>
+                <p class="text-muted-custom mb-0">{{ brand_tag or 'U. Technologies' }}</p>
             </div>
             
             <form action="{{ url_for('auth.login') }}" method="POST">

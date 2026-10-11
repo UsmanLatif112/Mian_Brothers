@@ -69,24 +69,36 @@ def create_app():
 
     @app.context_processor
     def inject_branding():
+        # Platform brand: OctaneFlow + U. Technologies + main app logo
         brand_name = 'OctaneFlow'
-        brand_tag = 'Station OS'
-        brand_logo = None
+        brand_tag = 'U. Technologies'
+        brand_logo = None  # None → static/img/logo.png
         brand_address = None
         brand_phone = None
         brand_email = None
         agency = None
+        use_platform_logo = True
+
+        def _is_octane_agency(row):
+            return bool(row and 'octane' in (row.name or '').lower())
+
         try:
             from app.models import Agency
             if current_user.is_authenticated and getattr(current_user, 'agency_id', None):
                 agency = Agency.query.get(current_user.agency_id)
                 if agency:
-                    brand_name = agency.name or brand_name
-                    brand_logo = agency.logo
                     brand_address = agency.address
                     brand_phone = agency.phone
                     brand_email = agency.email
-                    brand_tag = ''
+                    if _is_octane_agency(agency):
+                        brand_name = 'OctaneFlow'
+                        brand_tag = 'U. Technologies'
+                        use_platform_logo = True
+                    else:
+                        brand_name = agency.name or brand_name
+                        brand_logo = agency.logo
+                        brand_tag = ''
+                        use_platform_logo = False
             elif not current_user.is_authenticated:
                 agency = Agency.query.filter(
                     Agency.name.ilike('%octane%')
@@ -94,14 +106,19 @@ def create_app():
                 if agency is None:
                     agency = Agency.query.order_by(Agency.id.asc()).first()
                 if agency:
-                    brand_name = agency.name or brand_name
-                    brand_logo = agency.logo
-                    brand_address = agency.address
+                    brand_address = agency.address or 'U. Technologies'
                     brand_phone = agency.phone
                     brand_email = agency.email
+                brand_name = 'OctaneFlow'
+                brand_tag = 'U. Technologies'
+                use_platform_logo = True
         except Exception:
             agency = None
-        logo_url = media_url(brand_logo, 'img/logo.png')
+
+        if use_platform_logo:
+            logo_url = url_for('static', filename='img/logo.png')
+        else:
+            logo_url = media_url(brand_logo, 'img/logo.png')
         from app.tenancy import (
             is_super_admin, is_agency_admin, is_agency_manager, can_access_module, OPS_MODULES,
         )
@@ -333,7 +350,7 @@ def ensure_agency_schema():
                 logo_name = None
         agency = Agency(
             name='OctaneFlow',
-            address='U.Technologies',
+            address='U. Technologies',
             phone='',
             email='hello@udottechnologies.com',
             logo=logo_name,
@@ -341,6 +358,29 @@ def ensure_agency_schema():
         )
         db.session.add(agency)
         db.session.commit()
+    elif agency and 'octane' in (agency.name or '').lower():
+        # Keep OctaneFlow agency linked to U. Technologies + main logo file
+        changed = False
+        if (agency.name or '').strip() != 'OctaneFlow':
+            agency.name = 'OctaneFlow'
+            changed = True
+        addr_norm = (agency.address or '').replace('.', '').replace(' ', '').lower()
+        if not (agency.address or '').strip() or addr_norm == 'utechnologies':
+            agency.address = 'U. Technologies'
+            changed = True
+        src = os.path.join(_BASE_DIR, 'app', 'static', 'img', 'logo.png')
+        if os.path.isfile(src):
+            logo_name = 'octaneflow_logo.png'
+            dest = os.path.join(UPLOAD_DIR, logo_name)
+            try:
+                shutil.copy2(src, dest)
+                if agency.logo != logo_name:
+                    agency.logo = logo_name
+                    changed = True
+            except Exception as e:
+                print(f'logo sync skipped: {e}')
+        if changed:
+            db.session.commit()
 
     aid = agency.id
 
