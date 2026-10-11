@@ -5,7 +5,7 @@
     let hideTimer = null;
     let safetyTimer = null;
     const MIN_MS = 280;
-    const MAX_MS = 90000; /* long CRUD / restore must not drop the loader mid-wait */
+    const MAX_MS = 45000; /* restore/CRUD ceiling; normal nav clears on turbo:load */
     const NAV_KEY = 'ofNavLoad';
     const NAV_MSG = 'ofNavMsg';
     const navPendingAtBoot = !!window.__ofNavPending;
@@ -88,8 +88,13 @@
             busy += 1;
             reveal(message || 'Working…', sub);
         },
+        /** Update copy / keep visible without stacking busy count. */
+        stay(message, sub) {
+            if (busy < 1) busy = 1;
+            reveal(message || 'Loading…', sub);
+        },
         showNav(message) {
-            /* Full animated loader + handoff flag for the next page (no soft half-veil). */
+            /* Full-page handoff only (no Turbo). Marks sessionStorage for next document. */
             const msg = message || 'Loading…';
             markNav(msg);
             document.documentElement.classList.remove('of-leaving');
@@ -141,8 +146,8 @@
         window.location.reload();
     };
 
-    // Keep in-flight nav loader running until window.load (base.html settles it).
-    // Only clear leftovers on a normal open / refresh.
+    // Hard refresh / normal open: never leave a stuck loader.
+    // Nav handoff (sessionStorage) is settled by base.html within ~420ms.
     if (!navPendingAtBoot) {
         forceOff();
     } else {
@@ -150,7 +155,9 @@
         if (node && !node.classList.contains('is-on')) {
             reveal(window.__ofNavMsg || 'Loading…');
         }
-        armSafety();
+        // Short safety — base.html also settles; do not keep spinner for 45s on refresh
+        if (safetyTimer) clearTimeout(safetyTimer);
+        safetyTimer = setTimeout(forceOff, 2500);
     }
 
     // Only mutate requests show loader by default (GET polling must not hang UI)
@@ -193,18 +200,20 @@
         window.ofLoader.showNav('Loading…');
     }, true);
 
-    window.addEventListener('pageshow', (ev) => {
-        // bfcache only — do not kill an active nav loader (busy may still be 0)
-        if (ev.persisted) forceOff();
+    window.addEventListener('pageshow', () => {
+        // F5 / back-forward: clear leftover flags; if no Turbo visit in flight, hide
+        clearNavFlag();
+        setTimeout(() => {
+            if (window.__ofTurboVisitActive) return;
+            forceOff();
+        }, 600);
     });
 
     window.addEventListener('load', () => {
-        // Nav settle is owned by base.html; only clear CRUD leftovers here
-        if (!window.__ofNavPending && busy === 0) {
-            setTimeout(() => {
-                if (!window.__ofNavPending && busy === 0) forceOff();
-            }, 180);
-        }
+        setTimeout(() => {
+            if (window.__ofTurboVisitActive) return;
+            if (!window.__ofNavPending) forceOff();
+        }, 500);
     }, { once: true });
 })();
 

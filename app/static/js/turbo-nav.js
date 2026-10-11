@@ -1,11 +1,11 @@
 /**
- * Turbo Drive navigation — no full tab refresh.
- * Full animated loader for every visit / CRUD submit until turbo:load.
+ * Turbo Drive navigation — in-tab loader only (no full tab refresh).
+ * Never show loader for prefetch hover requests (that was sticking the spinner).
  */
 (function initTurboNav() {
     if (!window.Turbo) return;
 
-    const MAX_MS = 90000;
+    const MAX_MS = 45000;
     let safetyTimer = null;
     let visitPending = false;
     let submitPending = false;
@@ -18,11 +18,31 @@
         }
     }
 
+    function isPrefetch(fetchOptions) {
+        if (!fetchOptions) return false;
+        const headers = fetchOptions.headers || {};
+        const purpose = String(
+            headers['X-Sec-Purpose']
+            || headers['Sec-Purpose']
+            || headers['Purpose']
+            || ''
+        ).toLowerCase();
+        if (purpose.includes('prefetch')) return true;
+        // Turbo may mark prefetch on the options object
+        if (fetchOptions.headers && fetchOptions.headers['X-Turbo-Prefetch']) return true;
+        return false;
+    }
+
     function showNavLoader(msg) {
+        window.__ofTurboVisitActive = true;
         document.documentElement.classList.remove('of-leaving');
         document.documentElement.classList.add('of-loading');
-        if (window.ofLoader && typeof window.ofLoader.show === 'function') {
-            window.ofLoader.show(msg || 'Loading…');
+        if (window.ofLoader) {
+            if (loaderShown && typeof window.ofLoader.stay === 'function') {
+                window.ofLoader.stay(msg || 'Loading…');
+            } else if (typeof window.ofLoader.show === 'function') {
+                window.ofLoader.show(msg || 'Loading…');
+            }
             loaderShown = true;
         } else {
             const node = document.getElementById('ofLoader');
@@ -43,7 +63,12 @@
         visitPending = false;
         submitPending = false;
         loaderShown = false;
+        window.__ofTurboVisitActive = false;
         document.documentElement.classList.remove('of-loading', 'of-leaving');
+        try {
+            sessionStorage.removeItem('ofNavLoad');
+            sessionStorage.removeItem('ofNavMsg');
+        } catch (e) { /* ignore */ }
         if (window.ofLoader && typeof window.ofLoader.hide === 'function') {
             window.ofLoader.hide(!!force);
         } else {
@@ -70,18 +95,23 @@
     });
 
     document.addEventListener('turbo:before-fetch-request', (event) => {
-        const headers = event.detail.fetchOptions.headers;
+        const opts = event.detail.fetchOptions || {};
+        const headers = opts.headers || (opts.headers = {});
         headers.Accept = 'text/html, application/xhtml+xml';
-        const method = String(event.detail.fetchOptions.method || 'GET').toUpperCase();
+        opts.ofSilent = true;
+
+        // Prefetch on hover must NOT show the loader (nothing clears it)
+        if (isPrefetch(opts)) return;
+
+        const method = String(opts.method || 'GET').toUpperCase();
         if (method !== 'GET' && method !== 'HEAD') {
             submitPending = true;
             showNavLoader('Saving…');
-            event.detail.fetchOptions.ofSilent = true;
-        } else if (!loaderShown) {
-            showNavLoader('Loading…');
-            event.detail.fetchOptions.ofSilent = true;
-        } else {
-            event.detail.fetchOptions.ofSilent = true;
+            return;
+        }
+        // Real visit GET already covered by turbo:click / before-visit
+        if (visitPending || submitPending) {
+            showNavLoader(submitPending ? 'Saving…' : 'Loading…');
         }
     });
 
@@ -131,5 +161,7 @@
         document.body.style.overflow = '';
     });
 
+    // Initial turbo:load already fired or about to — ensure clean state after boot
+    window.__ofTurboVisitActive = false;
     window.__ofTurboNav = true;
 })();
