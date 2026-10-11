@@ -546,25 +546,6 @@ def index():
     ensure_shop_categories()
     shop_categories = [category_payload(c) for c in list_active_categories()]
 
-    purchase_logs_q = apply_agency_filter(ItemPurchaseLog.query, ItemPurchaseLog).order_by(
-        ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc()
-    )
-    if search_q:
-        like = f'%{search_q}%'
-        purchase_logs_q = purchase_logs_q.filter(
-            db.or_(
-                ItemPurchaseLog.item_name.ilike(like),
-                ItemPurchaseLog.vendor.ilike(like),
-                ItemPurchaseLog.category.ilike(like),
-                ItemPurchaseLog.company.ilike(like),
-            )
-        )
-    logs_page = request.args.get('logs_page', 1)
-    purchase_logs, purchase_logs_pagination = paginate(purchase_logs_q, logs_page, PER_PAGE)
-    purchase_log_status = {
-        log.id: purchase_log_payment_status(log) for log in purchase_logs
-    }
-
     from app.charts_data import inventory_listing_series
 
     return render_template(
@@ -575,9 +556,6 @@ def index():
         fuel_last_costs=fuel_last_costs,
         shop_items=shop_items,
         shop_pagination=shop_pagination,
-        purchase_logs=purchase_logs,
-        purchase_logs_pagination=purchase_logs_pagination,
-        purchase_log_status=purchase_log_status,
         vendors=vendors,
         today=datetime.utcnow().date().isoformat(),
         chart_series=inventory_listing_series(),
@@ -590,83 +568,15 @@ def index():
 @inventory_bp.route('/purchase-log/<int:log_id>/edit', methods=['POST'])
 @login_required
 def edit_purchase_log(log_id):
-    """Edit a purchase batch — updates stock, vendor payment, and payable."""
-    log = ItemPurchaseLog.query.get_or_404(log_id)
-    require_agency_access(log)
-    try:
-        cost_val = float(request.form.get('cost_price') or 0)
-        sale_val = float(request.form.get('sale_price') or log.sale_price or 0)
-        if cost_val < 0 or sale_val < 0:
-            raise ValueError('Prices cannot be negative.')
-    except (TypeError, ValueError) as e:
-        flash(f'Invalid values: {e}', 'danger')
-        return redirect(url_for('inventory.index'))
-
-    old_liters = float(log.liters or 0) if log.liters is not None else 0.0
-    old_qty = int(log.quantity or 0) if log.quantity is not None else 0
-    new_liters = old_liters
-    new_qty = old_qty
-
-    liters_raw = request.form.get('liters')
-    qty_raw = request.form.get('quantity')
-    if liters_raw not in (None, ''):
-        try:
-            new_liters = float(liters_raw)
-            if new_liters < 0:
-                raise ValueError('Liters cannot be negative.')
-        except (TypeError, ValueError) as e:
-            flash(f'Invalid liters: {e}', 'danger')
-            return redirect(url_for('inventory.index'))
-    if qty_raw not in (None, ''):
-        try:
-            new_qty = int(qty_raw)
-            if new_qty < 0:
-                raise ValueError('Quantity cannot be negative.')
-        except (TypeError, ValueError) as e:
-            flash(f'Invalid quantity: {e}', 'danger')
-            return redirect(url_for('inventory.index'))
-
-    vendor_id = (request.form.get('vendor_id') or '').strip() or None
-    vendor_name = (request.form.get('vendor') or log.vendor or '').strip() or None
-    payment_status = normalize_purchase_payment_status(request.form.get('payment_status'))
-    entry_day = parse_form_date(request.form.get('entry_date'))
-    apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty)
-
-    log.cost_price = cost_val
-    log.sale_price = sale_val
-    log.entry_date = datetime_from_date(entry_day)
-    log.liters = new_liters if (log.category in ('fuel', 'ft_mobile') or new_liters > 0) else log.liters
-    if log.category not in ('fuel', 'ft_mobile'):
-        log.quantity = new_qty
-
-    vendor = resolve_vendor(vendor_id=vendor_id, vendor_name=vendor_name)
-    if vendor:
-        log.vendor = vendor.name
-        log.vendor_id = vendor.id
-    elif vendor_name:
-        log.vendor = vendor_name
-
-    sync_auto_payment_for_log(log, payment_status=payment_status, payment_date=log.entry_date)
-    db.session.flush()
-    if log.vendor_id:
-        vendor = Vendor.query.get(log.vendor_id)
-        if vendor:
-            recalculate_vendor_balance(vendor)
-    db.session.commit()
-    flash(f'Purchase log #{log.id} updated. Stock and vendor ledger recalculated.', 'success')
-    return redirect(url_for('inventory.index'))
+    """Legacy URL — purchasing page owns edit now."""
+    return redirect(url_for('purchasing.index'))
 
 
 @inventory_bp.route('/purchase-log/<int:log_id>/delete', methods=['POST'])
 @login_required
 def delete_purchase_log(log_id):
-    log = ItemPurchaseLog.query.get_or_404(log_id)
-    require_agency_access(log)
-    label = f'{log.item_name} (#{log.id})'
-    delete_purchase_log_cascade(log)
-    db.session.commit()
-    flash(f'Deleted purchase {label}. Stock and vendor ledger updated.', 'success')
-    return redirect(url_for('inventory.index'))
+    """Legacy URL — purchasing page owns delete now."""
+    return redirect(url_for('purchasing.index'))
 
 
 @inventory_bp.route('/item/<int:item_id>/edit', methods=['POST'])

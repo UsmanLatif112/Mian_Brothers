@@ -1,6 +1,56 @@
 {% extends "base.html" %}
 
-{% block title %}Purchasing — OctaneFlow{% endblock %}
+{% block title %}Purchasing — {{ brand_name }}{% endblock %}
+
+{% block topbar_search %}
+<form class="topbar-search" action="{{ url_for('purchasing.index') }}" method="GET" role="search" data-search-mode="page">
+    <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
+    <input type="hidden" name="period" value="{{ period }}">
+    <input type="hidden" name="category" value="{{ category }}">
+    <input type="hidden" name="status" value="{{ status }}">
+    {% if period == 'custom' %}
+    <input type="hidden" name="start_date" value="{{ start_date }}">
+    <input type="hidden" name="end_date" value="{{ end_date }}">
+    {% endif %}
+    <input type="search" class="topbar-search-input" name="search"
+           placeholder="Search purchases…" value="{{ search or '' }}" autocomplete="off" aria-label="Search purchases">
+</form>
+{% endblock %}
+
+{% block topbar_filters %}
+<form method="GET" class="period-filter period-filter-compact period-filter-wide" id="purchasing-filter-form" data-allow-multi-submit="1">
+    <input type="hidden" name="search" value="{{ search or '' }}">
+    <select name="category" id="purch-category" class="form-select form-control-custom period-select" aria-label="Category">
+        {% for value, label in category_choices %}
+        <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="status" id="purch-status" class="form-select form-control-custom period-select" aria-label="Payment status">
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="period" id="purch-period" class="form-select form-control-custom period-select" aria-label="Period">
+        {% for value, label in period_choices %}
+        <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
+        <div class="period-date-field">
+            <span class="period-date-label">From</span>
+            <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
+        </div>
+        <span class="period-date-sep">–</span>
+        <div class="period-date-field">
+            <span class="period-date-label">To</span>
+            <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
+        </div>
+        <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
+            <i class="bi bi-check-lg"></i>
+        </button>
+    </div>
+</form>
+{% endblock %}
 
 {% block content %}
 <header class="page-header mb-4">
@@ -9,293 +59,294 @@
             <p class="page-eyebrow">Supply</p>
             <h1 class="page-title">Purchasing</h1>
         </div>
-        <form method="GET" class="period-filter period-filter-compact period-filter-wide" id="period-filter-form">
-            <select name="category" id="category-select" class="form-select form-control-custom period-select" aria-label="Category">
-                {% for value, label in category_choices %}
-                <option value="{{ value }}" {% if category == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <select name="period" id="period-select" class="form-select form-control-custom period-select" aria-label="Period">
-                {% for value, label in period_choices %}
-                <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <div class="period-custom-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
-                <div class="period-date-field">
-                    <span class="period-date-label">From</span>
-                    <input type="date" name="start_date" class="form-control form-control-custom period-date" value="{{ start_date }}" aria-label="From date">
-                </div>
-                <span class="period-date-sep">–</span>
-                <div class="period-date-field">
-                    <span class="period-date-label">To</span>
-                    <input type="date" name="end_date" class="form-control form-control-custom period-date" value="{{ end_date }}" aria-label="To date">
-                </div>
-                <button type="submit" class="btn btn-primary-custom period-filter-submit" title="Apply">
-                    <i class="bi bi-check-lg"></i>
-                </button>
-            </div>
-        </form>
+        <a href="{{ url_for('inventory.index') }}" class="btn btn-primary-custom">
+            <i class="bi bi-plus-circle me-1"></i> Add Inventory
+        </a>
     </div>
     <div class="page-header-meta">
         <span class="period-range-badge"><i class="bi bi-calendar3"></i>{{ start_date }} → {{ end_date }}</span>
     </div>
 </header>
 
-<script>
-(function () {
-    const form = document.getElementById('period-filter-form');
-    const periodSel = document.getElementById('period-select');
-    const catSel = document.getElementById('category-select');
-    if (!form || !periodSel) return;
-
-    const startInput = form.querySelector('[name="start_date"]');
-    const endInput = form.querySelector('[name="end_date"]');
-    const customWrap = form.querySelector('.custom-dates');
-    const todayStr = () => {
-        const d = new Date();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${d.getFullYear()}-${m}-${day}`;
-    };
-
-    const setCustomEnabled = (enabled) => {
-        if (customWrap) customWrap.classList.toggle('d-none', !enabled);
-        if (!startInput || !endInput) return;
-        startInput.name = enabled ? 'start_date' : '';
-        endInput.name = enabled ? 'end_date' : '';
-        startInput.disabled = false;
-        endInput.disabled = false;
-    };
-
-    const daySpan = (start, end) => {
-        const a = Date.parse(start);
-        const b = Date.parse(end);
-        if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
-        return Math.abs(b - a) / 86400000;
-    };
-
-    const snapToSingleDay = () => {
-        const day = (endInput && endInput.value) || todayStr();
-        if (startInput) startInput.value = day;
-        if (endInput) endInput.value = day;
-    };
-
-    const isLeftoverAllRange = (maxDays) => {
-        if (!startInput || !endInput) return false;
-        const start = startInput.value;
-        const end = endInput.value;
-        if (!start || !end) return true;
-        const span = daySpan(start, end);
-        if (Number.isNaN(span)) return true;
-        if (span > maxDays) return true;
-        return start.slice(5) === end.slice(5) && start.slice(0, 4) !== end.slice(0, 4) && span > 60;
-    };
-
-    setCustomEnabled(periodSel.value === 'custom');
-
-    if (periodSel.value === 'custom' && isLeftoverAllRange(365)) {
-        snapToSingleDay();
-        form.submit();
-        return;
-    }
-
-    periodSel.addEventListener('change', () => {
-        const isCustom = periodSel.value === 'custom';
-        setCustomEnabled(isCustom);
-        if (!isCustom) {
-            form.submit();
-            return;
-        }
-        if (isLeftoverAllRange(90)) snapToSingleDay();
-    });
-    if (catSel) {
-        catSel.addEventListener('change', () => form.submit());
-    }
-    form.addEventListener('submit', () => {
-        if (periodSel.value !== 'custom') {
-            if (startInput) startInput.name = '';
-            if (endInput) endInput.name = '';
-            return;
-        }
-        if (startInput) startInput.name = 'start_date';
-        if (endInput) endInput.name = 'end_date';
-    });
-    form.setAttribute('data-allow-multi-submit', '1');
-})();
-</script>
-
-<!-- Vendor purchasing summary -->
 <div class="row g-3 mb-4 row-cols-1 row-cols-md-3 dashboard-stats">
     <div class="col">
         <div class="card card-premium metric-card stock h-100">
             <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Purchasing</span>
+                <span class="metric-label text-muted-custom text-uppercase">Total Purchases</span>
                 <div class="metric-value fw-bold mb-0">{{ purchase_total | money }}</div>
-                <small class="text-muted-custom">Selected period · all batches</small>
+                <small class="text-muted-custom">Filtered period · all batches</small>
             </div>
         </div>
     </div>
     <div class="col">
         <div class="card card-premium metric-card profit h-100">
             <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Paid to Vendors</span>
+                <span class="metric-label text-muted-custom text-uppercase">Paid</span>
                 <div class="metric-value fw-bold mb-0">{{ paid_total | money }}</div>
-                <small class="text-muted-custom">All payments recorded</small>
+                <small class="text-muted-custom">Settled with purchase</small>
             </div>
         </div>
     </div>
     <div class="col">
         <div class="card card-premium metric-card credit h-100">
             <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Payable</span>
-                <div class="metric-value fw-bold mb-0">{{ payable_total | money }}</div>
-                <small class="text-muted-custom">Still due to vendors</small>
+                <span class="metric-label text-muted-custom text-uppercase">Unpaid</span>
+                <div class="metric-value fw-bold mb-0">{{ unpaid_total | money }}</div>
+                <small class="text-muted-custom">On vendor account</small>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Purchase totals -->
-<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-3 dashboard-stats">
-    <div class="col">
-        <div class="card card-premium metric-card stock h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Petrol Purchase</span>
-                <div class="metric-value fw-bold mb-0">{{ purchase_stats.petrol_purchase | money }}</div>
-                <small class="text-muted-custom">{{ "{:,.2f}".format(purchase_stats.petrol_liters) }} L bought</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card profit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Diesel Purchase</span>
-                <div class="metric-value fw-bold mb-0 text-success">{{ purchase_stats.diesel_purchase | money }}</div>
-                <small class="text-muted-custom">{{ "{:,.2f}".format(purchase_stats.diesel_liters) }} L bought</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Mobile Purchase</span>
-                <div class="metric-value fw-bold mb-0">{{ purchase_stats.mobile_purchase | money }}</div>
-                <small class="text-muted-custom">{{ purchase_stats.mobile_qty }} units</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card profit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total FT Mobile Oil Purchase</span>
-                <div class="metric-value fw-bold mb-0">{{ purchase_stats.get('ft_mobile_purchase', 0) | money }}</div>
-                <small class="text-muted-custom">{{ "{:,.2f}".format(purchase_stats.get('ft_mobile_liters', 0)) }} L bought</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card credit h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Filter Purchase</span>
-                <div class="metric-value fw-bold mb-0">{{ purchase_stats.filter_purchase | money }}</div>
-                <small class="text-muted-custom">{{ purchase_stats.filter_qty }} units</small>
-            </div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="card card-premium metric-card h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Total Other Purchase</span>
-                <div class="metric-value fw-bold mb-0">{{ purchase_stats.other_purchase | money }}</div>
-                <small class="text-muted-custom">{{ purchase_stats.other_qty }} units</small>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Purchase listing -->
 <div class="row g-4">
     <div class="col-12">
-        <div class="card card-premium">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Purchase History</h5>
-                <small class="text-muted-custom">One row per inventory add — e.g. 1000 L @ 200 and 2000 L @ 250 stay separate</small>
+        <div class="card card-premium list-panel">
+            <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h2 class="panel-title mb-0">Purchase Logs</h2>
+                    <p class="panel-subtitle mb-0">Every inventory batch · edit, delete, or print receipt</p>
+                </div>
+                <span class="badge badge-custom badge-staff">{{ hist_pagination.total if hist_pagination else purchase_logs|length }} batches</span>
             </div>
             <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0">
+                <table class="table table-custom table-hover mb-0 list-table">
                     <thead>
                         <tr>
                             <th>Date</th>
                             <th>Category</th>
-                            <th>What</th>
+                            <th>Item</th>
                             <th>Vendor</th>
-                            <th>Qty / Liters</th>
-                            <th>Cost / Unit</th>
-                            <th>Sale / Unit</th>
-                            <th>Total Cost</th>
-                            <th>By</th>
+                            <th>Cost</th>
+                            <th>Qty / L</th>
+                            <th>Batch</th>
+                            <th>Status</th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% if purchase_logs %}
                             {% for log in purchase_logs %}
+                            {% set batch = (log.cost_price|float) * ((log.liters|float) if (log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity)) else (log.quantity|float)) %}
+                            {% set pay_status = (purchase_log_status or {}).get(log.id, 'unpaid') %}
                             <tr>
-                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if log.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ log.category }}{% endif %}</span></td>
+                                <td class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') if log.entry_date else '—' }}</td>
+                                <td>
+                                    <span class="badge badge-custom bg-secondary text-uppercase">
+                                        {% if log.category == 'ft_mobile' %}FT Mobile{% else %}{{ log.category }}{% endif %}
+                                    </span>
+                                </td>
                                 <td class="fw-semibold">
-                                    <span class="of-clip-cell" data-of-tip="{{ log.item_name }}{% if log.company %} · {{ log.company }}{% endif %}{% if log.item_type %} · {{ log.item_type }}{% endif %}">{{ log.item_name }}</span>
-                                    {% if log.company %}
-                                        <small class="text-muted-custom d-block of-clip" data-of-tip="{{ log.company }}{% if log.item_type %} · {{ log.item_type }}{% endif %}">{{ log.company }}{% if log.item_type %} · {{ log.item_type }}{% endif %}</small>
-                                    {% elif log.item_type %}
-                                        <small class="text-muted-custom d-block of-clip" data-of-tip="{{ log.item_type }}">{{ log.item_type }}</small>
-                                    {% endif %}
+                                    <span class="of-clip-cell" data-of-tip="{{ log.item_name }}{% if log.company %} ({{ log.company }}){% endif %}{% if log.item_type %} · {{ log.item_type }}{% endif %}">
+                                        {{ log.item_name }}{% if log.company %} <span class="text-muted-custom">({{ log.company }})</span>{% endif %}
+                                    </span>
                                 </td>
-                                <td><span class="of-clip-cell" data-of-tip="{{ log.vendor or '-' }}">{{ log.vendor or '-' }}</span></td>
-                                <td class="fw-bold">
-                                    {% if log.category in ('fuel', 'ft_mobile') %}
-                                        {{ "{:,.2f}".format(log.liters or 0) }} L
-                                    {% elif log.category == 'mobile' %}
-                                        {{ log.quantity or 0 }}
-                                        {% if log.liters %} <span class="text-muted-custom fw-normal">({{ "{:,.2f}".format(log.liters) }} L)</span>{% endif %}
-                                    {% else %}
-                                        {{ log.quantity or 0 }}
-                                    {% endif %}
-                                </td>
+                                <td><span class="of-clip-cell" data-of-tip="{{ log.vendor or '—' }}">{{ log.vendor or '—' }}</span></td>
                                 <td>{{ log.cost_price | money }}</td>
-                                <td>{{ log.sale_price | money }}</td>
-                                <td class="fw-bold">{{ purchase_amount(log) | money }}</td>
-                                <td>{{ log.creator.name if log.creator else '-' }}</td>
-                            </tr>
-                            {% endfor %}
-                        {% elif deliveries %}
-                            {% for del in deliveries %}
-                            <tr>
-                                <td style="font-size: 0.85rem;" class="text-muted-custom">{{ del.entry_date.strftime('%Y-%m-%d %H:%M') }}</td>
-                                <td><span class="badge badge-custom bg-secondary">FUEL</span></td>
-                                <td class="fw-semibold">{{ del.fuel_type.name }}</td>
-                                <td>{{ del.supplier or '-' }}</td>
-                                <td class="fw-bold">{{ "{:,.2f}".format(del.liters_added) }} L</td>
-                                <td>{{ del.cost_per_liter | money }}</td>
-                                <td>-</td>
-                                <td class="fw-bold">{{ ((del.cost_per_liter or 0) * (del.liters_added or 0)) | money }}</td>
-                                <td>{{ del.creator.name if del.creator else '-' }}</td>
+                                <td>
+                                    {% if log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity) %}
+                                    {{ "{:,.2f}".format(log.liters or 0) }} L
+                                    {% else %}
+                                    {{ log.quantity or 0 }}
+                                    {% if log.liters %} <span class="text-muted-custom">({{ "{:,.2f}".format(log.liters) }} L)</span>{% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="fw-semibold">{{ batch | money }}</td>
+                                <td>
+                                    {% if pay_status == 'paid' %}
+                                    <span class="badge badge-custom badge-success-custom text-uppercase">Paid</span>
+                                    {% else %}
+                                    <span class="badge badge-custom badge-danger-custom text-uppercase">Unpaid</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="table-actions btn-group gap-1 justify-content-end">
+                                        <a href="{{ url_for('receipts.purchase', log_id=log.id) }}"
+                                           class="btn btn-sm btn-outline-secondary border-0"
+                                           title="View receipt"
+                                           target="_blank" rel="noopener">
+                                            <i class="bi bi-printer"></i>
+                                        </a>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary border-0 edit-purchase-log-btn"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editPurchaseModal"
+                                                data-edit-url="{{ url_for('purchasing.edit_purchase_log', log_id=log.id) }}"
+                                                data-item="{{ log.item_name|e }}"
+                                                data-category="{{ log.category|e }}"
+                                                data-vendor-id="{{ log.vendor_id or '' }}"
+                                                data-vendor="{{ (log.vendor or '')|e }}"
+                                                data-cost="{{ log.cost_price }}"
+                                                data-sale="{{ log.sale_price }}"
+                                                data-liters="{{ log.liters if log.liters is not none else '' }}"
+                                                data-quantity="{{ log.quantity if log.quantity is not none else '' }}"
+                                                data-payment-status="{{ pay_status }}"
+                                                data-entry-date="{{ log.entry_date.strftime('%Y-%m-%d') if log.entry_date else today }}"
+                                                data-is-fuel="{{ 1 if log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity) else 0 }}"
+                                                title="Edit purchase">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <form action="{{ url_for('purchasing.delete_purchase_log', log_id=log.id) }}" method="POST" class="d-inline"
+                                              data-confirm="Delete this purchase batch? Stock and vendor ledger will update."
+                                              data-confirm-title="Delete purchase">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete purchase">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
                                 <td colspan="9" class="empty-state text-center py-4">
                                     <div class="empty-state-icon"><i class="bi bi-cart-plus"></i></div>
-                                    <p class="text-muted-custom mb-0">No purchases for this filter.</p>
+                                    <p class="text-muted-custom mb-2">No purchases for this filter.</p>
+                                    <a href="{{ url_for('inventory.index') }}" class="btn btn-sm btn-primary-custom">Add Inventory</a>
                                 </td>
                             </tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
-            {% with pagination=hist_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'category': category} %}
+            {% with pagination=hist_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'category': category, 'status': status, 'search': search} %}
                 {% include "partials/pagination.html" %}
             {% endwith %}
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="editPurchaseModal" tabindex="-1" aria-labelledby="editPurchaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow" style="background-color: var(--card-bg); color: var(--text-primary); border-radius: 14px;">
+            <form method="POST" id="edit-purchase-form">
+                <div class="modal-header border-0 pb-2">
+                    <h5 class="modal-title fw-bold" id="editPurchaseModalLabel">Edit Purchase</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <p class="text-muted small mb-3" id="edit_purchase_item_label">—</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label form-label-custom" for="edit_entry_date">Date</label>
+                            <input type="date" class="form-control form-control-custom" id="edit_entry_date" name="entry_date" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-custom" for="edit_payment_status">Payment</label>
+                            <select class="form-select form-control-custom" id="edit_payment_status" name="payment_status">
+                                <option value="unpaid">Unpaid</option>
+                                <option value="paid">Paid</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label form-label-custom" for="edit_vendor_id">Vendor</label>
+                            <select class="form-select form-control-custom js-search-vendor" id="edit_vendor_id" name="vendor_id"
+                                    data-placeholder="Search vendor…">
+                                <option value="">Select vendor…</option>
+                                {% for v in vendors %}
+                                <option value="{{ v.id }}">{{ v.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <input type="hidden" name="vendor" id="edit_vendor_name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-custom" for="edit_cost_price">Cost / unit</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_cost_price" name="cost_price" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label form-label-custom" for="edit_sale_price">Sale / unit</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_sale_price" name="sale_price">
+                        </div>
+                        <div class="col-md-6" id="edit_liters_wrap">
+                            <label class="form-label form-label-custom" for="edit_liters">Liters</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_liters" name="liters">
+                        </div>
+                        <div class="col-md-6" id="edit_qty_wrap">
+                            <label class="form-label form-label-custom" for="edit_quantity">Quantity</label>
+                            <input type="number" step="1" min="0" class="form-control form-control-custom" id="edit_quantity" name="quantity">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">
+                        <i class="bi bi-check-circle me-1"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function (fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+    else fn();
+})(function () {
+    const form = document.getElementById('purchasing-filter-form');
+    const periodSel = document.getElementById('purch-period');
+    const catSel = document.getElementById('purch-category');
+    const statusSel = document.getElementById('purch-status');
+    if (form && periodSel) {
+        const customWrap = form.querySelector('.custom-dates');
+        const startInput = form.querySelector('[name="start_date"]');
+        const endInput = form.querySelector('[name="end_date"]');
+        const setCustom = (on) => {
+            if (customWrap) customWrap.classList.toggle('d-none', !on);
+            if (startInput) startInput.disabled = !on;
+            if (endInput) endInput.disabled = !on;
+        };
+        setCustom(periodSel.value === 'custom');
+        periodSel.addEventListener('change', () => {
+            const isCustom = periodSel.value === 'custom';
+            setCustom(isCustom);
+            if (!isCustom) form.submit();
+        });
+        if (catSel) catSel.addEventListener('change', () => form.submit());
+        if (statusSel) statusSel.addEventListener('change', () => form.submit());
+    }
+
+    document.querySelectorAll('.edit-purchase-log-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const editForm = document.getElementById('edit-purchase-form');
+            editForm.action = btn.dataset.editUrl || '';
+            document.getElementById('edit_purchase_item_label').textContent =
+                (btn.dataset.item || 'Purchase') + ' · ' + (btn.dataset.category || '');
+            document.getElementById('edit_entry_date').value = btn.dataset.entryDate || '';
+            document.getElementById('edit_payment_status').value =
+                (btn.dataset.paymentStatus || 'unpaid').toLowerCase() === 'paid' ? 'paid' : 'unpaid';
+            document.getElementById('edit_cost_price').value = btn.dataset.cost || '';
+            document.getElementById('edit_sale_price').value = btn.dataset.sale || '';
+            document.getElementById('edit_liters').value = btn.dataset.liters || '';
+            document.getElementById('edit_quantity').value = btn.dataset.quantity || '';
+            document.getElementById('edit_vendor_name').value = btn.dataset.vendor || '';
+
+            const vendorSel = document.getElementById('edit_vendor_id');
+            const vid = btn.dataset.vendorId || '';
+            if (vendorSel) {
+                if (vendorSel.tomselect) {
+                    vendorSel.tomselect.setValue(vid, true);
+                } else {
+                    vendorSel.value = vid;
+                }
+            }
+
+            const isFuel = String(btn.dataset.isFuel || '0') === '1';
+            document.getElementById('edit_liters_wrap').classList.toggle('d-none', !isFuel);
+            document.getElementById('edit_qty_wrap').classList.toggle('d-none', isFuel);
+        });
+    });
+
+    const vendorSel = document.getElementById('edit_vendor_id');
+    if (vendorSel) {
+        vendorSel.addEventListener('change', () => {
+            const opt = vendorSel.options[vendorSel.selectedIndex];
+            document.getElementById('edit_vendor_name').value = opt ? opt.textContent.trim() : '';
+        });
+    }
+});
+</script>
 {% endblock %}

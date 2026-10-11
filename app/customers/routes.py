@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.customers import customers_bp
 from app.models import db, Customer, Sale, Payment, CreditSale
 from app.tenancy import (
-    apply_agency_filter, require_agency_access, stamp_agency, is_super_admin,
+    apply_agency_filter, require_agency_access, stamp_agency, is_agency_manager,
 )
 from app.utils import paginate, parse_form_date, datetime_from_date
 from app.services.entries import (
@@ -623,7 +623,7 @@ def ledger(customer_id):
 @login_required
 def sync_balances():
     """Rebuild all customer balances from sales + payments (cascade truth)."""
-    if not is_super_admin():
+    if not is_agency_manager():
         flash('Only administrators can sync customer balances.', 'danger')
         return redirect(url_for('customers.index'))
 

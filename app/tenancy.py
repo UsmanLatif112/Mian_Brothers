@@ -1,18 +1,68 @@
-"""Agency / multi-tenant scoping helpers (Boltwood-style)."""
+"""Agency / multi-tenant scoping helpers.
+
+Roles:
+  - super_admin: full app (all agencies)
+  - admin: agency owner — all data for their agency; manage team members
+  - user: team member — agency data limited to modules allowed by their admin
+"""
 
 from flask import abort
 from flask_login import current_user
+
+# Operational modules a team member may be granted (admin/super ignore this list).
+OPS_MODULES = (
+    ('dashboard', 'Dashboard'),
+    ('journal', 'Journal'),
+    ('sales', 'Sales'),
+    ('inventory', 'Inventory'),
+    ('purchasing', 'Purchasing'),
+    ('expenses', 'Expenses'),
+    ('customers', 'Customers'),
+    ('vendors', 'Vendors'),
+    ('categories', 'Categories'),
+    ('account', 'Account'),
+    ('pricing', 'Pricing'),
+    ('reports', 'Reports'),
+)
+
+OPS_MODULE_KEYS = {k for k, _ in OPS_MODULES}
+
+# Blueprint / endpoint prefix → module key
+BLUEPRINT_MODULE = {
+    'dashboard': 'dashboard',
+    'journal': 'journal',
+    'sales': 'sales',
+    'inventory': 'inventory',
+    'purchasing': 'purchasing',
+    'expenses': 'expenses',
+    'customers': 'customers',
+    'vendors': 'vendors',
+    'account': 'account',
+    'pricing': 'pricing',
+}
 
 
 def is_super_admin():
     """Platform owner — sees all agencies' data."""
     if not current_user.is_authenticated:
         return False
-    return current_user.role in ('super_admin', 'admin')
+    return (current_user.role or '') == 'super_admin'
+
+
+def is_agency_admin():
+    """Agency admin — all data for their own agency only."""
+    if not current_user.is_authenticated:
+        return False
+    return (current_user.role or '') == 'admin'
+
+
+def is_agency_manager():
+    """Super admin or agency admin (can manage team / sync tools in scope)."""
+    return is_super_admin() or is_agency_admin()
 
 
 def agency_scope():
-    """None = no filter (super_admin sees all). Else agency_id for the current user."""
+    """None = no filter (super_admin sees all). Else agency_id for admin/user."""
     if not current_user.is_authenticated:
         return None
     if is_super_admin():
@@ -66,3 +116,52 @@ def get_write_agency_id():
     if current_user.is_authenticated and current_user.agency_id:
         return current_user.agency_id
     return None
+
+
+def parse_allowed_modules(raw):
+    """Normalize allowed_modules string → set of keys, or None for 'all'."""
+    if raw is None or str(raw).strip() in ('', '*'):
+        return None
+    keys = {p.strip() for p in str(raw).split(',') if p.strip()}
+    keys &= OPS_MODULE_KEYS
+    return keys or None
+
+
+def serialize_allowed_modules(keys):
+    if keys is None:
+        return '*'
+    cleaned = sorted(k for k in keys if k in OPS_MODULE_KEYS)
+    return ','.join(cleaned) if cleaned else '*'
+
+
+def user_allowed_modules(user=None):
+    """Modules the user may open. None = all operational modules."""
+    u = user if user is not None else current_user
+    if not getattr(u, 'is_authenticated', False) and user is None:
+        return set()
+    role = getattr(u, 'role', '') or ''
+    if role in ('super_admin', 'admin'):
+        return None  # unrestricted within their role scope
+    return parse_allowed_modules(getattr(u, 'allowed_modules', None))
+
+
+def can_access_module(module_key, user=None):
+    """Whether the user may use an operational module."""
+    if not module_key:
+        return True
+    allowed = user_allowed_modules(user)
+    if allowed is None:
+        return True
+    return module_key in allowed
+
+
+def module_for_endpoint(endpoint):
+    """Map Flask endpoint to an OPS module key, or None if not module-gated."""
+    if not endpoint:
+        return None
+    if endpoint.startswith('dashboard.reports') or endpoint == 'dashboard.reports':
+        return 'reports'
+    if endpoint.startswith('inventory.categories'):
+        return 'categories'
+    bp = endpoint.split('.', 1)[0]
+    return BLUEPRINT_MODULE.get(bp)

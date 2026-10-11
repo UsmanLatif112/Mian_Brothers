@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 
 from app.models import db, Vendor, VendorPayment, ItemPurchaseLog
 from app.tenancy import (
-    apply_agency_filter, require_agency_access, stamp_agency, is_super_admin,
+    apply_agency_filter, require_agency_access, stamp_agency, is_agency_manager,
 )
 from app.utils import paginate, parse_form_date, datetime_from_date
 from app.vendors import vendors_bp
@@ -507,7 +507,7 @@ def ledger(vendor_id):
 @login_required
 def sync_balances():
     """Admin utility: rebuild all vendor balances from purchase logs and payments."""
-    if not is_super_admin():
+    if not is_agency_manager():
         flash('Only administrators can sync vendor balances.', 'danger')
         return redirect(url_for('vendors.index'))
 

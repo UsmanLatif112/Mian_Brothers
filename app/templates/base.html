@@ -163,42 +163,73 @@
         </div>
 
         <nav class="sidebar-nav">
-            <a class="sidebar-link {% if request.blueprint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" data-search-label="Dashboard">
+            {% if can_access_module('dashboard') %}
+            <a class="sidebar-link {% if request.blueprint == 'dashboard' and request.endpoint != 'dashboard.reports' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" data-search-label="Dashboard">
                 <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
             </a>
+            {% endif %}
+            {% if can_access_module('journal') %}
             <a class="sidebar-link {% if request.blueprint == 'journal' %}active{% endif %}" href="{{ url_for('journal.index') }}" data-search-label="Journal">
                 <i class="bi bi-journal-text"></i><span>Journal</span>
             </a>
+            {% endif %}
+            {% if can_access_module('sales') %}
             <a class="sidebar-link {% if request.blueprint == 'sales' %}active{% endif %}" href="{{ url_for('sales.index') }}" data-search-label="Sales">
                 <i class="bi bi-cart3"></i><span>Sales</span>
             </a>
+            {% endif %}
+            {% if can_access_module('inventory') %}
             <a class="sidebar-link {% if request.endpoint == 'inventory.index' %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
                 <i class="bi bi-box-seam"></i><span>Inventory</span>
             </a>
+            {% endif %}
+            {% if can_access_module('purchasing') %}
+            <a class="sidebar-link {% if request.blueprint == 'purchasing' %}active{% endif %}" href="{{ url_for('purchasing.index') }}" data-search-label="Purchasing">
+                <i class="bi bi-cart-plus"></i><span>Purchasing</span>
+            </a>
+            {% endif %}
+            {% if can_access_module('expenses') %}
             <a class="sidebar-link {% if request.blueprint == 'expenses' %}active{% endif %}" href="{{ url_for('expenses.index') }}" data-search-label="Expenses">
                 <i class="bi bi-receipt"></i><span>Expenses</span>
             </a>
+            {% endif %}
+            {% if can_access_module('customers') %}
             <a class="sidebar-link {% if request.blueprint == 'customers' %}active{% endif %}" href="{{ url_for('customers.index') }}" data-search-label="Customers">
                 <i class="bi bi-people"></i><span>Customers</span>
             </a>
+            {% endif %}
+            {% if can_access_module('vendors') %}
             <a class="sidebar-link {% if request.blueprint == 'vendors' %}active{% endif %}" href="{{ url_for('vendors.index') }}" data-search-label="Vendors">
                 <i class="bi bi-building"></i><span>Vendors</span>
             </a>
+            {% endif %}
+            {% if can_access_module('categories') %}
             <a class="sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory.categories') %}active{% endif %}" href="{{ url_for('inventory.categories') }}" data-search-label="Categories">
                 <i class="bi bi-collection"></i><span>Categories</span>
             </a>
+            {% endif %}
+            {% if can_access_module('account') %}
             <a class="sidebar-link {% if request.blueprint == 'account' %}active{% endif %}" href="{{ url_for('account.index') }}" data-search-label="Account">
                 <i class="bi bi-wallet2"></i><span>Account</span>
             </a>
-            {% if is_super_admin or current_user.role in ('super_admin', 'admin') %}
+            {% endif %}
+            {% if can_access_module('pricing') %}
             <a class="sidebar-link {% if request.blueprint == 'pricing' %}active{% endif %}" href="{{ url_for('pricing.index') }}" data-search-label="Pricing">
                 <i class="bi bi-tags"></i><span>Pricing</span>
             </a>
+            {% endif %}
+            {% if is_super_admin or is_agency_admin %}
             <a class="sidebar-link {% if request.blueprint == 'backup' %}active{% endif %}" href="{{ url_for('backup.index') }}" data-search-label="Backup">
                 <i class="bi bi-cloud-arrow-up"></i><span>Backup</span>
             </a>
+            {% endif %}
+            {% if is_super_admin %}
             <a class="sidebar-link {% if request.endpoint == 'auth.users' %}active{% endif %}" href="{{ url_for('auth.users') }}" data-search-label="Users">
                 <i class="bi bi-person-gear"></i><span>Users</span>
+            </a>
+            {% elif is_agency_admin %}
+            <a class="sidebar-link {% if request.endpoint == 'auth.users' %}active{% endif %}" href="{{ url_for('auth.users') }}" data-search-label="Team">
+                <i class="bi bi-people-fill"></i><span>Team</span>
             </a>
             {% endif %}
         </nav>

@@ -17,7 +17,10 @@
             <p class="page-eyebrow">Stock</p>
             <h1 class="page-title">Inventory Control</h1>
         </div>
-        <div class="page-header-actions">
+        <div class="page-header-actions d-flex flex-wrap gap-2">
+            <a href="{{ url_for('purchasing.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-cart-plus me-1"></i><span class="btn-label"> Purchasing</span>
+            </a>
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn" title="Add Inventory">
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Inventory</span>
             </button>
@@ -279,109 +282,6 @@
     </div>
 </div>
 
-<!-- Purchase logs (edit/delete cascades stock + vendor ledger) -->
-<div class="row g-4 mb-4">
-    <div class="col-12">
-        <div class="card card-premium list-panel">
-            <div class="card-header-premium">
-                <h5 class="mb-0 fw-bold">Purchase Logs</h5>
-                <small class="text-muted-custom">Every Add Inventory batch · edit or delete updates stock and vendor ledger</small>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-custom table-hover mb-0 list-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Category</th>
-                            <th>Item</th>
-                            <th>Vendor</th>
-                            <th>Cost</th>
-                            <th>Qty / L</th>
-                            <th>Batch</th>
-                            <th>Status</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if purchase_logs %}
-                            {% for log in purchase_logs %}
-                            {% set batch = (log.cost_price|float) * ((log.liters|float) if (log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity)) else (log.quantity|float)) %}
-                            {% set pay_status = (purchase_log_status or {}).get(log.id, 'unpaid') %}
-                            <tr>
-                                <td class="text-muted-custom">{{ log.entry_date.strftime('%Y-%m-%d %H:%M') if log.entry_date else '—' }}</td>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{{ log.category }}</span></td>
-                                <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ log.item_name }}{% if log.company %} ({{ log.company }}){% endif %}">{{ log.item_name }}{% if log.company %} <span class="text-muted-custom">({{ log.company }})</span>{% endif %}</span></td>
-                                <td>{{ log.vendor or '—' }}</td>
-                                <td>{{ log.cost_price | money }}</td>
-                                <td>
-                                    {% if log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity) %}
-                                    {{ "{:,.2f}".format(log.liters or 0) }} L
-                                    {% else %}
-                                    {{ log.quantity or 0 }}
-                                    {% endif %}
-                                </td>
-                                <td class="fw-semibold">{{ batch | money }}</td>
-                                <td>
-                                    {% if pay_status == 'paid' %}
-                                    <span class="badge badge-custom badge-success-custom text-uppercase">Paid</span>
-                                    {% else %}
-                                    <span class="badge badge-custom badge-danger-custom text-uppercase">Unpaid</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    <div class="table-actions btn-group gap-1 justify-content-end">
-                                        <a href="{{ url_for('receipts.purchase', log_id=log.id) }}"
-                                           class="btn btn-sm btn-outline-secondary border-0"
-                                           title="View receipt"
-                                           target="_blank" rel="noopener">
-                                            <i class="bi bi-printer"></i>
-                                        </a>
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-secondary border-0 edit-purchase-log-btn"
-                                                data-edit-url="{{ url_for('inventory.edit_purchase_log', log_id=log.id) }}"
-                                                data-category="{{ log.category|e }}"
-                                                data-item="{{ log.item_name|e }}"
-                                                data-company="{{ (log.company or '')|e }}"
-                                                data-item-type="{{ (log.item_type or '')|e }}"
-                                                data-fuel-type-id="{{ log.fuel_type_id or '' }}"
-                                                data-vendor-id="{{ log.vendor_id or '' }}"
-                                                data-vendor="{{ (log.vendor or '')|e }}"
-                                                data-cost="{{ log.cost_price }}"
-                                                data-sale="{{ log.sale_price }}"
-                                                data-liters="{{ log.liters if log.liters is not none else '' }}"
-                                                data-quantity="{{ log.quantity if log.quantity is not none else '' }}"
-                                                data-payment-status="{{ pay_status }}"
-                                                data-entry-date="{{ log.entry_date.strftime('%Y-%m-%d') if log.entry_date else today }}"
-                                                title="Edit purchase log">
-                                            <i class="bi bi-pencil-square"></i>
-                                        </button>
-                                        <form action="{{ url_for('inventory.delete_purchase_log', log_id=log.id) }}" method="POST" class="d-inline"
-                                              data-confirm="Delete this purchase batch? Stock and vendor ledger will update."
-                                              data-confirm-title="Delete purchase">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete purchase log">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="9" class="empty-state text-center py-4">
-                                    <p class="text-muted-custom mb-0">No purchase logs yet. Use Add Inventory to create batches.</p>
-                                </td>
-                            </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
-            {% with pagination=purchase_logs_pagination, page_param='logs_page', keep_args={'search': search} %}
-                {% include "partials/pagination.html" %}
-            {% endwith %}
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block modals %}

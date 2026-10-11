@@ -8,6 +8,10 @@ from werkzeug.utils import secure_filename
 from app.auth import auth_bp
 from app.models import db, User, Agency
 from app.decorators import role_required
+from app.tenancy import (
+    is_super_admin, is_agency_admin, OPS_MODULES,
+    serialize_allowed_modules,
+)
 
 ALLOWED_LOGO_EXT = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
 
@@ -39,6 +43,14 @@ def _seed_agency_defaults(agency_id):
         ensure_shop_categories(agency_id=agency_id)
     except Exception as e:
         print(f'category seed for agency {agency_id}: {e}')
+
+
+def _modules_from_form():
+    """Read module checkboxes from create/edit team forms."""
+    selected = request.form.getlist('modules')
+    if request.form.get('modules_all') == '1' or not selected:
+        return '*'
+    return serialize_allowed_modules(selected)
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -76,15 +88,66 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+def _manage_mode():
+    """platform = super_admin (agencies/admins); agency = agency admin (team)."""
+    if is_super_admin():
+        return 'platform'
+    if is_agency_admin():
+        return 'agency'
+    return None
+
+
+def _list_manageable_users(mode, search_q):
+    if mode == 'platform':
+        users = User.query.order_by(User.id.asc()).all()
+    else:
+        users = (
+            User.query
+            .filter(User.agency_id == current_user.agency_id)
+            .order_by(User.id.asc())
+            .all()
+        )
+    if search_q:
+        users = [
+            u for u in users
+            if search_q in (u.name or '').lower()
+            or search_q in (u.email or '').lower()
+            or search_q in (u.phone or '').lower()
+            or search_q in (u.role or '').lower()
+            or (u.agency and search_q in (u.agency.name or '').lower())
+        ]
+    return users
+
+
+def _can_manage_user(target, mode):
+    if not target:
+        return False
+    if mode == 'platform':
+        return True
+    if mode == 'agency':
+        if target.agency_id != current_user.agency_id:
+            return False
+        # Agency admin may manage team users (and themselves), not super_admins
+        if target.role == 'super_admin':
+            return False
+        return True
+    return False
+
+
 @auth_bp.route('/users', methods=['GET', 'POST'])
 @auth_bp.route('/staff-accounts', methods=['GET', 'POST'])  # legacy alias
 @login_required
-@role_required('super_admin')
+@role_required('super_admin', 'admin')
 def users():
+    mode = _manage_mode()
+    if not mode:
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('dashboard.index'))
+
     if request.method == 'POST':
         action = request.form.get('action')
-        
-        if action == 'create':
+
+        if action == 'create' and mode == 'platform':
             name = (request.form.get('name') or '').strip()
             email = (request.form.get('email') or '').strip()
             phone = (request.form.get('phone') or '').strip() or None
@@ -93,7 +156,7 @@ def users():
             agency_address = (request.form.get('agency_address') or '').strip() or None
             agency_phone = (request.form.get('agency_phone') or '').strip() or None
             agency_email = (request.form.get('agency_email') or '').strip() or None
-            
+
             if not name or not email or not password:
                 flash('Username, email, and password are required.', 'danger')
                 return redirect(url_for('auth.users'))
@@ -124,30 +187,68 @@ def users():
                 name=name,
                 email=email,
                 phone=phone,
-                role='user',
+                role='admin',
                 status='active',
                 agency_id=agency.id,
+                allowed_modules='*',
             )
             new_user.set_password(password)
             db.session.add(new_user)
             db.session.commit()
 
             _seed_agency_defaults(agency.id)
-            
-            flash(f"User '{name}' created for agency '{agency_name}'.", 'success')
-            
+            flash(f"Agency admin '{name}' created for '{agency_name}'.", 'success')
+
+        elif action == 'create_team' and mode == 'agency':
+            if not current_user.agency_id:
+                flash('Your account is not linked to an agency.', 'danger')
+                return redirect(url_for('auth.users'))
+
+            name = (request.form.get('name') or '').strip()
+            email = (request.form.get('email') or '').strip()
+            phone = (request.form.get('phone') or '').strip() or None
+            password = request.form.get('password')
+            modules = _modules_from_form()
+
+            if not name or not email or not password:
+                flash('Username, email, and password are required.', 'danger')
+                return redirect(url_for('auth.users'))
+            if User.query.filter_by(name=name).first():
+                flash('A user with that username already exists.', 'danger')
+                return redirect(url_for('auth.users'))
+            if User.query.filter_by(email=email).first():
+                flash('A user with that email already exists.', 'danger')
+                return redirect(url_for('auth.users'))
+
+            new_user = User(
+                name=name,
+                email=email,
+                phone=phone,
+                role='user',
+                status='active',
+                agency_id=current_user.agency_id,
+                allowed_modules=modules,
+            )
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            flash(f"Team member '{name}' created.", 'success')
+
         elif action == 'edit':
             user_id = request.form.get('user_id')
             user = User.query.get(user_id)
-            if user:
-                user.name = (request.form.get('name') or '').strip() or user.name
-                user.phone = (request.form.get('phone') or '').strip() or None
-                
-                new_password = request.form.get('password')
-                if new_password:
-                    user.set_password(new_password)
+            if not _can_manage_user(user, mode):
+                flash('You cannot edit that user.', 'danger')
+                return redirect(url_for('auth.users'))
 
-                # Update linked agency contact / logo
+            user.name = (request.form.get('name') or '').strip() or user.name
+            user.phone = (request.form.get('phone') or '').strip() or None
+
+            new_password = request.form.get('password')
+            if new_password:
+                user.set_password(new_password)
+
+            if mode == 'platform':
                 agency = Agency.query.get(user.agency_id) if user.agency_id else None
                 if agency:
                     agency_name = (request.form.get('agency_name') or '').strip()
@@ -159,36 +260,38 @@ def users():
                     new_logo = _save_agency_logo(request.files.get('agency_logo'))
                     if new_logo:
                         agency.logo = new_logo
-                    
-                db.session.commit()
-                flash(f"User '{user.name}' updated successfully.", 'success')
-                
+            elif mode == 'agency' and user.role == 'user':
+                user.allowed_modules = _modules_from_form()
+
+            db.session.commit()
+            flash(f"User '{user.name}' updated successfully.", 'success')
+
         elif action == 'toggle_status':
             user_id = request.form.get('user_id')
             user = User.query.get(user_id)
-            if user:
-                if user.id == current_user.id:
-                    flash('You cannot disable your own account!', 'danger')
-                else:
-                    user.status = 'disabled' if user.status == 'active' else 'active'
-                    db.session.commit()
-                    flash(f"User status updated to '{user.status}' for {user.name}.", 'success')
-                    
+            if not _can_manage_user(user, mode):
+                flash('You cannot change that user.', 'danger')
+                return redirect(url_for('auth.users'))
+            if user.id == current_user.id:
+                flash('You cannot disable your own account!', 'danger')
+            elif mode == 'agency' and user.role == 'admin' and user.id != current_user.id:
+                flash('You cannot disable another agency admin.', 'danger')
+            else:
+                user.status = 'disabled' if user.status == 'active' else 'active'
+                db.session.commit()
+                flash(f"User status updated to '{user.status}' for {user.name}.", 'success')
+
         return redirect(url_for('auth.users'))
-        
-    # GET request
+
     search_q = (request.args.get('search') or '').strip().lower()
-    users = User.query.order_by(User.id.asc()).all()
-    if search_q:
-        users = [
-            u for u in users
-            if search_q in (u.name or '').lower()
-            or search_q in (u.email or '').lower()
-            or search_q in (u.phone or '').lower()
-            or search_q in (u.role or '').lower()
-            or (u.agency and search_q in (u.agency.name or '').lower())
-        ]
-    return render_template('auth/users.html', users=users, search=search_q)
+    users_list = _list_manageable_users(mode, search_q)
+    return render_template(
+        'auth/users.html',
+        users=users_list,
+        search=search_q,
+        manage_mode=mode,
+        ops_modules=OPS_MODULES,
+    )
 
 
 # Keep old endpoint name for any lingering links

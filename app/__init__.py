@@ -91,7 +91,9 @@ def create_app():
         except Exception:
             agency = None
         logo_url = media_url(brand_logo, 'img/logo.png')
-        from app.tenancy import is_super_admin
+        from app.tenancy import (
+            is_super_admin, is_agency_admin, is_agency_manager, can_access_module, OPS_MODULES,
+        )
         return {
             'brand_name': brand_name,
             'brand_tag': brand_tag,
@@ -102,6 +104,10 @@ def create_app():
             'brand_email': brand_email,
             'current_agency': agency,
             'is_super_admin': is_super_admin(),
+            'is_agency_admin': is_agency_admin(),
+            'is_agency_manager': is_agency_manager(),
+            'can_access_module': can_access_module,
+            'ops_modules': OPS_MODULES,
         }
 
     @app.route('/media/uploads/<path:filename>')
@@ -136,6 +142,33 @@ def create_app():
     app.register_blueprint(expenses_bp, url_prefix='/expenses')
     app.register_blueprint(backup_bp, url_prefix='/backup')
     app.register_blueprint(receipts_bp, url_prefix='/receipts')
+
+    @app.before_request
+    def enforce_module_access():
+        """Team members may only open modules their agency admin granted."""
+        from flask_login import current_user as cu
+        from flask import request as req, flash as flash_msg
+        from app.tenancy import module_for_endpoint, can_access_module as _can
+
+        if not cu.is_authenticated:
+            return None
+        endpoint = req.endpoint or ''
+        if endpoint.startswith('static') or endpoint in ('auth.login', 'auth.logout', 'uploaded_file', 'root'):
+            return None
+        # Auth users/team + backup are role-gated separately
+        if endpoint.startswith('auth.') or endpoint.startswith('backup.'):
+            return None
+        module = module_for_endpoint(endpoint)
+        if not module:
+            return None
+        if _can(module):
+            return None
+        flash_msg('You do not have access to that section. Ask your agency admin.', 'danger')
+        if module != 'dashboard' and _can('dashboard'):
+            return redirect(url_for('dashboard.index'))
+        if _can('account'):
+            return redirect(url_for('account.index'))
+        return redirect(url_for('auth.logout'))
     
     # Root route redirect
     @app.route('/')
@@ -262,17 +295,35 @@ def ensure_agency_schema():
 
     aid = agency.id
 
-    # Migrate roles + attach users
+    # Ensure team-member module grants column
+    if 'users' in tables:
+        user_cols = {c['name'] for c in inspector.get_columns('users')}
+        if 'allowed_modules' not in user_cols:
+            try:
+                with db.engine.begin() as conn:
+                    if is_mysql:
+                        conn.execute(text(
+                            "ALTER TABLE `users` ADD COLUMN `allowed_modules` VARCHAR(500) NULL DEFAULT '*'"
+                        ))
+                    else:
+                        conn.execute(text(
+                            "ALTER TABLE users ADD COLUMN allowed_modules VARCHAR(500) DEFAULT '*'"
+                        ))
+            except Exception as e:
+                print(f'allowed_modules add skip: {e}')
+
+    # Migrate legacy roles + attach users (do NOT force admin → super_admin;
+    # admin is the agency-owner role).
     for user in User.query.all():
         changed = False
-        if user.role == 'admin':
-            user.role = 'super_admin'
-            changed = True
-        elif user.role == 'staff':
+        if user.role == 'staff':
             user.role = 'user'
             changed = True
-        if user.agency_id is None:
+        if user.agency_id is None and user.role != 'super_admin':
             user.agency_id = aid
+            changed = True
+        if user.role == 'user' and not getattr(user, 'allowed_modules', None):
+            user.allowed_modules = '*'
             changed = True
         if changed:
             db.session.add(user)

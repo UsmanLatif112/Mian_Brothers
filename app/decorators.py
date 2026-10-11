@@ -3,14 +3,26 @@ from flask import flash, redirect, url_for
 from flask_login import current_user
 
 
-def role_required(role):
+def role_required(*roles):
     """
-    Restrict access by role.
+    Restrict access to one or more exact roles.
 
-    Allowed roles: 'super_admin', 'user' (legacy aliases: 'admin', 'staff').
-    'admin' and 'super_admin' are treated as equivalent for access checks.
-    'staff' and 'user' are treated as equivalent.
+    Examples:
+      @role_required('super_admin')
+      @role_required('super_admin', 'admin')
+
+    Legacy aliases: 'staff' counts as 'user'.
     """
+    if len(roles) == 1 and isinstance(roles[0], (list, tuple, set)):
+        roles = tuple(roles[0])
+
+    allowed = set()
+    for role in roles:
+        if role in ('user', 'staff'):
+            allowed.update({'user', 'staff'})
+        else:
+            allowed.add(role)
+
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -18,14 +30,13 @@ def role_required(role):
                 return redirect(url_for('auth.login'))
 
             user_role = current_user.role or ''
-            allowed = {role}
-            if role in ('super_admin', 'admin'):
-                allowed = {'super_admin', 'admin'}
-            elif role in ('user', 'staff'):
-                allowed = {'user', 'staff'}
-
             if user_role not in allowed:
-                label = 'super admin' if role in ('super_admin', 'admin') else role
+                if allowed == {'super_admin'}:
+                    label = 'super admin'
+                elif allowed <= {'super_admin', 'admin'}:
+                    label = 'admin'
+                else:
+                    label = 'authorized'
                 flash(
                     f"Unauthorized access. This area is restricted to {label} users.",
                     "danger",

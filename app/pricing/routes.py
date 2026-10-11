@@ -2,7 +2,6 @@ from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app.pricing import pricing_bp
 from app.models import db, FuelType, FuelPrice, OtherItem, ItemPriceLog
-from app.decorators import role_required
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import parse_form_datetime, fuel_rate_for
 from datetime import datetime
@@ -10,7 +9,6 @@ from datetime import datetime
 
 @pricing_bp.route('/', methods=['GET', 'POST'])
 @login_required
-@role_required('super_admin')
 def index():
     if request.method == 'POST':
         item_key = (request.form.get('item_key') or '').strip()

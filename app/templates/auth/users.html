@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Manage Users — {{ brand_name }}{% endblock %}
+{% set is_platform = manage_mode == 'platform' %}
+
+{% block title %}{% if is_platform %}Manage Users{% else %}Team{% endif %} — {{ brand_name }}{% endblock %}
 
 {% block topbar_search %}
 <form class="topbar-search" action="{{ url_for('auth.users') }}" method="GET" role="search" data-search-mode="page">
     <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
     <input type="search" class="topbar-search-input" name="search"
-           placeholder="Search users…" value="{{ search or '' }}" autocomplete="off" aria-label="Search users">
+           placeholder="{% if is_platform %}Search users…{% else %}Search team…{% endif %}" value="{{ search or '' }}" autocomplete="off" aria-label="Search">
 </form>
 {% endblock %}
 
@@ -14,12 +16,18 @@
 <header class="page-header mb-4">
     <div class="page-header-row">
         <div class="page-header-text">
-            <p class="page-eyebrow">Administration</p>
-            <h1 class="page-title">Manage Users</h1>
+            <p class="page-eyebrow">{% if is_platform %}Administration{% else %}Agency{% endif %}</p>
+            <h1 class="page-title">{% if is_platform %}Manage Users{% else %}Team Members{% endif %}</h1>
         </div>
+        {% if is_platform %}
         <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createUserModal">
-            <i class="bi bi-person-plus me-2"></i> Add User &amp; Agency
+            <i class="bi bi-person-plus me-2"></i> Add Admin &amp; Agency
         </button>
+        {% else %}
+        <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createTeamModal">
+            <i class="bi bi-person-plus me-2"></i> Add Team Member
+        </button>
+        {% endif %}
     </div>
 </header>
 
@@ -28,8 +36,14 @@
         <div class="card card-premium">
             <div class="card-header-premium d-flex justify-content-between align-items-center">
                 <div>
-                    <h2 class="panel-title mb-0">Users</h2>
-                    <p class="panel-subtitle mb-0">Each user is attached to an agency</p>
+                    <h2 class="panel-title mb-0">{% if is_platform %}Users{% else %}Team{% endif %}</h2>
+                    <p class="panel-subtitle mb-0">
+                        {% if is_platform %}
+                        Super admin creates agency admins. Each admin only sees their agency.
+                        {% else %}
+                        Create team members and choose which sections they can open.
+                        {% endif %}
+                    </p>
                 </div>
                 <span class="badge badge-custom badge-staff">{{ users | length }} total</span>
             </div>
@@ -39,9 +53,10 @@
                         <tr>
                             <th>Name</th>
                             <th>Email</th>
-                            <th>Agency</th>
+                            {% if is_platform %}<th>Agency</th>{% endif %}
                             <th>Phone</th>
                             <th>Role</th>
+                            {% if not is_platform %}<th>Access</th>{% endif %}
                             <th>Status</th>
                             <th>Created</th>
                             <th class="text-end">Actions</th>
@@ -59,13 +74,26 @@
                                 </div>
                             </td>
                             <td>{{ user.email }}</td>
+                            {% if is_platform %}
                             <td>{{ user.agency.name if user.agency else '—' }}</td>
+                            {% endif %}
                             <td>{{ user.phone or '-' }}</td>
                             <td>
                                 <span class="badge badge-custom {% if user.role in ('super_admin', 'admin') %}badge-admin{% else %}badge-staff{% endif %}">
                                     {% if user.role == 'super_admin' %}Super Admin{% elif user.role == 'admin' %}Admin{% else %}User{% endif %}
                                 </span>
                             </td>
+                            {% if not is_platform %}
+                            <td class="small text-muted-custom">
+                                {% if user.role != 'user' %}
+                                Full agency
+                                {% elif not user.allowed_modules or user.allowed_modules == '*' %}
+                                All modules
+                                {% else %}
+                                {{ user.allowed_modules.replace(',', ', ') }}
+                                {% endif %}
+                            </td>
+                            {% endif %}
                             <td>
                                 <span class="badge badge-custom {% if user.status == 'active' %}badge-success-custom{% else %}badge-danger-custom{% endif %}">
                                     {{ user.status | capitalize }}
@@ -74,13 +102,16 @@
                             <td>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '—' }}</td>
                             <td class="text-end">
                                 <div class="btn-group gap-1">
+                                    {% if is_platform or user.role == 'user' or user.id == current_user.id %}
                                     <button class="btn btn-sm btn-outline-secondary border-0 edit-user-btn"
                                             data-bs-toggle="modal"
-                                            data-bs-target="#editUserModal"
+                                            data-bs-target="{% if is_platform %}#editUserModal{% else %}#editTeamModal{% endif %}"
                                             data-id="{{ user.id }}"
                                             data-name="{{ user.name }}"
                                             data-email="{{ user.email }}"
                                             data-phone="{{ user.phone or '' }}"
+                                            data-role="{{ user.role }}"
+                                            data-modules="{{ user.allowed_modules or '*' }}"
                                             data-agency-name="{{ user.agency.name if user.agency else '' }}"
                                             data-agency-address="{{ user.agency.address if user.agency else '' }}"
                                             data-agency-phone="{{ user.agency.phone if user.agency else '' }}"
@@ -88,8 +119,9 @@
                                             data-agency-logo="{% if user.agency and user.agency.logo %}{{ url_for('uploaded_file', filename=user.agency.logo) }}{% endif %}">
                                         <i class="bi bi-pencil-square" title="Edit"></i>
                                     </button>
-                                    
-                                    {% if user.id != current_user.id %}
+                                    {% endif %}
+
+                                    {% if user.id != current_user.id and (is_platform or user.role == 'user') %}
                                     <form action="{{ url_for('auth.users') }}" method="POST" class="d-inline"
                                           data-confirm="Are you sure you want to change this user's access?"
                                           data-confirm-title="Change access"
@@ -119,18 +151,19 @@
 {% endblock %}
 
 {% block modals %}
-<!-- CREATE USER + AGENCY -->
+{% if is_platform %}
+<!-- CREATE ADMIN + AGENCY -->
 <div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <div class="modal-header border-bottom-0">
-                <h5 class="modal-title fw-bold">Add User &amp; Agency</h5>
+                <h5 class="modal-title fw-bold">Add Admin &amp; Agency</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" data-turbo="false">
                 <input type="hidden" name="action" value="create">
                 <div class="modal-body py-0">
-                    <p class="text-muted small mb-3">User account</p>
+                    <p class="text-muted small mb-3">Agency admin account (sees only this agency)</p>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="create_name" class="form-label form-label-custom">Username</label>
@@ -186,7 +219,7 @@
                                             Clear
                                         </button>
                                     </div>
-                                    <p class="of-logo-picker-hint">Crop, rotate, and zoom before upload. Used on sidebar, favicon, and receipts.</p>
+                                    <p class="of-logo-picker-hint">Crop, rotate, and zoom before upload.</p>
                                 </div>
                                 <input type="file" id="create_agency_logo" name="agency_logo" accept="image/*" hidden data-of-logo-input>
                             </div>
@@ -199,14 +232,14 @@
                 </div>
                 <div class="modal-footer border-top-0">
                     <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary-custom">Create User &amp; Agency</button>
+                    <button type="submit" class="btn btn-primary-custom">Create Admin &amp; Agency</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- EDIT USER + AGENCY -->
+<!-- EDIT ADMIN + AGENCY -->
 <div class="modal fade" id="editUserModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div class="modal-content">
@@ -274,7 +307,7 @@
                                             Clear new
                                         </button>
                                     </div>
-                                    <p class="of-logo-picker-hint">Leave as-is to keep the current logo, or crop a new one.</p>
+                                    <p class="of-logo-picker-hint">Leave as-is to keep the current logo.</p>
                                 </div>
                                 <input type="file" id="edit_agency_logo" name="agency_logo" accept="image/*" hidden data-of-logo-input>
                             </div>
@@ -294,7 +327,137 @@
     </div>
 </div>
 
-<!-- Logo crop studio (shared by create + edit) -->
+{% else %}
+<!-- CREATE TEAM MEMBER -->
+<div class="modal fade" id="createTeamModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Add Team Member</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('auth.users') }}" method="POST" data-turbo="false">
+                <input type="hidden" name="action" value="create_team">
+                <div class="modal-body py-0">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="team_name" class="form-label form-label-custom">Username</label>
+                            <input type="text" class="form-control form-control-custom" id="team_name" name="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="team_email" class="form-label form-label-custom">Email</label>
+                            <input type="email" class="form-control form-control-custom" id="team_email" name="email" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="team_phone" class="form-label form-label-custom">Phone</label>
+                            <input type="text" class="form-control form-control-custom" id="team_phone" name="phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="team_password" class="form-label form-label-custom">Password</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control form-control-custom" id="team_password" name="password" required autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary password-toggle" data-password-target="team_password" aria-label="Show password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <p class="text-muted small mb-0">Allowed sections</p>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="1" id="team_modules_all" name="modules_all" checked data-modules-all>
+                            <label class="form-check-label small" for="team_modules_all">All modules</label>
+                        </div>
+                    </div>
+                    <div class="row g-2" data-modules-grid>
+                        {% for key, label in ops_modules %}
+                        <div class="col-6 col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="modules" value="{{ key }}" id="team_mod_{{ key }}" checked disabled data-module-cb>
+                                <label class="form-check-label" for="team_mod_{{ key }}">{{ label }}</label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Create Team Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT TEAM MEMBER -->
+<div class="modal fade" id="editTeamModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Edit Team Member</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('auth.users') }}" method="POST" data-turbo="false">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="user_id" id="edit_team_user_id">
+                <div class="modal-body py-0">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_team_name" class="form-label form-label-custom">Username</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_team_name" name="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_team_email" class="form-label form-label-custom">Email (cannot change)</label>
+                            <input type="email" class="form-control form-control-custom" id="edit_team_email" readonly disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_team_phone" class="form-label form-label-custom">Phone</label>
+                            <input type="text" class="form-control form-control-custom" id="edit_team_phone" name="phone">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_team_password" class="form-label form-label-custom">New password (optional)</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control form-control-custom" id="edit_team_password" name="password" autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary password-toggle" data-password-target="edit_team_password" aria-label="Show password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="edit_team_modules_wrap">
+                        <hr class="my-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <p class="text-muted small mb-0">Allowed sections</p>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="edit_team_modules_all" name="modules_all" data-modules-all>
+                                <label class="form-check-label small" for="edit_team_modules_all">All modules</label>
+                            </div>
+                        </div>
+                        <div class="row g-2" data-modules-grid>
+                            {% for key, label in ops_modules %}
+                            <div class="col-6 col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="modules" value="{{ key }}" id="edit_team_mod_{{ key }}" data-module-cb>
+                                    <label class="form-check-label" for="edit_team_mod_{{ key }}">{{ label }}</label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-outline-secondary border-0" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if is_platform %}
+<!-- Logo crop studio -->
 <div id="ofLogoCrop" class="of-logo-crop" hidden aria-hidden="true" role="dialog" aria-labelledby="ofLogoCropTitle">
     <div class="of-logo-crop-panel">
         <div class="of-logo-crop-head">
@@ -333,11 +496,14 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
+{% if is_platform %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+{% endif %}
 <script>
 (function (fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
@@ -356,6 +522,100 @@
         }
     }
 
+    function wireModulesAll(root) {
+        if (!root) return;
+        const all = root.querySelector('[data-modules-all]');
+        const boxes = root.querySelectorAll('[data-module-cb]');
+        if (!all) return;
+        const sync = () => {
+            const on = all.checked;
+            boxes.forEach((cb) => {
+                cb.disabled = on;
+                if (on) cb.checked = true;
+            });
+        };
+        all.addEventListener('change', sync);
+        sync();
+    }
+
+    document.querySelectorAll('#createTeamModal, #editTeamModal').forEach(wireModulesAll);
+
+    document.querySelectorAll('.edit-user-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const isPlatform = {{ 'true' if is_platform else 'false' }};
+            if (isPlatform) {
+                document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
+                document.getElementById('edit_name').value = btn.getAttribute('data-name');
+                document.getElementById('edit_email').value = btn.getAttribute('data-email');
+                document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
+                document.getElementById('edit_agency_name').value = btn.getAttribute('data-agency-name') || '';
+                document.getElementById('edit_agency_address').value = btn.getAttribute('data-agency-address') || '';
+                document.getElementById('edit_agency_phone').value = btn.getAttribute('data-agency-phone') || '';
+                document.getElementById('edit_agency_email').value = btn.getAttribute('data-agency-email') || '';
+                resetPasswordToggle('edit_password');
+
+                const editPicker = document.querySelector('[data-of-logo-picker="edit"]');
+                if (editPicker) {
+                    const logoUrl = btn.getAttribute('data-agency-logo') || '';
+                    editPicker.dataset.existingLogo = logoUrl;
+                    delete editPicker.dataset.hasNewFile;
+                    const input = editPicker.querySelector('[data-of-logo-input]');
+                    if (input) input.value = '';
+                    const img = editPicker.querySelector('[data-of-logo-preview]');
+                    const ph = editPicker.querySelector('[data-of-logo-ph]');
+                    const clearBtn = editPicker.querySelector('[data-of-logo-clear]');
+                    if (logoUrl && img) {
+                        img.src = logoUrl;
+                        img.hidden = false;
+                        if (ph) ph.hidden = true;
+                    } else if (img) {
+                        img.removeAttribute('src');
+                        img.hidden = true;
+                        if (ph) ph.hidden = false;
+                    }
+                    if (clearBtn) clearBtn.hidden = true;
+                }
+            } else {
+                document.getElementById('edit_team_user_id').value = btn.getAttribute('data-id');
+                document.getElementById('edit_team_name').value = btn.getAttribute('data-name');
+                document.getElementById('edit_team_email').value = btn.getAttribute('data-email');
+                document.getElementById('edit_team_phone').value = btn.getAttribute('data-phone');
+                resetPasswordToggle('edit_team_password');
+
+                const role = btn.getAttribute('data-role') || 'user';
+                const wrap = document.getElementById('edit_team_modules_wrap');
+                if (wrap) wrap.hidden = role !== 'user';
+
+                const mods = (btn.getAttribute('data-modules') || '*').trim();
+                const all = document.getElementById('edit_team_modules_all');
+                const boxes = document.querySelectorAll('#editTeamModal [data-module-cb]');
+                const allOn = !mods || mods === '*';
+                if (all) all.checked = allOn;
+                const set = new Set(allOn ? [] : mods.split(',').map((s) => s.trim()).filter(Boolean));
+                boxes.forEach((cb) => {
+                    cb.checked = allOn || set.has(cb.value);
+                    cb.disabled = allOn;
+                });
+            }
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.password-toggle');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const targetId = btn.getAttribute('data-password-target') || btn.getAttribute('data-target');
+        const input = targetId ? document.getElementById(targetId) : null;
+        if (!input) return;
+        const show = (input.getAttribute('type') || input.type) === 'password';
+        input.setAttribute('type', show ? 'text' : 'password');
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+    });
+
+    {% if is_platform %}
+    /* —— Logo crop (platform create/edit) —— */
     function setLogoPreview(picker, url) {
         const img = picker.querySelector('[data-of-logo-preview]');
         const ph = picker.querySelector('[data-of-logo-ph]');
@@ -378,13 +638,11 @@
         const input = picker.querySelector('[data-of-logo-input]');
         if (input) input.value = '';
         delete picker.dataset.hasNewFile;
-        const existing = picker.dataset.existingLogo || '';
-        setLogoPreview(picker, existing || '');
+        setLogoPreview(picker, picker.dataset.existingLogo || '');
         const clearBtn = picker.querySelector('[data-of-logo-clear]');
         if (clearBtn) clearBtn.hidden = true;
     }
 
-    /* —— Crop studio —— */
     const cropRoot = document.getElementById('ofLogoCrop');
     const cropImg = document.getElementById('ofLogoCropImg');
     const zoomLabel = cropRoot?.querySelector('[data-of-logo-zoom-label]');
@@ -401,19 +659,12 @@
         if (!cropper || !zoomLabel) return;
         const data = cropper.getImageData();
         if (!data || !data.naturalWidth) return;
-        const pct = Math.round((data.width / data.naturalWidth) * 100);
-        zoomLabel.textContent = `${pct}%`;
+        zoomLabel.textContent = `${Math.round((data.width / data.naturalWidth) * 100)}%`;
     }
 
     function destroyCropper() {
-        if (cropper) {
-            cropper.destroy();
-            cropper = null;
-        }
-        if (objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-            objectUrl = null;
-        }
+        if (cropper) { cropper.destroy(); cropper = null; }
+        if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
         if (cropImg) cropImg.removeAttribute('src');
     }
 
@@ -428,10 +679,7 @@
     }
 
     function openCrop(file, picker) {
-        if (!cropRoot || !cropImg || typeof Cropper === 'undefined') {
-            if (window.ofToast) window.ofToast('Cropper failed to load. Try refreshing.', 'danger');
-            return;
-        }
+        if (!cropRoot || !cropImg || typeof Cropper === 'undefined') return;
         destroyCropper();
         activePicker = picker;
         objectUrl = URL.createObjectURL(file);
@@ -439,42 +687,21 @@
         cropRoot.hidden = false;
         cropRoot.setAttribute('aria-hidden', 'false');
         document.body.classList.add('of-logo-crop-open');
-
         cropper = new Cropper(cropImg, {
-            aspectRatio: 1,
-            viewMode: 1,
-            dragMode: 'move',
-            autoCropArea: 1,
-            responsive: true,
-            background: false,
-            guides: true,
-            center: true,
-            highlight: false,
-            cropBoxMovable: true,
-            cropBoxResizable: true,
+            aspectRatio: 1, viewMode: 1, dragMode: 'move', autoCropArea: 1,
+            responsive: true, background: false, guides: true, center: true,
+            highlight: false, cropBoxMovable: true, cropBoxResizable: true,
             toggleDragModeOnDblclick: false,
-            ready() {
-                updateZoomLabel();
-            },
-            zoom() {
-                updateZoomLabel();
-            },
+            ready: updateZoomLabel, zoom: updateZoomLabel,
         });
     }
 
     async function applyCrop() {
         if (!cropper || !activePicker) return;
-        const canvas = cropper.getCroppedCanvas({
-            width: 512,
-            height: 512,
-            imageSmoothingEnabled: true,
-            imageSmoothingQuality: 'high',
-        });
+        const canvas = cropper.getCroppedCanvas({ width: 512, height: 512, imageSmoothingEnabled: true, imageSmoothingQuality: 'high' });
         if (!canvas) return;
-
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 0.95));
         if (!blob) return;
-
         const file = new File([blob], 'agency_logo.png', { type: 'image/png' });
         const input = activePicker.querySelector('[data-of-logo-input]');
         if (input) {
@@ -483,8 +710,7 @@
             input.files = dt.files;
         }
         activePicker.dataset.hasNewFile = '1';
-        const previewUrl = URL.createObjectURL(blob);
-        setLogoPreview(activePicker, previewUrl);
+        setLogoPreview(activePicker, URL.createObjectURL(blob));
         const clearBtn = activePicker.querySelector('[data-of-logo-clear]');
         if (clearBtn) clearBtn.hidden = false;
         closeCrop();
@@ -495,105 +721,31 @@
             activePicker = picker;
             sourceInput.click();
         });
-        picker.querySelector('[data-of-logo-clear]')?.addEventListener('click', () => {
-            clearLogoFile(picker);
-        });
+        picker.querySelector('[data-of-logo-clear]')?.addEventListener('click', () => clearLogoFile(picker));
     });
-
     sourceInput.addEventListener('change', () => {
         const file = sourceInput.files && sourceInput.files[0];
-        if (!file || !activePicker) return;
-        if (!file.type.startsWith('image/')) {
-            if (window.ofToast) window.ofToast('Please choose an image file.', 'warning');
-            return;
-        }
-        openCrop(file, activePicker);
+        if (file && activePicker) openCrop(file, activePicker);
     });
-
-    cropRoot?.querySelectorAll('[data-of-logo-crop-cancel]').forEach((btn) => {
-        btn.addEventListener('click', closeCrop);
-    });
-    cropRoot?.querySelector('[data-of-logo-crop-apply]')?.addEventListener('click', () => {
-        applyCrop().catch(() => {
-            if (window.ofToast) window.ofToast('Could not crop logo.', 'danger');
-        });
-    });
+    cropRoot?.querySelectorAll('[data-of-logo-crop-cancel]').forEach((btn) => btn.addEventListener('click', closeCrop));
+    cropRoot?.querySelector('[data-of-logo-crop-apply]')?.addEventListener('click', () => applyCrop().catch(() => {}));
     cropRoot?.querySelectorAll('[data-of-logo-zoom]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            if (!cropper) return;
-            cropper.zoom(Number(btn.getAttribute('data-of-logo-zoom')) || 0);
-            updateZoomLabel();
-        });
+        btn.addEventListener('click', () => { if (cropper) { cropper.zoom(Number(btn.getAttribute('data-of-logo-zoom')) || 0); updateZoomLabel(); } });
     });
     cropRoot?.querySelectorAll('[data-of-logo-rotate]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            if (!cropper) return;
-            cropper.rotate(Number(btn.getAttribute('data-of-logo-rotate')) || 0);
-        });
+        btn.addEventListener('click', () => { if (cropper) cropper.rotate(Number(btn.getAttribute('data-of-logo-rotate')) || 0); });
     });
-    cropRoot?.querySelector('[data-of-logo-reset]')?.addEventListener('click', () => {
-        if (!cropper) return;
-        cropper.reset();
-        updateZoomLabel();
-    });
-    cropRoot?.addEventListener('click', (e) => {
-        if (e.target === cropRoot) closeCrop();
-    });
+    cropRoot?.querySelector('[data-of-logo-reset]')?.addEventListener('click', () => { if (cropper) { cropper.reset(); updateZoomLabel(); } });
+    cropRoot?.addEventListener('click', (e) => { if (e.target === cropRoot) closeCrop(); });
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && cropRoot && !cropRoot.hidden) {
-            e.preventDefault();
-            closeCrop();
-        }
+        if (e.key === 'Escape' && cropRoot && !cropRoot.hidden) { e.preventDefault(); closeCrop(); }
     });
-
-    document.querySelectorAll('.edit-user-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
-            document.getElementById('edit_name').value = btn.getAttribute('data-name');
-            document.getElementById('edit_email').value = btn.getAttribute('data-email');
-            document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
-            document.getElementById('edit_agency_name').value = btn.getAttribute('data-agency-name') || '';
-            document.getElementById('edit_agency_address').value = btn.getAttribute('data-agency-address') || '';
-            document.getElementById('edit_agency_phone').value = btn.getAttribute('data-agency-phone') || '';
-            document.getElementById('edit_agency_email').value = btn.getAttribute('data-agency-email') || '';
-            resetPasswordToggle('edit_password');
-
-            const editPicker = document.querySelector('[data-of-logo-picker="edit"]');
-            if (editPicker) {
-                const logoUrl = btn.getAttribute('data-agency-logo') || '';
-                editPicker.dataset.existingLogo = logoUrl;
-                delete editPicker.dataset.hasNewFile;
-                const input = editPicker.querySelector('[data-of-logo-input]');
-                if (input) input.value = '';
-                setLogoPreview(editPicker, logoUrl);
-                const clearBtn = editPicker.querySelector('[data-of-logo-clear]');
-                if (clearBtn) clearBtn.hidden = true;
-            }
-        });
-    });
-
     document.getElementById('createUserModal')?.addEventListener('hidden.bs.modal', () => {
         const createPicker = document.querySelector('[data-of-logo-picker="create"]');
-        if (createPicker) {
-            delete createPicker.dataset.existingLogo;
-            clearLogoFile(createPicker);
-        }
+        if (createPicker) { delete createPicker.dataset.existingLogo; clearLogoFile(createPicker); }
         resetPasswordToggle('create_password');
     });
-
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.password-toggle');
-        if (!btn) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const targetId = btn.getAttribute('data-password-target') || btn.getAttribute('data-target');
-        const input = targetId ? document.getElementById(targetId) : null;
-        if (!input) return;
-        const show = (input.getAttribute('type') || input.type) === 'password';
-        input.setAttribute('type', show ? 'text' : 'password');
-        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-        btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
-    });
+    {% endif %}
 });
 </script>
 {% endblock %}
