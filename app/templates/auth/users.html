@@ -160,7 +160,7 @@
                 <h5 class="modal-title fw-bold">Add Admin &amp; Agency</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" data-turbo="false">
+            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" >
                 <input type="hidden" name="action" value="create">
                 <div class="modal-body py-0">
                     <p class="text-muted small mb-3">Agency admin account (sees only this agency)</p>
@@ -247,7 +247,7 @@
                 <h5 class="modal-title fw-bold">Edit User &amp; Agency</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" data-turbo="false">
+            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" >
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="user_id" id="edit_user_id">
                 <div class="modal-body py-0">
@@ -336,7 +336,7 @@
                 <h5 class="modal-title fw-bold">Add Team Member</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('auth.users') }}" method="POST" data-turbo="false">
+            <form action="{{ url_for('auth.users') }}" method="POST" >
                 <input type="hidden" name="action" value="create_team">
                 <div class="modal-body py-0">
                     <div class="row g-3">
@@ -398,7 +398,7 @@
                 <h5 class="modal-title fw-bold">Edit Team Member</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('auth.users') }}" method="POST" data-turbo="false">
+            <form action="{{ url_for('auth.users') }}" method="POST" >
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="user_id" id="edit_team_user_id">
                 <div class="modal-body py-0">

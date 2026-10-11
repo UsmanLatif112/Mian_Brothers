@@ -74,7 +74,7 @@
                 </div>
 
                 <form action="{{ url_for('backup.restore') }}" method="POST" id="restore-form"
-                      enctype="multipart/form-data" data-turbo="false" data-busy-label="Restoring…">
+                      enctype="multipart/form-data" data-busy-label="Restoring…">
                     <div class="mb-3">
                         <label for="backup_upload" class="form-label form-label-custom">Backup file</label>
                         <input type="file"
@@ -300,8 +300,10 @@
     submitBtn.addEventListener('click', function () {
         modal.hide();
         form.dataset.busyLabel = 'Restoring…';
-        if (window.ofLoader) window.ofLoader.showNav('Restoring…');
-        form.submit();
+        if (window.ofLoader) window.ofLoader.show('Restoring…');
+        if (window.ofSubmitForm) window.ofSubmitForm(form);
+        else if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
     });
 });
 </script>

@@ -767,8 +767,8 @@
         let block = document.querySelector(`.machine-block[data-fuel="${fuelId}"]`);
         if (!block) {
             // Fuel type exists in select but block missing (edge case) — reload once
-            if (window.ofLoader) window.ofLoader.showNav('Loading…');
-            location.reload();
+            if (window.ofReload) window.ofReload('Loading…');
+            else location.reload();
             return;
         }
         const rowHost = block.querySelector('.row.g-3.mb-2') || block;

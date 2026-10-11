@@ -129,6 +129,18 @@
         window.location.href = url;
     };
 
+    /** Reload current page via Turbo (no full tab refresh). */
+    window.ofReload = function ofReload(message) {
+        const msg = message || 'Loading…';
+        if (window.Turbo && typeof window.Turbo.visit === 'function') {
+            window.ofLoader.show(msg);
+            window.Turbo.visit(window.location.href, { action: 'replace' });
+            return;
+        }
+        window.ofLoader.showNav(msg);
+        window.location.reload();
+    };
+
     // Keep in-flight nav loader running until window.load (base.html settles it).
     // Only clear leftovers on a normal open / refresh.
     if (!navPendingAtBoot) {
@@ -460,11 +472,7 @@
         window.ofConfirm({ title, message, confirmLabel, danger }).then((ok) => {
             if (!ok) return;
             form.dataset.ofConfirmed = '1';
-            if (typeof form.requestSubmit === 'function') {
-                form.requestSubmit();
-            } else {
-                HTMLFormElement.prototype.submit.call(form);
-            }
+            window.ofSubmitForm(form);
         });
     }, true);
 })();
@@ -728,13 +736,36 @@ window.ofBootUi = function ofBootUi() {
         const turboOff = form.getAttribute('data-turbo') === 'false';
         const hasTurbo = !!(window.__ofTurboNav || window.Turbo);
 
-        // Always full loader. Full-page submits also set nav handoff for the next page.
+        // Turbo path: in-tab loader only. Full-page fallback keeps nav handoff.
         if (turboOff || !hasTurbo) {
             window.ofLoader.showNav(msg);
             return;
         }
         window.ofLoader.show(msg);
     }
+
+    /** Submit a form via Turbo Drive (no full tab reload). */
+    window.ofSubmitForm = function ofSubmitForm(form) {
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.dataset.noLoader !== '1') showFormLoader(form);
+
+        const turboOff = form.getAttribute('data-turbo') === 'false';
+        if (!turboOff && window.Turbo) {
+            if (window.Turbo.navigator && typeof window.Turbo.navigator.submitForm === 'function') {
+                window.Turbo.navigator.submitForm(form);
+                return;
+            }
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+                return;
+            }
+        }
+
+        if (form.dataset.submitting === '1') return;
+        form.dataset.submitting = '1';
+        lockFormButtons(form);
+        nativeFormSubmit.call(form);
+    };
 
     document.addEventListener('submit', (e) => {
         const form = e.target;
@@ -771,17 +802,10 @@ window.ofBootUi = function ofBootUi() {
         }, 0);
     });
 
-    // Programmatic form.submit() does not fire the submit event — cover it too
+    // Programmatic form.submit() normally bypasses Turbo — route through Turbo instead
     const nativeFormSubmit = HTMLFormElement.prototype.submit;
     HTMLFormElement.prototype.submit = function patchedFormSubmit() {
-        if (this.dataset.allowMultiSubmit === '1') {
-            return nativeFormSubmit.call(this);
-        }
-        if (this.dataset.submitting === '1') return;
-        this.dataset.submitting = '1';
-        lockFormButtons(this);
-        showFormLoader(this);
-        return nativeFormSubmit.call(this);
+        window.ofSubmitForm(this);
     };
 
     /* —— Plus-button Register Vendor / Customer ——
@@ -1004,8 +1028,8 @@ window.ofBootUi = function ofBootUi() {
                 ofCloseQuickCreate(modalEl);
                 form.reset();
             } else {
-                if (window.ofLoader) window.ofLoader.showNav('Loading…');
-                window.location.reload();
+                if (window.ofReload) window.ofReload('Loading…');
+                else window.location.reload();
                 return;
             }
         } catch (err) {
@@ -1180,8 +1204,8 @@ window.ofBootUi = function ofBootUi() {
                                           });
                                           return;
                                       }
-                                      if (window.ofLoader) window.ofLoader.showNav('Loading…');
-                                      location.reload();
+                                      if (window.ofReload) window.ofReload('Loading…');
+                                      else location.reload();
                                   })
                                   .catch(() => {
                                       window.ofAlert({ message: 'Could not add fuel' });
