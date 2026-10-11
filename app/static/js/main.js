@@ -168,6 +168,8 @@
         } catch (_) {
             return;
         }
+        // Turbo Drive keeps the tab alive — turbo-nav.js owns the loader
+        if (window.__ofTurboNav || window.Turbo) return;
         window.ofLoader.showNav('Loading…');
     }, true);
 
@@ -246,8 +248,12 @@
     };
 
     function boot() {
-        document.querySelectorAll('[data-of-toast]').forEach(armToast);
+        document.querySelectorAll('[data-of-toast]:not([data-of-toast-armed])').forEach((node) => {
+            node.dataset.ofToastArmed = '1';
+            armToast(node);
+        });
     }
+    window.ofToastsRefresh = boot;
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot, { once: true });
     } else {
@@ -389,10 +395,11 @@
     }, true);
 })();
 
-document.addEventListener('DOMContentLoaded', () => {
+window.ofBootUi = function ofBootUi() {
     // Surface "Cannot delete…" toasts as an in-app alert popup
     const blockFlash = document.querySelector('.of-toast-danger .of-toast-text');
-    if (blockFlash && /cannot delete/i.test(blockFlash.textContent || '')) {
+    if (blockFlash && /cannot delete/i.test(blockFlash.textContent || '') && !blockFlash.dataset.ofAlerted) {
+        blockFlash.dataset.ofAlerted = '1';
         const text = (blockFlash.textContent || '').replace(/\s+/g, ' ').trim();
         window.ofAlert({ title: 'Cannot delete', message: text });
     }
@@ -403,17 +410,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const savedTheme = localStorage.getItem('theme') || 'light';
     htmlElement.setAttribute('data-theme', savedTheme);
-    updateThemeToggle(savedTheme);
-
-    if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', () => {
-            const currentTheme = htmlElement.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            htmlElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeToggle(newTheme);
-        });
-    }
 
     function updateThemeToggle(theme) {
         if (!themeToggleBtn) return;
@@ -427,6 +423,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const icon = themeToggleBtn.querySelector('i');
         if (icon) icon.className = isDark ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
+    updateThemeToggle(savedTheme);
+
+    if (themeToggleBtn && themeToggleBtn.dataset.ofBound !== '1') {
+        themeToggleBtn.dataset.ofBound = '1';
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            htmlElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeToggle(newTheme);
+        });
+    }
 
     // -------------------------------------------------------
     // Shopify-style shell: sidebar + global search
@@ -438,30 +446,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('sidebarClose');
 
     function openSidebar() {
-        if (!sidebar) return;
+        const sb = document.getElementById('appSidebar');
+        const bd = document.getElementById('sidebarBackdrop');
+        if (!sb) return;
         body.classList.add('sidebar-open');
-        if (backdrop) backdrop.hidden = false;
+        if (bd) bd.hidden = false;
         body.style.overflow = window.innerWidth < 992 ? 'hidden' : '';
     }
 
     function closeSidebar() {
         body.classList.remove('sidebar-open');
-        if (backdrop) backdrop.hidden = true;
+        const bd = document.getElementById('sidebarBackdrop');
+        if (bd) bd.hidden = true;
         body.style.overflow = '';
     }
 
-    if (openBtn) openBtn.addEventListener('click', openSidebar);
-    if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
-    if (backdrop) backdrop.addEventListener('click', closeSidebar);
+    if (openBtn && openBtn.dataset.ofBound !== '1') {
+        openBtn.dataset.ofBound = '1';
+        openBtn.addEventListener('click', openSidebar);
+    }
+    if (closeBtn && closeBtn.dataset.ofBound !== '1') {
+        closeBtn.dataset.ofBound = '1';
+        closeBtn.addEventListener('click', closeSidebar);
+    }
+    if (backdrop && backdrop.dataset.ofBound !== '1') {
+        backdrop.dataset.ofBound = '1';
+        backdrop.addEventListener('click', closeSidebar);
+    }
 
     sidebar?.querySelectorAll('.sidebar-link').forEach((link) => {
+        if (link.dataset.ofBound === '1') return;
+        link.dataset.ofBound = '1';
         link.addEventListener('click', () => {
             if (window.innerWidth < 992) closeSidebar();
         });
-    });
-
-    window.addEventListener('resize', () => {
-        if (window.innerWidth >= 992) closeSidebar();
     });
 
     const searchInput = document.getElementById('globalSearch') || document.querySelector('.topbar-search-input');
@@ -506,7 +524,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.hidden = false;
     }
 
-    if (searchInput && isGlobalSearch) {
+    if (searchInput && isGlobalSearch && searchInput.dataset.ofBound !== '1') {
+        searchInput.dataset.ofBound = '1';
         searchInput.addEventListener('input', () => renderSearch(searchInput.value));
         searchInput.addEventListener('focus', () => {
             if (searchInput.value.trim()) renderSearch(searchInput.value);
@@ -517,25 +536,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 searchInput.blur();
             }
         });
-        document.addEventListener('click', (e) => {
-            if (!searchForm?.contains(e.target) && searchPanel) searchPanel.hidden = true;
-        });
     }
+
+    async function postJson(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        return res.json();
+    }
+    window.ofPostJson = postJson;
+
+    // -------------------------------------------------------
+    // Prevent duplicate submits / double-clicks (global) — once
+    // -------------------------------------------------------
+    if (!window.__ofMainBound) {
+    window.__ofMainBound = true;
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 992) {
+            document.body.classList.remove('sidebar-open');
+            const bd = document.getElementById('sidebarBackdrop');
+            if (bd) bd.hidden = true;
+            document.body.style.overflow = '';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        const form = document.getElementById('globalSearchForm') || document.querySelector('.topbar-search');
+        const panel = document.getElementById('searchPanel');
+        if (!form?.contains(e.target) && panel) panel.hidden = true;
+    });
 
     document.addEventListener('keydown', (e) => {
         if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
             const tag = (document.activeElement?.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
-            if (!searchInput) return;
+            const input = document.getElementById('globalSearch') || document.querySelector('.topbar-search-input');
+            if (!input) return;
             e.preventDefault();
-            searchInput.focus();
-            searchInput.select();
+            input.focus();
+            input.select();
         }
     });
 
-    // -------------------------------------------------------
-    // Prevent duplicate submits / double-clicks (global)
-    // -------------------------------------------------------
     function getFormSubmitButtons(form) {
         return Array.from(
             form.querySelectorAll('button[type="submit"], input[type="submit"]')
@@ -604,6 +649,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (method === 'get' || form.dataset.allowMultiSubmit === '1') msg = 'Loading…';
         if (/delete|remove/.test(action) || actionVal === 'delete') msg = 'Deleting…';
         if (form.dataset.busyLabel) msg = form.dataset.busyLabel;
+        // Turbo owns navigation loaders; avoid full-page showNav handoff
+        if (window.__ofTurboNav || window.Turbo) return;
         // Full POST/GET navigations keep the loader on the next page
         if (method !== 'dialog') window.ofLoader.showNav(msg);
         else window.ofLoader.show(msg);
@@ -656,15 +703,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showFormLoader(this);
         return nativeFormSubmit.call(this);
     };
-
-    async function postJson(url, body) {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        return res.json();
-    }
 
     /* —— Plus-button Register Vendor / Customer ——
        Nested open uses a plain overlay (not Bootstrap Modal) so the parent
@@ -904,6 +942,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    } // end __ofMainBound once
+
     if (typeof TomSelect !== 'undefined') {
         const shared = {
             maxOptions: null,          // show all matches; list scrolls
@@ -1141,6 +1181,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Keep Tom Select usable inside Bootstrap modals (focus + position)
         document.querySelectorAll('.modal').forEach((modalEl) => {
+            if (modalEl.dataset.ofTsBound === '1') return;
+            modalEl.dataset.ofTsBound = '1';
             modalEl.addEventListener('shown.bs.modal', () => {
                 modalEl.querySelectorAll('select.form-select').forEach((el) => {
                     if (!el.tomselect) return;
@@ -1156,10 +1198,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const computedLitersSpan = document.getElementById('computed_liters');
     const computedAmountSpan = document.getElementById('computed_amount');
     const fuelSelect = document.getElementById('fuel_type_id');
-    const priceDisplay = document.getElementById('price_display');
     const rateInput = document.getElementById('price_per_liter_input');
 
-    if (openingInput && closingInput) {
+    if (openingInput && closingInput && openingInput.dataset.ofBound !== '1') {
+        openingInput.dataset.ofBound = '1';
         const updateCalculations = () => {
             const openVal = parseFloat(openingInput.value) || 0;
             const closeVal = parseFloat(closingInput.value) || 0;
@@ -1177,7 +1219,16 @@ document.addEventListener('DOMContentLoaded', () => {
         closingInput.addEventListener('input', updateCalculations);
         if (fuelSelect) fuelSelect.addEventListener('change', updateCalculations);
     }
-});
+};
+
+/* With Turbo, turbo:load (turbo-nav.js) boots UI; without it, use DOMContentLoaded */
+if (!window.Turbo) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => window.ofBootUi(), { once: true });
+    } else {
+        window.ofBootUi();
+    }
+}
 
 /* Per-row thermal receipt print */
 (function initOfReceiptPrint() {

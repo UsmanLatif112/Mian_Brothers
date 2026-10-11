@@ -283,7 +283,7 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
         // Wire up edit modal button dataset bindings
         const editButtons = document.querySelectorAll('.edit-customer-btn');
         editButtons.forEach(btn => {

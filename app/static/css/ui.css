@@ -1838,3 +1838,186 @@ td .of-clip-cell {
 [data-theme="dark"] .tooltip.of-app-tooltip .tooltip-arrow::before {
     border-top-color: #1e293b;
 }
+
+/* —— Agency logo picker + crop studio —— */
+.of-logo-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--card-bg) 88%, var(--accent-blue) 6%);
+}
+
+.of-logo-preview {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent-blue) 14%, transparent), transparent 55%),
+        var(--card-bg-solid);
+    display: grid;
+    place-items: center;
+}
+
+.of-logo-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.of-logo-preview-ph {
+    color: var(--text-secondary);
+    font-size: 1.35rem;
+    opacity: 0.7;
+}
+
+.of-logo-picker-meta {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.of-logo-picker-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.of-logo-picker-hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.of-logo-picker .btn-of-logo {
+    --bs-btn-padding-y: 0.32rem;
+    --bs-btn-padding-x: 0.7rem;
+    --bs-btn-font-size: 0.82rem;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.of-logo-crop {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(12, 25, 41, 0.55);
+    backdrop-filter: blur(6px);
+}
+
+.of-logo-crop[hidden] {
+    display: none !important;
+}
+
+.of-logo-crop-panel {
+    width: min(560px, 100%);
+    max-height: min(92vh, 720px);
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--radius-lg);
+    background: var(--card-bg-solid);
+    color: var(--text-primary);
+    border: var(--card-border);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+.of-logo-crop-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem 0.65rem;
+}
+
+.of-logo-crop-head h3 {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.of-logo-crop-sub {
+    margin: 0.15rem 0 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.of-logo-crop-stage {
+    margin: 0 1.15rem;
+    height: min(46vh, 340px);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: #0c1929;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.of-logo-crop-stage img {
+    display: block;
+    max-width: 100%;
+}
+
+.of-logo-crop-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.85rem 1.15rem 0.35rem;
+}
+
+.of-logo-crop-tools .btn {
+    min-width: 2.4rem;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.of-logo-crop-zoom {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.of-logo-crop-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.85rem 1.15rem 1.15rem;
+}
+
+.of-logo-crop .cropper-view-box,
+.of-logo-crop .cropper-face {
+    border-radius: 12px;
+}
+
+.of-logo-crop .cropper-modal {
+    background-color: rgba(7, 10, 18, 0.55);
+}
+
+.of-logo-crop .cropper-line,
+.of-logo-crop .cropper-point {
+    background-color: var(--accent-blue);
+}
+
+body.of-logo-crop-open {
+    overflow: hidden;
+}

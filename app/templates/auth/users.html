@@ -84,7 +84,8 @@
                                             data-agency-name="{{ user.agency.name if user.agency else '' }}"
                                             data-agency-address="{{ user.agency.address if user.agency else '' }}"
                                             data-agency-phone="{{ user.agency.phone if user.agency else '' }}"
-                                            data-agency-email="{{ user.agency.email if user.agency else '' }}">
+                                            data-agency-email="{{ user.agency.email if user.agency else '' }}"
+                                            data-agency-logo="{% if user.agency and user.agency.logo %}{{ url_for('uploaded_file', filename=user.agency.logo) }}{% endif %}">
                                         <i class="bi bi-pencil-square" title="Edit"></i>
                                     </button>
                                     
@@ -126,7 +127,7 @@
                 <h5 class="modal-title fw-bold">Add User &amp; Agency</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" data-turbo="false">
                 <input type="hidden" name="action" value="create">
                 <div class="modal-body py-0">
                     <p class="text-muted small mb-3">User account</p>
@@ -169,10 +170,26 @@
                             <label for="create_agency_email" class="form-label form-label-custom">Company email</label>
                             <input type="email" class="form-control form-control-custom" id="create_agency_email" name="agency_email" placeholder="info@agency.com">
                         </div>
-                        <div class="col-md-6">
-                            <label for="create_agency_logo" class="form-label form-label-custom">Logo</label>
-                            <input type="file" class="form-control form-control-custom" id="create_agency_logo" name="agency_logo" accept="image/*">
-                            <div class="form-text">Used on sidebar, favicon, and receipts.</div>
+                        <div class="col-12">
+                            <label class="form-label form-label-custom">Logo</label>
+                            <div class="of-logo-picker" data-of-logo-picker="create">
+                                <div class="of-logo-preview">
+                                    <img data-of-logo-preview alt="Logo preview" hidden>
+                                    <span class="of-logo-preview-ph" data-of-logo-ph aria-hidden="true"><i class="bi bi-image"></i></span>
+                                </div>
+                                <div class="of-logo-picker-meta">
+                                    <div class="of-logo-picker-actions">
+                                        <button type="button" class="btn btn-outline-secondary btn-of-logo" data-of-logo-pick>
+                                            <i class="bi bi-crop me-1"></i> Choose &amp; crop
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-of-logo" data-of-logo-clear hidden>
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <p class="of-logo-picker-hint">Crop, rotate, and zoom before upload. Used on sidebar, favicon, and receipts.</p>
+                                </div>
+                                <input type="file" id="create_agency_logo" name="agency_logo" accept="image/*" hidden data-of-logo-input>
+                            </div>
                         </div>
                         <div class="col-12">
                             <label for="create_agency_address" class="form-label form-label-custom">Address</label>
@@ -197,7 +214,7 @@
                 <h5 class="modal-title fw-bold">Edit User &amp; Agency</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ url_for('auth.users') }}" method="POST" enctype="multipart/form-data" data-turbo="false">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="user_id" id="edit_user_id">
                 <div class="modal-body py-0">
@@ -241,9 +258,26 @@
                             <label for="edit_agency_email" class="form-label form-label-custom">Company email</label>
                             <input type="email" class="form-control form-control-custom" id="edit_agency_email" name="agency_email">
                         </div>
-                        <div class="col-md-6">
-                            <label for="edit_agency_logo" class="form-label form-label-custom">Replace logo</label>
-                            <input type="file" class="form-control form-control-custom" id="edit_agency_logo" name="agency_logo" accept="image/*">
+                        <div class="col-12">
+                            <label class="form-label form-label-custom">Logo</label>
+                            <div class="of-logo-picker" data-of-logo-picker="edit">
+                                <div class="of-logo-preview">
+                                    <img data-of-logo-preview alt="Logo preview" hidden>
+                                    <span class="of-logo-preview-ph" data-of-logo-ph aria-hidden="true"><i class="bi bi-image"></i></span>
+                                </div>
+                                <div class="of-logo-picker-meta">
+                                    <div class="of-logo-picker-actions">
+                                        <button type="button" class="btn btn-outline-secondary btn-of-logo" data-of-logo-pick>
+                                            <i class="bi bi-crop me-1"></i> Replace &amp; crop
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-of-logo" data-of-logo-clear hidden>
+                                            Clear new
+                                        </button>
+                                    </div>
+                                    <p class="of-logo-picker-hint">Leave as-is to keep the current logo, or crop a new one.</p>
+                                </div>
+                                <input type="file" id="edit_agency_logo" name="agency_logo" accept="image/*" hidden data-of-logo-input>
+                            </div>
                         </div>
                         <div class="col-12">
                             <label for="edit_agency_address" class="form-label form-label-custom">Address</label>
@@ -259,51 +293,307 @@
         </div>
     </div>
 </div>
+
+<!-- Logo crop studio (shared by create + edit) -->
+<div id="ofLogoCrop" class="of-logo-crop" hidden aria-hidden="true" role="dialog" aria-labelledby="ofLogoCropTitle">
+    <div class="of-logo-crop-panel">
+        <div class="of-logo-crop-head">
+            <div>
+                <h3 id="ofLogoCropTitle">Crop logo</h3>
+                <p class="of-logo-crop-sub">Drag to frame · zoom &amp; rotate · square for sidebar &amp; favicon</p>
+            </div>
+            <button type="button" class="btn-close" data-of-logo-crop-cancel aria-label="Close"></button>
+        </div>
+        <div class="of-logo-crop-stage">
+            <img id="ofLogoCropImg" alt="Logo to crop">
+        </div>
+        <div class="of-logo-crop-tools">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-of-logo-zoom="-0.1" title="Zoom out" aria-label="Zoom out">
+                <i class="bi bi-zoom-out"></i>
+            </button>
+            <span class="of-logo-crop-zoom" data-of-logo-zoom-label>100%</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-of-logo-zoom="0.1" title="Zoom in" aria-label="Zoom in">
+                <i class="bi bi-zoom-in"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-of-logo-rotate="-90" title="Rotate left" aria-label="Rotate left">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-of-logo-rotate="90" title="Rotate right" aria-label="Rotate right">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-of-logo-reset title="Reset" aria-label="Reset">
+                <i class="bi bi-arrow-repeat"></i>
+            </button>
+        </div>
+        <div class="of-logo-crop-foot">
+            <button type="button" class="btn btn-outline-secondary border-0" data-of-logo-crop-cancel>Cancel</button>
+            <button type="button" class="btn btn-primary-custom" data-of-logo-crop-apply>
+                <i class="bi bi-check2 me-1"></i> Apply logo
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        function resetPasswordToggle(inputId) {
-            const input = document.getElementById(inputId);
-            const btn = document.querySelector('.password-toggle[data-password-target="' + inputId + '"]');
-            if (input) {
-                input.value = '';
-                input.setAttribute('type', 'password');
-            }
-            if (btn) {
-                btn.setAttribute('aria-label', 'Show password');
-                btn.innerHTML = '<i class="bi bi-eye"></i>';
-            }
+(function (fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+    else fn();
+})(function () {
+    function resetPasswordToggle(inputId) {
+        const input = document.getElementById(inputId);
+        const btn = document.querySelector('.password-toggle[data-password-target="' + inputId + '"]');
+        if (input) {
+            input.value = '';
+            input.setAttribute('type', 'password');
         }
+        if (btn) {
+            btn.setAttribute('aria-label', 'Show password');
+            btn.innerHTML = '<i class="bi bi-eye"></i>';
+        }
+    }
 
-        document.querySelectorAll('.edit-user-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
-                document.getElementById('edit_name').value = btn.getAttribute('data-name');
-                document.getElementById('edit_email').value = btn.getAttribute('data-email');
-                document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
-                document.getElementById('edit_agency_name').value = btn.getAttribute('data-agency-name') || '';
-                document.getElementById('edit_agency_address').value = btn.getAttribute('data-agency-address') || '';
-                document.getElementById('edit_agency_phone').value = btn.getAttribute('data-agency-phone') || '';
-                document.getElementById('edit_agency_email').value = btn.getAttribute('data-agency-email') || '';
-                resetPasswordToggle('edit_password');
-            });
+    function setLogoPreview(picker, url) {
+        const img = picker.querySelector('[data-of-logo-preview]');
+        const ph = picker.querySelector('[data-of-logo-ph]');
+        const clearBtn = picker.querySelector('[data-of-logo-clear]');
+        if (!img) return;
+        if (url) {
+            img.src = url;
+            img.hidden = false;
+            if (ph) ph.hidden = true;
+            if (clearBtn) clearBtn.hidden = !picker.dataset.hasNewFile;
+        } else {
+            img.removeAttribute('src');
+            img.hidden = true;
+            if (ph) ph.hidden = false;
+            if (clearBtn) clearBtn.hidden = true;
+        }
+    }
+
+    function clearLogoFile(picker) {
+        const input = picker.querySelector('[data-of-logo-input]');
+        if (input) input.value = '';
+        delete picker.dataset.hasNewFile;
+        const existing = picker.dataset.existingLogo || '';
+        setLogoPreview(picker, existing || '');
+        const clearBtn = picker.querySelector('[data-of-logo-clear]');
+        if (clearBtn) clearBtn.hidden = true;
+    }
+
+    /* —— Crop studio —— */
+    const cropRoot = document.getElementById('ofLogoCrop');
+    const cropImg = document.getElementById('ofLogoCropImg');
+    const zoomLabel = cropRoot?.querySelector('[data-of-logo-zoom-label]');
+    let cropper = null;
+    let activePicker = null;
+    let objectUrl = null;
+    const sourceInput = document.createElement('input');
+    sourceInput.type = 'file';
+    sourceInput.accept = 'image/png,image/jpeg,image/jpg,image/webp,image/gif';
+    sourceInput.hidden = true;
+    document.body.appendChild(sourceInput);
+
+    function updateZoomLabel() {
+        if (!cropper || !zoomLabel) return;
+        const data = cropper.getImageData();
+        if (!data || !data.naturalWidth) return;
+        const pct = Math.round((data.width / data.naturalWidth) * 100);
+        zoomLabel.textContent = `${pct}%`;
+    }
+
+    function destroyCropper() {
+        if (cropper) {
+            cropper.destroy();
+            cropper = null;
+        }
+        if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+        }
+        if (cropImg) cropImg.removeAttribute('src');
+    }
+
+    function closeCrop() {
+        if (!cropRoot) return;
+        destroyCropper();
+        cropRoot.hidden = true;
+        cropRoot.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('of-logo-crop-open');
+        activePicker = null;
+        sourceInput.value = '';
+    }
+
+    function openCrop(file, picker) {
+        if (!cropRoot || !cropImg || typeof Cropper === 'undefined') {
+            if (window.ofToast) window.ofToast('Cropper failed to load. Try refreshing.', 'danger');
+            return;
+        }
+        destroyCropper();
+        activePicker = picker;
+        objectUrl = URL.createObjectURL(file);
+        cropImg.src = objectUrl;
+        cropRoot.hidden = false;
+        cropRoot.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('of-logo-crop-open');
+
+        cropper = new Cropper(cropImg, {
+            aspectRatio: 1,
+            viewMode: 1,
+            dragMode: 'move',
+            autoCropArea: 1,
+            responsive: true,
+            background: false,
+            guides: true,
+            center: true,
+            highlight: false,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+            ready() {
+                updateZoomLabel();
+            },
+            zoom() {
+                updateZoomLabel();
+            },
         });
+    }
 
-        document.addEventListener('click', (e) => {
-            const btn = e.target.closest('.password-toggle');
-            if (!btn) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const targetId = btn.getAttribute('data-password-target') || btn.getAttribute('data-target');
-            const input = targetId ? document.getElementById(targetId) : null;
-            if (!input) return;
-            const show = (input.getAttribute('type') || input.type) === 'password';
-            input.setAttribute('type', show ? 'text' : 'password');
-            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-            btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+    async function applyCrop() {
+        if (!cropper || !activePicker) return;
+        const canvas = cropper.getCroppedCanvas({
+            width: 512,
+            height: 512,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+        });
+        if (!canvas) return;
+
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 0.95));
+        if (!blob) return;
+
+        const file = new File([blob], 'agency_logo.png', { type: 'image/png' });
+        const input = activePicker.querySelector('[data-of-logo-input]');
+        if (input) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+        }
+        activePicker.dataset.hasNewFile = '1';
+        const previewUrl = URL.createObjectURL(blob);
+        setLogoPreview(activePicker, previewUrl);
+        const clearBtn = activePicker.querySelector('[data-of-logo-clear]');
+        if (clearBtn) clearBtn.hidden = false;
+        closeCrop();
+    }
+
+    document.querySelectorAll('[data-of-logo-picker]').forEach((picker) => {
+        picker.querySelector('[data-of-logo-pick]')?.addEventListener('click', () => {
+            activePicker = picker;
+            sourceInput.click();
+        });
+        picker.querySelector('[data-of-logo-clear]')?.addEventListener('click', () => {
+            clearLogoFile(picker);
         });
     });
+
+    sourceInput.addEventListener('change', () => {
+        const file = sourceInput.files && sourceInput.files[0];
+        if (!file || !activePicker) return;
+        if (!file.type.startsWith('image/')) {
+            if (window.ofToast) window.ofToast('Please choose an image file.', 'warning');
+            return;
+        }
+        openCrop(file, activePicker);
+    });
+
+    cropRoot?.querySelectorAll('[data-of-logo-crop-cancel]').forEach((btn) => {
+        btn.addEventListener('click', closeCrop);
+    });
+    cropRoot?.querySelector('[data-of-logo-crop-apply]')?.addEventListener('click', () => {
+        applyCrop().catch(() => {
+            if (window.ofToast) window.ofToast('Could not crop logo.', 'danger');
+        });
+    });
+    cropRoot?.querySelectorAll('[data-of-logo-zoom]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!cropper) return;
+            cropper.zoom(Number(btn.getAttribute('data-of-logo-zoom')) || 0);
+            updateZoomLabel();
+        });
+    });
+    cropRoot?.querySelectorAll('[data-of-logo-rotate]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!cropper) return;
+            cropper.rotate(Number(btn.getAttribute('data-of-logo-rotate')) || 0);
+        });
+    });
+    cropRoot?.querySelector('[data-of-logo-reset]')?.addEventListener('click', () => {
+        if (!cropper) return;
+        cropper.reset();
+        updateZoomLabel();
+    });
+    cropRoot?.addEventListener('click', (e) => {
+        if (e.target === cropRoot) closeCrop();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && cropRoot && !cropRoot.hidden) {
+            e.preventDefault();
+            closeCrop();
+        }
+    });
+
+    document.querySelectorAll('.edit-user-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.getElementById('edit_user_id').value = btn.getAttribute('data-id');
+            document.getElementById('edit_name').value = btn.getAttribute('data-name');
+            document.getElementById('edit_email').value = btn.getAttribute('data-email');
+            document.getElementById('edit_phone').value = btn.getAttribute('data-phone');
+            document.getElementById('edit_agency_name').value = btn.getAttribute('data-agency-name') || '';
+            document.getElementById('edit_agency_address').value = btn.getAttribute('data-agency-address') || '';
+            document.getElementById('edit_agency_phone').value = btn.getAttribute('data-agency-phone') || '';
+            document.getElementById('edit_agency_email').value = btn.getAttribute('data-agency-email') || '';
+            resetPasswordToggle('edit_password');
+
+            const editPicker = document.querySelector('[data-of-logo-picker="edit"]');
+            if (editPicker) {
+                const logoUrl = btn.getAttribute('data-agency-logo') || '';
+                editPicker.dataset.existingLogo = logoUrl;
+                delete editPicker.dataset.hasNewFile;
+                const input = editPicker.querySelector('[data-of-logo-input]');
+                if (input) input.value = '';
+                setLogoPreview(editPicker, logoUrl);
+                const clearBtn = editPicker.querySelector('[data-of-logo-clear]');
+                if (clearBtn) clearBtn.hidden = true;
+            }
+        });
+    });
+
+    document.getElementById('createUserModal')?.addEventListener('hidden.bs.modal', () => {
+        const createPicker = document.querySelector('[data-of-logo-picker="create"]');
+        if (createPicker) {
+            delete createPicker.dataset.existingLogo;
+            clearLogoFile(createPicker);
+        }
+        resetPasswordToggle('create_password');
+    });
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.password-toggle');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const targetId = btn.getAttribute('data-password-target') || btn.getAttribute('data-target');
+        const input = targetId ? document.getElementById(targetId) : null;
+        if (!input) return;
+        const show = (input.getAttribute('type') || input.type) === 'password';
+        input.setAttribute('type', show ? 'text' : 'password');
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        btn.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+    });
+});
 </script>
 {% endblock %}

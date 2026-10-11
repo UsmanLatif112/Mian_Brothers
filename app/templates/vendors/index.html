@@ -257,7 +257,7 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+(function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
     document.querySelectorAll('.edit-vendor-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.getElementById('edit_vendor_id').value = btn.dataset.id;

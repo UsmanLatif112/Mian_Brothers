@@ -731,7 +731,7 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+(function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
     const modalEl = document.getElementById('addInventoryModal');
     const categorySelect = document.getElementById('category');
     const form = document.getElementById('add-item-form');

@@ -216,7 +216,7 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
         const editButtons = document.querySelectorAll('.edit-user-btn');
         editButtons.forEach(btn => {
             btn.addEventListener('click', () => {

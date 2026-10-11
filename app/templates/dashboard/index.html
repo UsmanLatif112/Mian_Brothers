@@ -274,7 +274,7 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+(function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
     const insights = OctaneCharts.parseJsonScript('dash-insights-json') || {};
     const empty = { labels: ['No data'], values: [1] };
 

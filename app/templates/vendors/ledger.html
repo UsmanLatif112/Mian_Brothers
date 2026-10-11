@@ -91,7 +91,7 @@
 
 <script type="application/json" id="vendorLedgerPie-json">{{ chart_series | tojson }}</script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+(function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
     const boot = () => {
         if (!window.OctaneCharts || !window.Chart) return setTimeout(boot, 40);
         const data = OctaneCharts.parseJsonScript('vendorLedgerPie-json') || {};
