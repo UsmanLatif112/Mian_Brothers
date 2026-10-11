@@ -7,6 +7,8 @@
 
     const MAX_MS = 8000;
     let safetyTimer = null;
+    let visitPending = false;
+    let submitPending = false;
 
     function clearSafety() {
         if (safetyTimer) {
@@ -35,6 +37,8 @@
 
     function hideNavLoader(force) {
         clearSafety();
+        visitPending = false;
+        submitPending = false;
         document.documentElement.classList.remove('of-loading', 'of-leaving');
         if (window.ofLoader && typeof window.ofLoader.hide === 'function') {
             window.ofLoader.hide(!!force);
@@ -56,12 +60,20 @@
     });
 
     document.addEventListener('turbo:before-visit', () => {
-        showNavLoader('Loading…');
+        visitPending = true;
+        showNavLoader(submitPending ? 'Saving…' : 'Loading…');
     });
 
     document.addEventListener('turbo:before-fetch-request', (event) => {
         const headers = event.detail.fetchOptions.headers;
         headers.Accept = 'text/html, application/xhtml+xml';
+        const method = String(event.detail.fetchOptions.method || 'GET').toUpperCase();
+        if (method !== 'GET' && method !== 'HEAD') {
+            submitPending = true;
+            showNavLoader('Saving…');
+            // Avoid double-count with main.js ofFetch wrapper
+            event.detail.fetchOptions.ofSilent = true;
+        }
     });
 
     document.addEventListener('turbo:load', () => {
@@ -78,10 +90,14 @@
     });
 
     document.addEventListener('turbo:submit-start', () => {
+        submitPending = true;
         showNavLoader('Saving…');
     });
 
-    document.addEventListener('turbo:submit-end', () => {
+    document.addEventListener('turbo:submit-end', (event) => {
+        const ok = !!(event.detail && event.detail.success);
+        // Successful saves usually navigate / re-render — keep loader until turbo:load
+        if (ok || visitPending) return;
         hideNavLoader(true);
     });
 

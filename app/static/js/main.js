@@ -715,11 +715,18 @@ window.ofBootUi = function ofBootUi() {
         if (method === 'get' || form.dataset.allowMultiSubmit === '1') msg = 'Loading…';
         if (/delete|remove/.test(action) || actionVal === 'delete') msg = 'Deleting…';
         if (form.dataset.busyLabel) msg = form.dataset.busyLabel;
-        // Turbo owns navigation loaders; avoid full-page showNav handoff
-        if (window.__ofTurboNav || window.Turbo) return;
-        // Full POST/GET navigations keep the loader on the next page
-        if (method !== 'dialog') window.ofLoader.showNav(msg);
-        else window.ofLoader.show(msg);
+
+        const turboOff = form.getAttribute('data-turbo') === 'false';
+        const hasTurbo = !!(window.__ofTurboNav || window.Turbo);
+
+        // Full-page submit (no Turbo / opted out): keep loader across reload
+        if (turboOff || !hasTurbo) {
+            if (method !== 'dialog') window.ofLoader.showNav(msg);
+            else window.ofLoader.show(msg);
+            return;
+        }
+        // Turbo Drive: show in-app loader immediately (turbo-nav keeps it until page settles)
+        window.ofLoader.show(msg);
     }
 
     document.addEventListener('submit', (e) => {
