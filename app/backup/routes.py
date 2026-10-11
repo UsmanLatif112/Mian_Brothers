@@ -19,7 +19,7 @@ from sqlalchemy import MetaData, insert, inspect, text
 
 from app.backup import backup_bp
 from app.decorators import role_required
-from app.models import db
+from app.models import BackupLog, db
 from app.tenancy import is_super_admin, is_agency_admin
 
 BACKUP_PREFIX = 'Mianbrothers'
@@ -235,20 +235,12 @@ def create_agency_backup_file(agency_id):
     return filename
 
 
-def restore_full_backup_file(filename):
-    """Replace entire database contents with the selected full backup."""
-    if not SAFE_FULL_BACKUP_NAME.match(filename):
-        raise ValueError('Invalid backup file name.')
-
-    path = os.path.join(_backup_dir(), filename)
-    if not os.path.isfile(path):
-        raise FileNotFoundError('Backup file not found.')
-
-    with open(path, 'r', encoding='utf-8') as fh:
-        payload = json.load(fh)
-
+def restore_full_from_payload(payload):
+    """Replace entire database contents from a full-backup JSON payload."""
+    if not isinstance(payload, dict):
+        raise ValueError('Invalid backup file.')
     if payload.get('scope') == 'agency':
-        raise ValueError('This is an agency backup. Use agency restore, or pick a full backup.')
+        raise ValueError('This is an agency backup. Use an agency account to restore it.')
 
     tables_data = payload.get('tables') or {}
     if not tables_data:
@@ -285,20 +277,11 @@ def restore_full_backup_file(filename):
     db.session.remove()
 
 
-def restore_agency_backup_file(filename, agency_id):
-    """Replace only one agency's data from an agency-scoped backup."""
+def restore_agency_from_payload(payload, agency_id):
+    """Replace only one agency's data from an agency-scoped JSON payload."""
     agency_id = int(agency_id)
-    meta = _parse_backup_meta(filename, 'agency')
-    if meta is None or meta['agency_id'] != agency_id:
-        raise ValueError('Invalid agency backup file for this agency.')
-
-    path = os.path.join(_backup_dir(agency_id), filename)
-    if not os.path.isfile(path):
-        raise FileNotFoundError('Backup file not found.')
-
-    with open(path, 'r', encoding='utf-8') as fh:
-        payload = json.load(fh)
-
+    if not isinstance(payload, dict):
+        raise ValueError('Invalid backup file.')
     if payload.get('scope') != 'agency':
         raise ValueError('Not an agency backup file.')
     if int(payload.get('agency_id') or 0) != agency_id:
@@ -329,7 +312,6 @@ def restore_agency_backup_file(filename, agency_id):
         else:
             conn.execute(text('SET FOREIGN_KEY_CHECKS = 0'))
 
-        # Delete tenant rows for this agency (children first)
         known = set(inspector.get_table_names())
         reflected = [t.name for t in reversed(metadata.sorted_tables)]
         for table_name in reflected:
@@ -343,7 +325,6 @@ def restore_agency_backup_file(filename, agency_id):
                 {'aid': agency_id},
             )
 
-        # Update agency profile from backup (keep same id)
         agency_info = tables_data.get('agencies') or {}
         agency_rows = agency_info.get('rows') or []
         if agency_rows and 'agencies' in metadata.tables:
@@ -360,7 +341,6 @@ def restore_agency_backup_file(filename, agency_id):
                     params,
                 )
 
-        # Insert remaining tables (skip agencies — already updated)
         insert_data = {k: v for k, v in tables_data.items() if k != 'agencies'}
         _insert_tables(conn, metadata, insert_data)
 
@@ -370,6 +350,58 @@ def restore_agency_backup_file(filename, agency_id):
             conn.execute(text('SET FOREIGN_KEY_CHECKS = 1'))
 
     db.session.remove()
+
+
+def restore_full_backup_file(filename):
+    """Replace entire database from a server-side full backup file."""
+    if not SAFE_FULL_BACKUP_NAME.match(filename):
+        raise ValueError('Invalid backup file name.')
+    path = os.path.join(_backup_dir(), filename)
+    if not os.path.isfile(path):
+        raise FileNotFoundError('Backup file not found.')
+    with open(path, 'r', encoding='utf-8') as fh:
+        payload = json.load(fh)
+    restore_full_from_payload(payload)
+
+
+def restore_agency_backup_file(filename, agency_id):
+    """Replace one agency from a server-side agency backup file."""
+    agency_id = int(agency_id)
+    meta = _parse_backup_meta(filename, 'agency')
+    if meta is None or meta['agency_id'] != agency_id:
+        raise ValueError('Invalid agency backup file for this agency.')
+    path = os.path.join(_backup_dir(agency_id), filename)
+    if not os.path.isfile(path):
+        raise FileNotFoundError('Backup file not found.')
+    with open(path, 'r', encoding='utf-8') as fh:
+        payload = json.load(fh)
+    restore_agency_from_payload(payload, agency_id)
+
+
+def _log_backup_event(*, filename, scope, action, size_bytes=None, agency_id=None):
+    entry = BackupLog(
+        user_id=current_user.id,
+        agency_id=agency_id,
+        filename=filename,
+        scope=scope,
+        action=action,
+        size_bytes=size_bytes,
+        created_at=datetime.utcnow(),
+    )
+    db.session.add(entry)
+    db.session.commit()
+    return entry
+
+
+def _user_backup_logs(search_q=''):
+    """Logs for the current admin only (super_admin / agency admin)."""
+    q = BackupLog.query.filter_by(user_id=current_user.id)
+    if is_agency_admin() and current_user.agency_id and not is_super_admin():
+        q = q.filter_by(agency_id=current_user.agency_id)
+    if search_q:
+        like = f'%{search_q}%'
+        q = q.filter(BackupLog.filename.ilike(like))
+    return q.order_by(BackupLog.created_at.desc()).limit(100).all()
 
 
 def _insert_tables(conn, metadata, tables_data):
@@ -433,16 +465,27 @@ def index():
 
     agency_id = current_user.agency_id if mode == 'agency' else None
     _cleanup_old_backups(mode, agency_id)
-    backups = _list_backups(mode, agency_id)
-    search_q = (request.args.get('search') or '').strip().lower()
-    if search_q:
-        backups = [
-            b for b in backups
-            if search_q in str(b.get('filename') or '').lower()
-        ]
+    search_q = (request.args.get('search') or '').strip()
+    logs = _user_backup_logs(search_q)
+    last_create = next((L for L in logs if L.action == 'create'), None)
+
+    # Attach whether server still has the file (optional re-download)
+    enriched = []
+    for entry in logs:
+        if entry.scope == 'agency' and entry.agency_id:
+            path = os.path.join(_backup_dir(entry.agency_id), entry.filename)
+        else:
+            path = os.path.join(_backup_dir(), entry.filename)
+        enriched.append({
+            'entry': entry,
+            'has_file': os.path.isfile(path) if entry.action == 'create' else False,
+            'size_kb': round((entry.size_bytes or 0) / 1024, 1) if entry.size_bytes else None,
+        })
+
     return render_template(
         'backup/index.html',
-        backups=backups,
+        logs=enriched,
+        last_backup=last_create,
         retention_days=BACKUP_RETENTION_DAYS,
         search=search_q,
         backup_mode=mode,
@@ -464,6 +507,7 @@ def create():
             _cleanup_old_backups('full')
             filename = create_full_backup_file()
             path = os.path.join(_backup_dir(), filename)
+            agency_id = None
             scope_label = 'Full app'
         else:
             agency_id = current_user.agency_id
@@ -471,6 +515,15 @@ def create():
             filename = create_agency_backup_file(agency_id)
             path = os.path.join(_backup_dir(agency_id), filename)
             scope_label = 'Agency'
+
+        size_bytes = os.path.getsize(path) if os.path.isfile(path) else None
+        _log_backup_event(
+            filename=filename,
+            scope=mode,
+            action='create',
+            size_bytes=size_bytes,
+            agency_id=agency_id,
+        )
 
         if _wants_file_response() and os.path.isfile(path):
             return _send_backup_file(path, filename)
@@ -496,6 +549,16 @@ def download(filename):
         flash('Backup is not available for your account.', 'danger')
         return redirect(url_for('backup.index'))
 
+    # Only allow re-download of files this user created
+    owned = BackupLog.query.filter_by(
+        user_id=current_user.id,
+        filename=filename,
+        action='create',
+    ).first()
+    if not owned:
+        flash('Backup not found in your logs.', 'danger')
+        return redirect(url_for('backup.index'))
+
     meta = _parse_backup_meta(filename, mode)
     if meta is None:
         flash('Invalid backup file.', 'danger')
@@ -510,7 +573,7 @@ def download(filename):
         path = os.path.join(_backup_dir(), filename)
 
     if not os.path.isfile(path):
-        flash('Backup file not found.', 'danger')
+        flash('Backup file no longer on server. Use your downloaded copy to restore.', 'warning')
         return redirect(url_for('backup.index'))
     return _send_backup_file(path, filename)
 
@@ -524,31 +587,56 @@ def restore():
         flash('Restore is not available for your account.', 'danger')
         return redirect(url_for('dashboard.index'))
 
-    filename = (request.form.get('backup_file') or '').strip()
     confirm = (request.form.get('confirm_restore') or '').strip().lower()
-
-    if not filename:
-        flash('Please select a backup to restore.', 'danger')
-        return redirect(url_for('backup.index'))
-
     if confirm != 'yes':
         flash('Restore cancelled. You must confirm before restoring.', 'warning')
         return redirect(url_for('backup.index'))
 
+    upload = request.files.get('backup_upload')
+    if not upload or not (upload.filename or '').strip():
+        flash('Please choose a backup JSON file from your computer.', 'danger')
+        return redirect(url_for('backup.index'))
+
+    filename = os.path.basename(upload.filename).strip()
+    if not filename.lower().endswith('.json'):
+        flash('Backup must be a .json file.', 'danger')
+        return redirect(url_for('backup.index'))
+
+    try:
+        raw = upload.read()
+        payload = json.loads(raw.decode('utf-8'))
+    except Exception:
+        flash('Could not read backup file. Choose a valid OctaneFlow JSON backup.', 'danger')
+        return redirect(url_for('backup.index'))
+
     try:
         if mode == 'full':
-            restore_full_backup_file(filename)
+            restore_full_from_payload(payload)
             flash(
                 f'Full data restored from {filename}. Previous live data has been replaced.',
                 'success',
             )
+            agency_id = None
         else:
-            restore_agency_backup_file(filename, current_user.agency_id)
+            restore_agency_from_payload(payload, current_user.agency_id)
             flash(
                 f'Agency data restored from {filename}. '
                 f'Only your agency was replaced — other agencies were not changed.',
                 'success',
             )
+            agency_id = current_user.agency_id
+
+        _log_backup_event(
+            filename=filename,
+            scope=mode,
+            action='restore',
+            size_bytes=len(raw) if raw is not None else None,
+            agency_id=agency_id,
+        )
     except Exception as exc:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         flash(f'Restore failed: {exc}', 'danger')
     return redirect(url_for('backup.index'))

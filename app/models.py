@@ -574,3 +574,22 @@ class ItemPriceLog(db.Model):
 
     def __repr__(self):
         return f"<ItemPriceLog item={self.other_item_id} price={self.sale_price}>"
+
+
+class BackupLog(db.Model):
+    """Per-user backup / restore activity (super_admin & agency admin)."""
+    __tablename__ = 'backup_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    agency_id = db.Column(db.Integer, db.ForeignKey('agencies.id'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    scope = db.Column(db.String(20), nullable=False, default='full')  # full | agency
+    action = db.Column(db.String(20), nullable=False, default='create')  # create | restore
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    def __repr__(self):
+        return f"<BackupLog {self.action} {self.filename}>"
