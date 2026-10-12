@@ -483,6 +483,13 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     diesel_total = diesel_cash + diesel_credit
     diesel_total_liters = diesel_cash_liters + diesel_credit_liters
 
+    def _expense_is_settled(row):
+        """Treat settled_date as source of truth (flag can be wrong on some DBs)."""
+        if getattr(row, 'settled_date', None):
+            return True
+        flag = getattr(row, 'is_settled', False)
+        return bool(flag) and str(flag).lower() not in ('0', 'false', 'none')
+
     expenses = apply_agency_filter(
         Expense.query.filter(
             Expense.expense_date >= start,
@@ -492,21 +499,25 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     ).order_by(Expense.expense_date.desc(), Expense.id.desc()).all()
     expense_total = sum(float(x.amount or 0) for x in expenses)
     unsettled_expense_total = sum(
-        float(x.amount or 0) for x in expenses if not getattr(x, 'is_settled', False)
+        float(x.amount or 0) for x in expenses if not _expense_is_settled(x)
     )
     settled_expense_total = expense_total - unsettled_expense_total
 
     # Money returned to till on settle date (may differ from expense_date).
+    # Do not rely only on is_settled IS TRUE — some SQLite/MySQL rows keep
+    # settled_date but a non-true boolean, which used to drop the cash return.
     expense_settlements = apply_agency_filter(
         Expense.query.filter(
-            Expense.is_settled.is_(True),
             Expense.settled_date.isnot(None),
             Expense.settled_date >= start,
             Expense.settled_date <= end,
         ),
         Expense,
     ).order_by(Expense.settled_date.desc(), Expense.id.desc()).all()
+    expense_settlements = [x for x in expense_settlements if _expense_is_settled(x)]
     expense_return_total = sum(float(x.amount or 0) for x in expense_settlements)
+    # Net till effect of expenses in this period (0 when out + get-back same day).
+    expense_net = expense_total - expense_return_total
 
     payments = apply_agency_filter(
         Payment.query.filter(
@@ -575,12 +586,13 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     total_receiving = deposits
 
     # Cash in hand = cash sales + previous balance + customer receiving
-    #                − customer cash loans − expenses + settled returns.
+    #                − customer cash loans − net expenses (out − settled returns).
+    # Same-day expense + get-back → expense_net 0 (cash case / wash).
     # Credit sale amounts are shown separately and do not reduce this formula.
     cash_in_hand = (
         petrol_cash + diesel_cash + other_cash + ft_cash
         + previous_balance + total_receiving
-        - loans - expense_total + expense_return_total
+        - loans - expense_net
     )
     # Same as cash in hand, but expenses (and expense settles) excluded.
     cash_in_hand_wo_expense = (
@@ -677,6 +689,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'unsettled_expense_total': unsettled_expense_total,
         'settled_expense_total': settled_expense_total,
         'expense_return_total': expense_return_total,
+        'expense_net': expense_net,
         'expenses': expenses,
         'expense_settlements': expense_settlements,
         'payments_total': payments_total,
@@ -1053,7 +1066,7 @@ def build_period_cash_entries(stats):
         item_name = exp.name
         if desc:
             item_name = f'{item_name} — {desc}'
-        is_settled = bool(getattr(exp, 'is_settled', False))
+        is_settled = bool(getattr(exp, 'settled_date', None) or getattr(exp, 'is_settled', False))
         rows.append(SimpleNamespace(
             id=exp.id,
             sale_date=exp.expense_date,
@@ -1136,6 +1149,7 @@ def build_cash_journal_summary(stats):
         'cash_in_hand': float(stats.get('cash_in_hand') or 0),
         'expense_total': float(stats.get('expense_total') or 0),
         'expense_return_total': float(stats.get('expense_return_total') or 0),
+        'expense_net': float(stats.get('expense_net') or 0),
         'purchase_total': float(stats.get('purchase_total') or 0),
         'vendor_payments_total': float(stats.get('vendor_payments_total') or 0),
         'paid_sale_cash': paid_sale_cash,

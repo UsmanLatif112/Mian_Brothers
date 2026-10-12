@@ -148,13 +148,15 @@ def index():
             Expense,
         ).scalar() or 0
     )
+    # Unsettled = no settle date and flag not set (settled_date is source of truth)
     unsettled_total = float(
         apply_agency_filter(
             db.session.query(func.coalesce(func.sum(Expense.amount), 0))
             .filter(
                 Expense.expense_date >= start,
                 Expense.expense_date <= end,
-                Expense.is_settled.is_(False),
+                Expense.settled_date.is_(None),
+                db.or_(Expense.is_settled.is_(False), Expense.is_settled.is_(None)),
             ),
             Expense,
         ).scalar() or 0

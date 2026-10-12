@@ -292,6 +292,10 @@
 
 /* In-app confirm / alert / prompt — no browser dialogs */
 (function initOfConfirm() {
+    // Turbo re-evaluates body scripts; never stack duplicate submit/confirm handlers
+    if (window.__ofConfirmInit) return;
+    window.__ofConfirmInit = true;
+
     let resolvePromise = null;
     let mode = 'confirm'; // confirm | alert | prompt
     let modalInstance = null;
@@ -299,7 +303,10 @@
     function getModal() {
         const el = document.getElementById('ofConfirmModal');
         if (!el || typeof bootstrap === 'undefined') return null;
-        if (!modalInstance) modalInstance = bootstrap.Modal.getOrCreateInstance(el);
+        // Permanent modal can outlive a stale Bootstrap instance after body swaps
+        if (!modalInstance || modalInstance._element !== el) {
+            modalInstance = bootstrap.Modal.getOrCreateInstance(el);
+        }
         return { el, modal: modalInstance };
     }
 
@@ -485,12 +492,9 @@
 
         const message = form.getAttribute('data-confirm');
         if (!message) return;
-        if (form.dataset.ofConfirmed === '1') {
-            delete form.dataset.ofConfirmed;
-            return;
-        }
 
         e.preventDefault();
+        e.stopPropagation();
         e.stopImmediatePropagation();
 
         const title = form.getAttribute('data-confirm-title') || 'Confirm';
@@ -499,8 +503,31 @@
 
         window.ofConfirm({ title, message, confirmLabel, danger }).then((ok) => {
             if (!ok) return;
-            form.dataset.ofConfirmed = '1';
-            window.ofSubmitForm(form);
+            // Form may have been replaced by a Turbo visit while the modal was open
+            if (!form.isConnected) return;
+            delete form.dataset.submitting;
+            // Drop data-confirm for the real submit so any stacked capture listeners let it through
+            form.removeAttribute('data-confirm');
+            if (window.ofLoader && form.dataset.noLoader !== '1') {
+                const busy = form.getAttribute('data-busy-label')
+                    || (/delete/i.test(message) ? 'Deleting…' : 'Saving…');
+                window.ofLoader.show(busy);
+            }
+            const restoreConfirm = () => {
+                if (form.isConnected && !form.getAttribute('data-confirm')) {
+                    form.setAttribute('data-confirm', message);
+                }
+            };
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+            } else if (window.ofSubmitForm) {
+                window.ofSubmitForm(form);
+            } else {
+                HTMLFormElement.prototype.submit.call(form);
+            }
+            // If navigation fails or is cancelled, put confirm back for the next attempt
+            queueMicrotask(restoreConfirm);
+            setTimeout(restoreConfirm, 800);
         });
     }, true);
 })();
@@ -778,15 +805,12 @@ window.ofBootUi = function ofBootUi() {
         if (form.dataset.noLoader !== '1') showFormLoader(form);
 
         const turboOff = form.getAttribute('data-turbo') === 'false';
-        if (!turboOff && window.Turbo) {
-            if (window.Turbo.navigator && typeof window.Turbo.navigator.submitForm === 'function') {
-                window.Turbo.navigator.submitForm(form);
-                return;
-            }
-            if (typeof form.requestSubmit === 'function') {
-                form.requestSubmit();
-                return;
-            }
+        // Prefer requestSubmit — Turbo listens to the submit event.
+        // Do NOT call Turbo.navigator.submitForm → form.submit() (hits our patch → loop).
+        if (!turboOff && window.Turbo && typeof form.requestSubmit === 'function') {
+            delete form.dataset.submitting;
+            form.requestSubmit();
+            return;
         }
 
         if (form.dataset.submitting === '1') return;

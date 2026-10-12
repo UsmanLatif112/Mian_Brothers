@@ -4,6 +4,8 @@
  */
 (function initTurboNav() {
     if (!window.Turbo) return;
+    if (window.__ofTurboNavBound) return;
+    window.__ofTurboNavBound = true;
 
     const MAX_MS = 45000;
     let safetyTimer = null;

@@ -297,25 +297,34 @@ def ledger(customer_id):
             source_type = (request.form.get('source_type') or '').strip().lower()
             source_id = request.form.get('source_id')
             try:
+                sid = int(source_id or 0)
+            except (TypeError, ValueError):
+                sid = 0
+            try:
+                if not sid:
+                    raise EntryError('Missing entry id.')
                 if source_type == 'payment':
-                    payment = Payment.query.filter_by(id=source_id, customer_id=customer.id).first()
+                    payment = Payment.query.filter_by(id=sid, customer_id=customer.id).first()
                     if not payment:
                         raise EntryError('Payment not found.')
                     delete_payment(payment)
                 elif source_type == 'credit_sale':
-                    cs = CreditSale.query.filter_by(id=source_id, customer_id=customer.id).first()
+                    cs = CreditSale.query.filter_by(id=sid, customer_id=customer.id).first()
                     if not cs:
                         raise EntryError('Entry not found.')
                     delete_credit_sale(cs)
                 elif source_type == 'legacy_sale':
                     raise EntryError('Legacy fuel sales cannot be deleted here.')
                 else:
-                    raise EntryError('Unknown entry type.')
+                    raise EntryError(f'Unknown entry type: {source_type or "(empty)"}.')
                 db.session.commit()
                 flash('Ledger entry deleted. Balance recalculated.', 'success')
             except EntryError as e:
                 db.session.rollback()
                 flash(str(e), 'danger')
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Could not delete entry: {e}', 'danger')
             return redirect(url_for('customers.ledger', customer_id=customer.id))
 
         # ---------- Advance / Loan ----------

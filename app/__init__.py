@@ -948,13 +948,19 @@ def ensure_expenses_schema():
     if 'settle_note' not in existing:
         alters.append("ALTER TABLE expenses ADD COLUMN settle_note VARCHAR(255) NULL")
 
-    if not alters:
-        return
-
     with db.engine.begin() as conn:
         for stmt in alters:
             conn.execute(text(stmt))
-    print("Upgraded expenses schema for settle / return-to-till.")
+        # Repair: settled_date set but flag still 0 → cash return was dropped from till
+        try:
+            conn.execute(text(
+                "UPDATE expenses SET is_settled = 1 "
+                "WHERE settled_date IS NOT NULL AND (is_settled = 0 OR is_settled IS NULL)"
+            ))
+        except Exception:
+            pass
+    if alters:
+        print("Upgraded expenses schema for settle / return-to-till.")
 
 
 def ensure_customers_schema():
