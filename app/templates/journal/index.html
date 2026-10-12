@@ -13,7 +13,7 @@
     <input type="hidden" name="end_date" value="{{ end_date }}">
     {% endif %}
     <input type="hidden" name="direction" value="{{ direction }}">
-    <input type="hidden" name="type" value="{{ entry_type }}">
+    <input type="hidden" name="entry_type" value="{{ entry_type }}">
 </form>
 {% endblock %}
 
@@ -36,7 +36,7 @@
         <input type="date" name="end_date" class="form-control form-control-custom topbar-filter-date" value="{{ end_date }}" aria-label="To">
         <button type="submit" class="btn btn-primary-custom topbar-filter-apply" title="Apply"><i class="bi bi-check-lg"></i></button>
     </div>
-    <select name="type" class="form-select form-control-custom topbar-filter-select topbar-filter-type" aria-label="Entry type" onchange="this.form.submit()">
+    <select name="entry_type" class="form-select form-control-custom topbar-filter-select topbar-filter-type" aria-label="Entry type" onchange="this.form.submit()">
         {% for value, label in type_choices %}
         <option value="{{ value }}" {% if entry_type == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -56,6 +56,9 @@
                 <div class="journal-range-chip">
                     <i class="bi bi-calendar3"></i>
                     <span>{{ start_date }} → {{ end_date }}</span>
+                    {% if working_date_active %}
+                    <span class="journal-working-date-hint" title="Period “Today” uses working date">· Working {{ working_date }}</span>
+                    {% endif %}
                 </div>
                 <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
                     <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
@@ -177,7 +180,7 @@
                 </tbody>
             </table>
         </div>
-        {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'direction': direction, 'type': entry_type, 'search': search} %}
+        {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'direction': direction, 'entry_type': entry_type, 'search': search} %}
             {% include "partials/pagination.html" %}
         {% endwith %}
     </div>

@@ -14,6 +14,36 @@ PERIOD_CHOICES = (
     ('custom', 'Custom Dates'),
 )
 
+WORKING_DATE_SESSION_KEY = 'working_date'
+
+
+def calendar_today():
+    """Wall-clock date (UTC)."""
+    return datetime.utcnow().date()
+
+
+def business_today():
+    """Operational “today” — working date from session, else calendar today."""
+    try:
+        from flask import has_request_context, session
+        if has_request_context():
+            raw = session.get(WORKING_DATE_SESSION_KEY)
+            if raw:
+                return datetime.strptime(str(raw)[:10], '%Y-%m-%d').date()
+    except (RuntimeError, ValueError, TypeError):
+        pass
+    return calendar_today()
+
+
+def set_working_date(day):
+    from flask import session
+    if day is None:
+        session.pop(WORKING_DATE_SESSION_KEY, None)
+        return
+    if isinstance(day, datetime):
+        day = day.date()
+    session[WORKING_DATE_SESSION_KEY] = day.isoformat()
+
 
 def earliest_activity_date():
     """Earliest business date across sales, meters, expenses, payments, purchases."""
@@ -24,7 +54,7 @@ def earliest_activity_date():
     )
     from app.tenancy import apply_agency_filter
 
-    today = datetime.utcnow().date()
+    today = business_today()
     candidates = []
 
     def _add(val):
@@ -57,8 +87,8 @@ def earliest_activity_date():
 
 
 def parse_form_date(raw, default=None):
-    """Parse YYYY-MM-DD from a form field; fall back to today (UTC) or default."""
-    today = datetime.utcnow().date()
+    """Parse YYYY-MM-DD from a form field; fall back to working date or default."""
+    today = business_today()
     if default is None:
         default = today
     raw = (raw or '').strip()
@@ -99,15 +129,15 @@ def datetime_from_date(d, hour=12):
     on one day stay separate and ordered in purchase logs.
     """
     now = datetime.utcnow()
-    if d == now.date():
+    if d == business_today():
         return datetime.combine(d, now.time().replace(microsecond=0))
     return datetime.combine(d, time(hour=hour, minute=0, second=0))
 
 
-def parse_period(args):
+def parse_period(args, default_period='all'):
     """Resolve start/end dates from request args. Returns (period, start_date, end_date)."""
-    today = datetime.utcnow().date()
-    period = (args.get('period') or 'all').strip().lower()
+    today = business_today()
+    period = (args.get('period') or default_period).strip().lower()
     if period not in dict(PERIOD_CHOICES):
         period = 'all'
 
@@ -709,6 +739,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'payments': payments,
         'cash_counts': cash_counts,
         'cash_taken_rows': cash_taken_rows(start, end),
+        'meter_rows': meter_rows,
         'start_date': start,
         'end_date': end,
     }
@@ -794,6 +825,8 @@ def build_period_cash_entries(stats):
     """
     from app.vendors.service import purchase_log_total
     from app.account.service import cash_taken_journal_rows, previous_balance_journal_row
+    from app.models import FuelPrice
+    from app.tenancy import apply_agency_filter
 
     entries = stats.get('entries') or []
     payments = stats.get('payments') or []
@@ -813,6 +846,43 @@ def build_period_cash_entries(stats):
     prev_row = previous_balance_journal_row(stats)
     if prev_row:
         rows.append(prev_row)
+
+    # Pump / meter cash sales (main fuel IN — not stored as CreditSale rows)
+    rate_as_of = build_fuel_rate_lookup(
+        apply_agency_filter(FuelPrice.query, FuelPrice, include_shared=True)
+    )
+    for r in stats.get('meter_rows') or []:
+        liters = float(getattr(r, 'liters_sold', 0) or 0)
+        if liters <= 0:
+            continue
+        stored = getattr(r, 'sale_rate', None)
+        rate = float(stored) if stored is not None else rate_as_of(
+            r.fuel_type_id, getattr(r, 'reading_date', None)
+        )
+        amt = liters * float(rate or 0)
+        if amt <= 0:
+            continue
+        ft = getattr(r, 'fuel_type', None)
+        fuel_name = (ft.name if ft else 'Fuel').strip()
+        rows.append(SimpleNamespace(
+            id=getattr(r, 'id', 0),
+            sale_date=getattr(r, 'reading_date', None),
+            entry_type='sale',
+            customer=None,
+            item_name=f'Pump · {fuel_name} {liters:,.2f} L @ PKR {rate:,.2f}/L',
+            liters=liters,
+            amount=amt,
+            discount=0,
+            amount_paid=amt,
+            overpayment=0,
+            credit_amount=0,
+            other_amount=0,
+            other_kind='none',
+            payment_status='paid',
+            cash_direction='in',
+            is_fuel=True,
+            other_item=None,
+        ))
 
     for e in entries:
         et = (getattr(e, 'entry_type', None) or 'sale').lower()

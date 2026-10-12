@@ -2,6 +2,11 @@
 <form method="GET" class="topbar-filters" id="period-filter-form" data-allow-multi-submit="1">
     {% if search is defined and search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
     {% if entry_type is defined and entry_type and entry_type != 'all' %}<input type="hidden" name="entry_type" value="{{ entry_type }}">{% endif %}
+    {% if show_working_date %}
+    <label class="topbar-working-date-label visually-hidden" for="topbar-working-date">Working date</label>
+    <input type="date" id="topbar-working-date" name="working_date" class="form-control form-control-custom topbar-filter-date topbar-working-date"
+           value="{{ working_date }}" aria-label="Working date" title="Working date — “Today” filters use this day">
+    {% endif %}
     <select name="period" id="period-select" class="form-select form-control-custom topbar-filter-select" aria-label="Period">
         {% for value, label in period_choices %}
         <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
@@ -34,5 +39,9 @@
         setCustom(isCustom);
         if (!isCustom) form.submit();
     });
+    const wd = document.getElementById('topbar-working-date');
+    if (wd) {
+        wd.addEventListener('change', () => form.submit());
+    }
 })();
 </script>

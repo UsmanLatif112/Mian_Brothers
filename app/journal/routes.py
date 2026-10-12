@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from flask import render_template, request
+from flask import redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app.journal import journal_bp
@@ -21,15 +21,25 @@ PER_PAGE = 25
 @journal_bp.route('/', methods=['GET'])
 @login_required
 def index():
-    # Default to today so the till view is actionable on open.
+    # Default to working-date “today” on first open (bookmarkable URL).
+    if not request.args:
+        return redirect(url_for(
+            'journal.index',
+            period='today',
+            direction='all',
+            entry_type='all',
+        ))
+
     args = request.args.to_dict(flat=True)
-    if 'period' not in request.args:
-        args['period'] = 'today'
-    period, start, end = parse_period(args)
+    period, start, end = parse_period(args, default_period='today')
     direction = (request.args.get('direction') or 'all').strip().lower()
     if direction not in dict(DIRECTION_FILTER_CHOICES):
         direction = 'all'
-    entry_type = (request.args.get('type') or 'all').strip().lower()
+    entry_type = (
+        request.args.get('entry_type')
+        or request.args.get('type')
+        or 'all'
+    ).strip().lower()
     if entry_type not in dict(TYPE_FILTER_CHOICES):
         entry_type = 'all'
 

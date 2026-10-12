@@ -19,4 +19,7 @@ if APP_ROOT not in sys.path:
 # Ensure relative paths / dotenv resolve from the app root
 os.chdir(APP_ROOT)
 
+# DB migrations are separate — never in create_app().
+# After schema changes: PYTHONPATH=. python scripts/migrate_schema.py
+
 from run import app as application

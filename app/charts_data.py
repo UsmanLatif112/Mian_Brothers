@@ -20,7 +20,8 @@ def _as_date(val):
 
 
 def daily_labels(days=14):
-    today = datetime.utcnow().date()
+    from app.utils import business_today
+    today = business_today()
     start = today - timedelta(days=days - 1)
     labels = []
     dates = []

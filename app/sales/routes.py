@@ -21,7 +21,8 @@ PER_PAGE = 15
 
 
 def _today():
-    return datetime.utcnow().date()
+    from app.utils import business_today
+    return business_today()
 
 
 def _fuel_rate(fuel_type_id, as_of_date=None):

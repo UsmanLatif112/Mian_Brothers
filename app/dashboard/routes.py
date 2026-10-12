@@ -9,34 +9,141 @@ from app.models import (
 from app.tenancy import apply_agency_filter
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
-    build_fuel_rate_lookup,
+    build_fuel_rate_lookup, business_today, calendar_today, set_working_date,
+    parse_form_date,
 )
 from datetime import datetime, timedelta
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload, load_only
 from types import SimpleNamespace
 import csv
 import io
 
 
 def get_cost_for_sale(fuel_type_id, sale_date):
+    """Latest fuel cost as-of date — one indexed lookup, not a full history load."""
+    end_dt = sale_date
+    if isinstance(sale_date, datetime):
+        end_dt = sale_date
+    else:
+        end_dt = datetime.combine(sale_date, datetime.max.time())
+
+    log = apply_agency_filter(
+        ItemPurchaseLog.query.filter(
+            ItemPurchaseLog.category == 'fuel',
+            ItemPurchaseLog.fuel_type_id == fuel_type_id,
+            ItemPurchaseLog.entry_date <= end_dt,
+        ),
+        ItemPurchaseLog,
+    ).order_by(ItemPurchaseLog.entry_date.desc()).first()
+    if log:
+        return float(log.cost_price or 0)
+
     latest_delivery = apply_agency_filter(
         StockEntry.query.filter(
             StockEntry.fuel_type_id == fuel_type_id,
-            StockEntry.entry_date <= sale_date
+            StockEntry.entry_date <= end_dt,
         ),
         StockEntry,
     ).order_by(StockEntry.entry_date.desc()).first()
-
     if latest_delivery:
-        return float(latest_delivery.cost_per_liter)
-
-    first_delivery = apply_agency_filter(
-        StockEntry.query.filter_by(fuel_type_id=fuel_type_id), StockEntry
-    ).first()
-    if first_delivery:
-        return float(first_delivery.cost_per_liter)
-
+        return float(latest_delivery.cost_per_liter or 0)
     return 0.0
+
+
+def _as_plain_date(val):
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val.date()
+    if isinstance(val, str):
+        try:
+            return datetime.strptime(val[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    return val
+
+
+def _fuel_cost_timeline(as_of_end):
+    """
+    Cost history per fuel_type_id up to as_of_end only (not the whole table forever).
+    Prefers purchase logs; falls back to stock entries for fuels with no logs.
+    """
+    from collections import defaultdict
+
+    end_dt = as_of_end
+    if not isinstance(as_of_end, datetime):
+        end_dt = datetime.combine(as_of_end, datetime.max.time())
+
+    fuel_costs = defaultdict(list)
+    for log in apply_agency_filter(
+        ItemPurchaseLog.query.filter(
+            ItemPurchaseLog.category == 'fuel',
+            ItemPurchaseLog.fuel_type_id.isnot(None),
+            ItemPurchaseLog.entry_date <= end_dt,
+        ).options(
+            load_only(
+                ItemPurchaseLog.id,
+                ItemPurchaseLog.fuel_type_id,
+                ItemPurchaseLog.entry_date,
+                ItemPurchaseLog.cost_price,
+                ItemPurchaseLog.agency_id,
+                ItemPurchaseLog.category,
+            )
+        ),
+        ItemPurchaseLog,
+    ).order_by(ItemPurchaseLog.entry_date.asc()).all():
+        d = _as_plain_date(log.entry_date)
+        if d is None:
+            continue
+        fuel_costs[log.fuel_type_id].append((d, float(log.cost_price or 0)))
+
+    fuels_with_logs = set(fuel_costs.keys())
+    for se in apply_agency_filter(
+        StockEntry.query.filter(
+            StockEntry.entry_date <= end_dt,
+            StockEntry.fuel_type_id.isnot(None),
+        ).options(
+            load_only(
+                StockEntry.id,
+                StockEntry.fuel_type_id,
+                StockEntry.entry_date,
+                StockEntry.cost_per_liter,
+                StockEntry.agency_id,
+            )
+        ),
+        StockEntry,
+    ).order_by(StockEntry.entry_date.asc()).all():
+        if se.fuel_type_id in fuels_with_logs:
+            continue
+        d = _as_plain_date(se.entry_date)
+        if d is None:
+            continue
+        fuel_costs[se.fuel_type_id].append((d, float(se.cost_per_liter or 0)))
+
+    def fuel_cost_as_of(fuel_type_id, sale_date):
+        sale_date = _as_plain_date(sale_date)
+        entries = fuel_costs.get(fuel_type_id) or []
+        best = None
+        for d, cost in entries:
+            if sale_date and d <= sale_date:
+                best = cost
+            else:
+                break
+        if best is not None:
+            return best
+        return entries[0][1] if entries else 0.0
+
+    return fuel_cost_as_of
+
+
+def _other_item_costs():
+    """id → cost_price only (no full ORM hydration of every column)."""
+    rows = apply_agency_filter(
+        db.session.query(OtherItem.id, OtherItem.cost_price),
+        OtherItem,
+    ).all()
+    return {oid: float(cost or 0) for oid, cost in rows}
 
 
 def _build_meter_trend(start, end):
@@ -57,65 +164,9 @@ def _build_meter_trend(start, end):
 
     # Selling rates as-of each reading date (not latest only)
     rate_as_of = build_fuel_rate_lookup(FuelPrice)
-
-    # Fuel cost timeline: (date, cost) ascending per fuel_type_id
-    # Prefer purchase logs; fall back to legacy stock_entries per fuel type.
-    fuel_costs = defaultdict(list)
-    for log in apply_agency_filter(
-        ItemPurchaseLog.query.filter(
-            ItemPurchaseLog.category == 'fuel',
-            ItemPurchaseLog.fuel_type_id.isnot(None),
-        ),
-        ItemPurchaseLog,
-    ).order_by(ItemPurchaseLog.entry_date.asc()).all():
-        ed = log.entry_date
-        d = ed.date() if isinstance(ed, datetime) else ed
-        if d is None:
-            continue
-        fuel_costs[log.fuel_type_id].append((d, float(log.cost_price or 0)))
-
-    fuels_with_purchase_logs = set(fuel_costs.keys())
-    for se in apply_agency_filter(StockEntry.query, StockEntry).order_by(
-        StockEntry.entry_date.asc()
-    ).all():
-        if not se.fuel_type_id or se.fuel_type_id in fuels_with_purchase_logs:
-            continue
-        ed = se.entry_date
-        d = ed.date() if isinstance(ed, datetime) else ed
-        if d is None:
-            continue
-        fuel_costs[se.fuel_type_id].append((d, float(se.cost_per_liter or 0)))
-
-    def as_date(val):
-        if val is None:
-            return None
-        if isinstance(val, datetime):
-            return val.date()
-        if isinstance(val, str):
-            try:
-                return datetime.strptime(val[:10], '%Y-%m-%d').date()
-            except ValueError:
-                return None
-        return val
-
-    def fuel_cost_as_of(fuel_type_id, sale_date):
-        sale_date = as_date(sale_date)
-        entries = fuel_costs.get(fuel_type_id) or []
-        best = None
-        for d, cost in entries:
-            if sale_date and d <= sale_date:
-                best = cost
-            else:
-                break
-        if best is not None:
-            return best
-        return entries[0][1] if entries else 0.0
-
-    # Other/FT current cost by item id
-    item_costs = {
-        oi.id: float(oi.cost_price or 0)
-        for oi in apply_agency_filter(OtherItem.query, OtherItem).all()
-    }
+    fuel_cost_as_of = _fuel_cost_timeline(end)
+    item_costs = _other_item_costs()
+    as_date = _as_plain_date
 
     day_sales = defaultdict(float)
     day_cogs = defaultdict(float)
@@ -316,7 +367,19 @@ def _models_ns():
 @dashboard_bp.route('/')
 @login_required
 def index():
-    period, start, end = parse_period(request.args)
+    wd_raw = (request.args.get('working_date') or '').strip()
+    if wd_raw:
+        set_working_date(parse_form_date(wd_raw))
+        args = request.args.to_dict(flat=True)
+        args.pop('working_date', None)
+        if 'period' not in request.args:
+            args['period'] = 'today'
+        return redirect(url_for('dashboard.index', **args))
+
+    if not request.args:
+        return redirect(url_for('dashboard.index', period='today'))
+
+    period, start, end = parse_period(request.args, default_period='today')
     stats = compute_period_stats(
         start, end, _models_ns(),
         include_opening_credit=(period == 'all'),
@@ -330,12 +393,18 @@ def index():
     total_expenses_profit = meter_trend['total_expenses']
 
     DRY_THRESHOLD = 100.0
-    inventory_items = apply_agency_filter(Inventory.query, Inventory).all()
+    inventory_items = (
+        apply_agency_filter(
+            Inventory.query.options(joinedload(Inventory.fuel_type)),
+            Inventory,
+        ).all()
+    )
     stock_summary = {}
     petrol_stock = diesel_stock = None
     for inv in inventory_items:
-        name = inv.fuel_type.name
-        current = float(inv.current_stock_liters)
+        ft = inv.fuel_type
+        name = ft.name if ft else f'Fuel #{inv.fuel_type_id}'
+        current = float(inv.current_stock_liters or 0)
         stock_summary[name] = current
         if name.lower() == 'petrol':
             petrol_stock = current
@@ -352,24 +421,38 @@ def index():
     elif diesel_dry:
         dry_message = 'Diesel Dry'
 
-    recent_deliveries = apply_agency_filter(StockEntry.query, StockEntry).order_by(
-        StockEntry.entry_date.desc()
-    ).limit(5).all()
-    other_items = apply_agency_filter(OtherItem.query, OtherItem).order_by(
-        OtherItem.name.asc()
-    ).all()
+    recent_deliveries = (
+        apply_agency_filter(
+            StockEntry.query.options(joinedload(StockEntry.fuel_type)),
+            StockEntry,
+        )
+        .order_by(StockEntry.entry_date.desc())
+        .limit(5)
+        .all()
+    )
+    # Stock cards only need items with qty/liters > 0 (not every dormant SKU)
+    other_items = apply_agency_filter(OtherItem.query, OtherItem).filter(
+        db.or_(
+            OtherItem.quantity > 0,
+            OtherItem.liters > 0,
+        )
+    ).order_by(OtherItem.name.asc()).all()
 
-    today = datetime.utcnow().date()
+    today = business_today()
     unit_by_key = {
-        c.key: (c.unit_mode or 'qty')
-        for c in apply_agency_filter(ShopCategory.query, ShopCategory).all()
+        key: (unit or 'qty')
+        for key, unit in apply_agency_filter(
+            db.session.query(ShopCategory.key, ShopCategory.unit_mode),
+            ShopCategory,
+        ).all()
     }
     total_stock_value = 0.0
+    cost_as_of = datetime.combine(today, datetime.min.time())
     for inv in inventory_items:
         liters = float(inv.current_stock_liters or 0)
         if liters <= 0:
             continue
-        cost = get_cost_for_sale(inv.fuel_type_id, datetime.combine(today, datetime.min.time()))
+        cost = get_cost_for_sale(inv.fuel_type_id, cost_as_of)
         total_stock_value += liters * float(cost or 0)
     for item in other_items:
         cost = float(item.cost_price or 0)
@@ -409,7 +492,7 @@ def index():
 
 
 def _dashboard_insights(start, end, stock_summary, other_items):
-    """Pie-card datasets for dashboard insight cards."""
+    """Pie-card datasets for dashboard insight cards — period-scoped, no full-table dumps."""
     from collections import defaultdict
 
     fuel_labels = []
@@ -432,7 +515,6 @@ def _dashboard_insights(start, end, stock_summary, other_items):
             continue
         other_labels.append(item.display_name())
         other_values.append(round(qty, 2))
-    # Keep chart readable
     if len(other_labels) > 8:
         paired = sorted(zip(other_labels, other_values), key=lambda x: -x[1])
         top = paired[:7]
@@ -440,51 +522,13 @@ def _dashboard_insights(start, end, stock_summary, other_items):
         other_labels = [n for n, _ in top] + (['Other'] if rest else [])
         other_values = [v for _, v in top] + ([round(rest, 2)] if rest else [])
 
-    # Profit by item (same COGS rules as trend chart)
     rate_as_of = build_fuel_rate_lookup(FuelPrice)
-    fuel_costs = defaultdict(list)
-    for log in apply_agency_filter(
-        ItemPurchaseLog.query.filter(
-            ItemPurchaseLog.category == 'fuel',
-            ItemPurchaseLog.fuel_type_id.isnot(None),
-        ),
-        ItemPurchaseLog,
-    ).order_by(ItemPurchaseLog.entry_date.asc()).all():
-        ed = log.entry_date
-        d = ed.date() if isinstance(ed, datetime) else ed
-        if d:
-            fuel_costs[log.fuel_type_id].append((d, float(log.cost_price or 0)))
-    fuels_with_logs = set(fuel_costs.keys())
-    for se in apply_agency_filter(StockEntry.query, StockEntry).order_by(
-        StockEntry.entry_date.asc()
-    ).all():
-        if not se.fuel_type_id or se.fuel_type_id in fuels_with_logs:
-            continue
-        ed = se.entry_date
-        d = ed.date() if isinstance(ed, datetime) else ed
-        if d:
-            fuel_costs[se.fuel_type_id].append((d, float(se.cost_per_liter or 0)))
-
-    def fuel_cost_as_of(fuel_type_id, sale_date):
-        entries = fuel_costs.get(fuel_type_id) or []
-        best = None
-        for d, cost in entries:
-            if sale_date and d <= sale_date:
-                best = cost
-            else:
-                break
-        if best is not None:
-            return best
-        return entries[0][1] if entries else 0.0
-
-    item_costs = {
-        oi.id: float(oi.cost_price or 0)
-        for oi in apply_agency_filter(OtherItem.query, OtherItem).all()
-    }
+    fuel_cost_as_of = _fuel_cost_timeline(end)
+    item_costs = _other_item_costs()
     profit_by = defaultdict(float)
 
     for reading in apply_agency_filter(
-        MeterReading.query.filter(
+        MeterReading.query.options(joinedload(MeterReading.fuel_type)).filter(
             MeterReading.reading_date >= start,
             MeterReading.reading_date <= end,
             MeterReading.closing_reading.isnot(None),
@@ -500,7 +544,9 @@ def _dashboard_insights(start, end, stock_summary, other_items):
         profit_by[name] += liters * (rate - cost)
 
     for e in apply_agency_filter(
-        CreditSale.query.filter(
+        CreditSale.query.options(
+            joinedload(CreditSale.fuel_type),
+        ).filter(
             CreditSale.sale_date >= start,
             CreditSale.sale_date <= end,
         ),
@@ -538,7 +584,9 @@ def _dashboard_insights(start, end, stock_summary, other_items):
 
     top_recv = (
         apply_agency_filter(
-            Customer.query.filter(Customer.current_balance_due > 0),
+            Customer.query.options(
+                load_only(Customer.id, Customer.name, Customer.current_balance_due, Customer.agency_id)
+            ).filter(Customer.current_balance_due > 0),
             Customer,
         )
         .order_by(Customer.current_balance_due.desc())
@@ -549,7 +597,9 @@ def _dashboard_insights(start, end, stock_summary, other_items):
 
     top_pay = (
         apply_agency_filter(
-            Vendor.query.filter(Vendor.current_balance_payable > 0),
+            Vendor.query.options(
+                load_only(Vendor.id, Vendor.name, Vendor.current_balance_payable, Vendor.agency_id)
+            ).filter(Vendor.current_balance_payable > 0),
             Vendor,
         )
         .order_by(Vendor.current_balance_payable.desc())

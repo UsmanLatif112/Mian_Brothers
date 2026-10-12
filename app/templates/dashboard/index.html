@@ -16,7 +16,9 @@
 {% endblock %}
 
 {% block topbar_filters %}
+{% with show_working_date=true %}
 {% include "partials/topbar_period_filter.html" %}
+{% endwith %}
 {% endblock %}
 
 {% block content %}
@@ -50,6 +52,13 @@
         <div class="page-header-text">
             <p class="page-eyebrow">Home</p>
             <h1 class="page-title">Dashboard</h1>
+            {% if working_date_active %}
+            <p class="page-subtitle mb-0">
+                Working date <strong>{{ working_date }}</strong>
+                <span class="text-muted-custom">(calendar {{ calendar_today }})</span>
+                — period “Today” uses the working date.
+            </p>
+            {% endif %}
         </div>
     </div>
 </header>

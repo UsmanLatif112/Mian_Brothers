@@ -122,6 +122,9 @@ def create_app():
         from app.tenancy import (
             is_super_admin, is_agency_admin, is_agency_manager, can_access_module, OPS_MODULES,
         )
+        from app.utils import business_today, calendar_today
+        wd = business_today()
+        cal = calendar_today()
         return {
             'brand_name': brand_name,
             'brand_tag': brand_tag,
@@ -136,6 +139,9 @@ def create_app():
             'is_agency_manager': is_agency_manager(),
             'can_access_module': can_access_module,
             'ops_modules': OPS_MODULES,
+            'working_date': wd.isoformat(),
+            'calendar_today': cal.isoformat(),
+            'working_date_active': wd != cal,
         }
 
     @app.route('/media/uploads/<path:filename>')
@@ -240,50 +246,50 @@ def create_app():
     @app.route('/')
     def root():
         return redirect(url_for('dashboard.index'))
-        
-    # On each restart: ensure tables/schema exist, then seed Jul-2026 fuel
-    # price history + missing Other/FT ItemPriceLog rows (idempotent).
-    with app.app_context():
-        db.create_all()
-        ensure_agency_schema()
-        ensure_inventory_schema()
-        ensure_sales_schema()
-        ensure_credit_sales_schema()
-        ensure_journal_schema()
-        ensure_customers_schema()
-        ensure_vendors_schema()
-        ensure_expenses_schema()
-        ensure_till_schema()
-        ensure_item_price_log_schema()
-        try:
-            ensure_default_fuel_types()
-        except Exception as e:
-            print(f'default fuels seed skipped: {e}')
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-        try:
-            from app.models import Agency
-            from app.inventory.categories import ensure_shop_categories
-            for ag in Agency.query.all():
-                ensure_shop_categories(agency_id=ag.id)
-        except Exception as e:
-            print(f'shop categories seed skipped: {e}')
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-        # Do not auto-seed Jul-2026 demo fuel prices — prices come from Price Management / scripts only.
-        ensure_meter_sale_rate_schema()
-        ensure_fuel_price_effective_at_schema()
-        # Intentionally NOT calling ensure_liter_precision_schema() during boot.
-        # ALTER TABLE under Passenger can metadata-lock MySQL and freeze the site.
-        # Run once from cPanel when traffic is quiet:
-        #   PYTHONPATH=. python -c "from app import create_app; from app import ensure_liter_precision_schema; app=create_app.__wrapped__ if False else None
-        # Prefer: PYTHONPATH=. python scripts/migrate_liter_precision.py
-        
+
+    # DB migrations are NEVER run from create_app / Passenger workers.
+    # Run separately: PYTHONPATH=. python scripts/migrate_schema.py
     return app
+
+
+def run_schema_boot():
+    """
+    DDL + light seed pass — only via scripts/migrate_schema.py.
+    Do not call from create_app() (Passenger multi-worker locks MySQL).
+    """
+    db.create_all()
+    ensure_agency_schema()
+    ensure_inventory_schema()
+    ensure_sales_schema()
+    ensure_credit_sales_schema()
+    ensure_journal_schema()
+    ensure_customers_schema()
+    ensure_vendors_schema()
+    ensure_expenses_schema()
+    ensure_till_schema()
+    ensure_item_price_log_schema()
+    try:
+        ensure_default_fuel_types()
+    except Exception as e:
+        print(f'default fuels seed skipped: {e}')
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        from app.models import Agency
+        from app.inventory.categories import ensure_shop_categories
+        for ag in Agency.query.all():
+            ensure_shop_categories(agency_id=ag.id)
+    except Exception as e:
+        print(f'shop categories seed skipped: {e}')
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    ensure_meter_sale_rate_schema()
+    ensure_fuel_price_effective_at_schema()
+    # Wider liter columns: scripts/migrate_liter_precision.py (optional, one-time)
 
 
 def ensure_agency_schema():
@@ -948,10 +954,13 @@ def ensure_expenses_schema():
     if 'settle_note' not in existing:
         alters.append("ALTER TABLE expenses ADD COLUMN settle_note VARCHAR(255) NULL")
 
+    if not alters:
+        return
+
     with db.engine.begin() as conn:
         for stmt in alters:
             conn.execute(text(stmt))
-        # Repair: settled_date set but flag still 0 → cash return was dropped from till
+        # One-time repair only when settle columns were just added
         try:
             conn.execute(text(
                 "UPDATE expenses SET is_settled = 1 "
@@ -959,8 +968,7 @@ def ensure_expenses_schema():
             ))
         except Exception:
             pass
-    if alters:
-        print("Upgraded expenses schema for settle / return-to-till.")
+    print("Upgraded expenses schema for settle / return-to-till.")
 
 
 def ensure_customers_schema():

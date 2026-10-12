@@ -11,7 +11,7 @@ from app import create_app, ensure_liter_precision_schema
 
 
 def main():
-    # Boot app WITHOUT the migration (create_app no longer calls it).
+    # create_app() never runs DDL — migrations are script-only
     app = create_app()
     with app.app_context():
         print('Running liter precision migration...')
