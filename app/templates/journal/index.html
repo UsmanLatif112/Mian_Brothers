@@ -55,8 +55,12 @@
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <div class="journal-range-chip">
                     <i class="bi bi-calendar3"></i>
+                    {% if period == 'all' %}
+                    <span>All time · {{ start_date }} → {{ end_date }}</span>
+                    {% else %}
                     <span>{{ start_date }} → {{ end_date }}</span>
-                    {% if working_date_active %}
+                    {% endif %}
+                    {% if working_date_active and period == 'today' %}
                     <span class="journal-working-date-hint" title="Period “Today” uses working date">· Working {{ working_date }}</span>
                     {% endif %}
                 </div>
@@ -229,20 +233,33 @@
     const customWrap = document.getElementById('journal-custom-dates');
     if (!form || !sel || !customWrap) return;
 
-    const startInput = form.querySelector('[name="start_date"]');
-    const endInput = form.querySelector('[name="end_date"]');
+    const startInput = customWrap.querySelector('input[type="date"]');
+    const endInput = customWrap.querySelectorAll('input[type="date"]')[1];
 
     const setCustom = (on) => {
         customWrap.classList.toggle('d-none', !on);
-        if (startInput) startInput.name = on ? 'start_date' : '';
-        if (endInput) endInput.name = on ? 'end_date' : '';
+        // Disable + drop names so custom dates never stick when picking All time / Today / …
+        [startInput, endInput].forEach((el, i) => {
+            if (!el) return;
+            el.disabled = !on;
+            el.name = on ? (i === 0 ? 'start_date' : 'end_date') : '';
+        });
     };
     setCustom(sel.value === 'custom');
 
     sel.addEventListener('change', () => {
         const isCustom = sel.value === 'custom';
         setCustom(isCustom);
-        if (!isCustom) form.submit();
+        if (!isCustom) {
+            // Clean URL: period only (no leftover start_date/end_date)
+            const params = new URLSearchParams(new FormData(form));
+            params.delete('start_date');
+            params.delete('end_date');
+            const qs = params.toString();
+            const url = form.getAttribute('action') || window.location.pathname;
+            if (window.ofNavigate) window.ofNavigate(url + (qs ? '?' + qs : ''), 'Loading…');
+            else window.location.href = url + (qs ? '?' + qs : '');
+        }
     });
 })();
 </script>

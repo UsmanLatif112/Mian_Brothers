@@ -134,7 +134,31 @@ body.sidebar-open .sidebar-backdrop {
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.75rem 0.65rem 1rem;
+    /* Match dark sidebar — not the default light OS scrollbar */
     scrollbar-width: thin;
+    scrollbar-color: rgba(13, 148, 136, 0.55) rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 999px;
+    margin: 0.35rem 0;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(13, 148, 136, 0.65), rgba(2, 132, 199, 0.45));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(45, 212, 191, 0.85), rgba(56, 189, 248, 0.55));
+    background-clip: padding-box;
 }
 
 .sidebar-section-label {

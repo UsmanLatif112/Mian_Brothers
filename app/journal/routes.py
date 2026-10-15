@@ -32,6 +32,12 @@ def index():
 
     args = request.args.to_dict(flat=True)
     period, start, end = parse_period(args, default_period='today')
+    # Stale custom dates in the URL must not leak into non-custom periods
+    if period != 'custom':
+        args.pop('start_date', None)
+        args.pop('end_date', None)
+        period, start, end = parse_period(args, default_period=period)
+
     direction = (request.args.get('direction') or 'all').strip().lower()
     if direction not in dict(DIRECTION_FILTER_CHOICES):
         direction = 'all'

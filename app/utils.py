@@ -10,7 +10,7 @@ PERIOD_CHOICES = (
     ('month', 'This Month'),
     ('6months', 'Last 6 Months'),
     ('year', 'This Year'),
-    ('all', 'All'),
+    ('all', 'All time'),
     ('custom', 'Custom Dates'),
 )
 
@@ -54,7 +54,8 @@ def earliest_activity_date():
     )
     from app.tenancy import apply_agency_filter
 
-    today = business_today()
+    # Use calendar today as fallback — working date must not shrink “All time”
+    today = calendar_today()
     candidates = []
 
     def _add(val):
@@ -154,9 +155,9 @@ def parse_period(args, default_period='all'):
     elif period == 'year':
         start = today.replace(month=1, day=1)
     elif period == 'all':
-        # Full history: first recorded activity → today
+        # Full history through calendar today (working date must not cut the end)
         start = earliest_activity_date()
-        end = today
+        end = max(calendar_today(), today)
     elif period == 'custom':
         start_raw = (args.get('start_date') or '').strip()
         end_raw = (args.get('end_date') or '').strip()

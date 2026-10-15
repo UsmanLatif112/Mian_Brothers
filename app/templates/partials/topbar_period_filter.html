@@ -24,12 +24,16 @@
     const form = document.getElementById('period-filter-form');
     const sel = document.getElementById('period-select');
     if (!form || !sel) return;
-    const startInput = form.querySelector('[name="start_date"]');
-    const endInput = form.querySelector('[name="end_date"]');
     const customWrap = form.querySelector('.custom-dates');
-    if (!startInput || !endInput || !customWrap) return;
+    if (!customWrap) return;
+    const dateInputs = customWrap.querySelectorAll('input[type="date"]');
+    const startInput = dateInputs[0];
+    const endInput = dateInputs[1];
+    if (!startInput || !endInput) return;
     const setCustom = (on) => {
         customWrap.classList.toggle('d-none', !on);
+        startInput.disabled = !on;
+        endInput.disabled = !on;
         startInput.name = on ? 'start_date' : '';
         endInput.name = on ? 'end_date' : '';
     };
@@ -37,7 +41,15 @@
     sel.addEventListener('change', () => {
         const isCustom = sel.value === 'custom';
         setCustom(isCustom);
-        if (!isCustom) form.submit();
+        if (!isCustom) {
+            const params = new URLSearchParams(new FormData(form));
+            params.delete('start_date');
+            params.delete('end_date');
+            const qs = params.toString();
+            const url = form.getAttribute('action') || window.location.pathname;
+            if (window.ofNavigate) window.ofNavigate(url + (qs ? '?' + qs : ''), 'Loading…');
+            else window.location.href = url + (qs ? '?' + qs : '');
+        }
     });
     const wd = document.getElementById('topbar-working-date');
     if (wd) {

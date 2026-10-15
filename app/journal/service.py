@@ -50,7 +50,7 @@ TYPE_FILTER_CHOICES = (
 )
 
 DIRECTION_FILTER_CHOICES = (
-    ('all', 'All'),
+    ('all', 'All flows'),
     ('in', 'Cash In'),
     ('out', 'Cash Out'),
 )
