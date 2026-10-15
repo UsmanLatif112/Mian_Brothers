@@ -135,15 +135,17 @@
                 <small class="text-muted-custom">In = received · Out = paid</small>
             </div>
         </div>
-        <div class="table-responsive">
+        {# Desktop / tablet table #}
+        <div class="table-responsive journal-table-wrap d-none d-md-block">
             <table class="table table-custom journal-table list-table mb-0">
                 <thead>
                     <tr>
                         <th>Date</th>
                         <th>Flow</th>
                         <th>Type</th>
+                        <th>Payment</th>
                         <th>Party</th>
-                        <th>Description</th>
+                        <th class="journal-col-desc">Description</th>
                         <th class="text-end">Amount</th>
                     </tr>
                 </thead>
@@ -163,26 +165,65 @@
                             </td>
                             <td>
                                 <span class="journal-type journal-type-{{ row.entry_type }}">{{ row.type_label }}</span>
+                            </td>
+                            <td>
                                 {% if row.payment_status in ('paid', 'unpaid', 'partial', 'overpay') %}
-                                <span class="badge badge-custom {% if row.payment_status == 'paid' %}badge-success-custom{% elif row.payment_status == 'overpay' %}badge-staff{% elif row.payment_status == 'partial' %}badge-staff{% else %}badge-danger-custom{% endif %} text-uppercase ms-1">{{ row.payment_status }}</span>
+                                <span class="badge badge-custom journal-pay-badge {% if row.payment_status == 'paid' %}badge-success-custom{% elif row.payment_status == 'overpay' %}badge-staff{% elif row.payment_status == 'partial' %}badge-staff{% else %}badge-danger-custom{% endif %} text-uppercase">{{ row.payment_status }}</span>
+                                {% else %}
+                                <span class="text-muted-custom">—</span>
                                 {% endif %}
                             </td>
-                            <td><span class="of-clip-cell" data-of-tip="{{ row.party }}">{{ row.party }}</span></td>
-                            <td><div class="journal-desc of-clip" data-of-tip="{{ row.item_name }}">{{ row.item_name }}</div></td>
-                            <td class="text-end fw-bold journal-amt-{{ row.cash_direction }}">
+                            <td><span class="of-clip-cell journal-party" data-of-tip="{{ row.party }}">{{ row.party }}</span></td>
+                            <td class="journal-col-desc">
+                                <div class="journal-desc of-clip" data-of-tip="{{ row.item_name }}">{{ row.item_name }}</div>
+                            </td>
+                            <td class="text-end fw-bold journal-amt-{{ row.cash_direction }} text-nowrap">
                                 {% if row.cash_direction == 'out' %}−{% endif %}{{ row.amount | money }}
                             </td>
                         </tr>
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="6" class="text-center text-muted-custom py-5">
+                            <td colspan="7" class="text-center text-muted-custom py-5">
                                 No cash movements for this filter.
                             </td>
                         </tr>
                     {% endif %}
                 </tbody>
             </table>
+        </div>
+
+        {# Phone cards #}
+        <div class="journal-mobile-list d-md-none">
+            {% if rows %}
+                {% for row in rows %}
+                <article class="journal-mobile-card journal-row-{{ row.cash_direction }}">
+                    <div class="journal-mobile-top">
+                        <span class="journal-flow journal-flow-{{ row.cash_direction }}">
+                            {% if row.cash_direction == 'in' %}
+                            <i class="bi bi-arrow-down-left"></i> In
+                            {% else %}
+                            <i class="bi bi-arrow-up-right"></i> Out
+                            {% endif %}
+                        </span>
+                        <span class="journal-date">{{ row.sale_date }}</span>
+                    </div>
+                    <div class="journal-mobile-meta">
+                        <span class="journal-type journal-type-{{ row.entry_type }}">{{ row.type_label }}</span>
+                        {% if row.payment_status in ('paid', 'unpaid', 'partial', 'overpay') %}
+                        <span class="badge badge-custom journal-pay-badge {% if row.payment_status == 'paid' %}badge-success-custom{% elif row.payment_status == 'overpay' %}badge-staff{% elif row.payment_status == 'partial' %}badge-staff{% else %}badge-danger-custom{% endif %} text-uppercase">{{ row.payment_status }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="journal-mobile-party of-clip" data-of-tip="{{ row.party }}">{{ row.party }}</div>
+                    <div class="journal-mobile-desc of-clip" data-of-tip="{{ row.item_name }}">{{ row.item_name }}</div>
+                    <div class="journal-mobile-amt journal-amt-{{ row.cash_direction }}">
+                        {% if row.cash_direction == 'out' %}−{% endif %}{{ row.amount | money }}
+                    </div>
+                </article>
+                {% endfor %}
+            {% else %}
+                <p class="text-center text-muted-custom py-5 mb-0">No cash movements for this filter.</p>
+            {% endif %}
         </div>
         {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'direction': direction, 'entry_type': entry_type, 'search': search} %}
             {% include "partials/pagination.html" %}
