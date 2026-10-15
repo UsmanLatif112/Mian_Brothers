@@ -20,37 +20,6 @@ import csv
 import io
 
 
-def get_cost_for_sale(fuel_type_id, sale_date):
-    """Latest fuel cost as-of date — one indexed lookup, not a full history load."""
-    end_dt = sale_date
-    if isinstance(sale_date, datetime):
-        end_dt = sale_date
-    else:
-        end_dt = datetime.combine(sale_date, datetime.max.time())
-
-    log = apply_agency_filter(
-        ItemPurchaseLog.query.filter(
-            ItemPurchaseLog.category == 'fuel',
-            ItemPurchaseLog.fuel_type_id == fuel_type_id,
-            ItemPurchaseLog.entry_date <= end_dt,
-        ),
-        ItemPurchaseLog,
-    ).order_by(ItemPurchaseLog.entry_date.desc()).first()
-    if log:
-        return float(log.cost_price or 0)
-
-    latest_delivery = apply_agency_filter(
-        StockEntry.query.filter(
-            StockEntry.fuel_type_id == fuel_type_id,
-            StockEntry.entry_date <= end_dt,
-        ),
-        StockEntry,
-    ).order_by(StockEntry.entry_date.desc()).first()
-    if latest_delivery:
-        return float(latest_delivery.cost_per_liter or 0)
-    return 0.0
-
-
 def _as_plain_date(val):
     if val is None:
         return None
@@ -66,9 +35,10 @@ def _as_plain_date(val):
 
 def _fuel_cost_timeline(as_of_end):
     """
-    Cost history per fuel_type_id up to as_of_end only (not the whole table forever).
+    Cost history per fuel_type_id up to as_of_end (one load, bisect as-of).
     Prefers purchase logs; falls back to stock entries for fuels with no logs.
     """
+    import bisect
     from collections import defaultdict
 
     end_dt = as_of_end
@@ -121,20 +91,50 @@ def _fuel_cost_timeline(as_of_end):
             continue
         fuel_costs[se.fuel_type_id].append((d, float(se.cost_per_liter or 0)))
 
+    indexed = {}
+    for fuel_id, entries in fuel_costs.items():
+        entries.sort(key=lambda x: x[0])
+        indexed[fuel_id] = (
+            [e[0] for e in entries],
+            [e[1] for e in entries],
+        )
+
     def fuel_cost_as_of(fuel_type_id, sale_date):
+        pair = indexed.get(fuel_type_id)
+        if not pair:
+            return 0.0
+        dates, costs = pair
         sale_date = _as_plain_date(sale_date)
-        entries = fuel_costs.get(fuel_type_id) or []
-        best = None
-        for d, cost in entries:
-            if sale_date and d <= sale_date:
-                best = cost
-            else:
-                break
-        if best is not None:
-            return best
-        return entries[0][1] if entries else 0.0
+        if sale_date is None:
+            return costs[-1]
+        i = bisect.bisect_right(dates, sale_date) - 1
+        if i >= 0:
+            return costs[i]
+        return costs[0]
 
     return fuel_cost_as_of
+
+
+def get_cost_for_sale(fuel_type_id, sale_date):
+    """Latest fuel cost as-of date — uses request-cached timeline when possible."""
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            as_of = _as_plain_date(sale_date) or business_today()
+            cache_key = '_of_fuel_cost_as_of'
+            end_key = '_of_fuel_cost_end'
+            fn = getattr(g, cache_key, None)
+            cached_end = getattr(g, end_key, None)
+            if fn is None or cached_end is None or as_of > cached_end:
+                g._of_fuel_cost_as_of = _fuel_cost_timeline(as_of)
+                g._of_fuel_cost_end = as_of
+                fn = g._of_fuel_cost_as_of
+            return fn(fuel_type_id, as_of)
+    except RuntimeError:
+        pass
+    return _fuel_cost_timeline(_as_plain_date(sale_date) or business_today())(
+        fuel_type_id, sale_date
+    )
 
 
 def _other_item_costs():
@@ -175,7 +175,7 @@ def _build_meter_trend(start, end):
 
     # 1) Meter / pump fuel
     readings = apply_agency_filter(
-        MeterReading.query.filter(
+        MeterReading.query.options(joinedload(MeterReading.fuel_type)).filter(
             MeterReading.reading_date >= start,
             MeterReading.reading_date <= end,
             MeterReading.closing_reading.isnot(None),
@@ -198,7 +198,10 @@ def _build_meter_trend(start, end):
 
     # 2) Credit / other / FT sales — skip advance/loan/opening
     entries = apply_agency_filter(
-        CreditSale.query.filter(
+        CreditSale.query.options(
+            joinedload(CreditSale.fuel_type),
+            joinedload(CreditSale.other_item),
+        ).filter(
             CreditSale.sale_date >= start,
             CreditSale.sale_date <= end,
         ),
@@ -257,10 +260,16 @@ def _build_meter_trend(start, end):
     cogs_trend = []
     grain = 'day'
 
+    # Cap empty day walks — long “All” ranges used to keep the worker busy.
+    # Aggregate from activity days only for week/month grains.
+    active_days = sorted(set(day_sales) | set(day_net) | set(day_expenses) | set(day_gross) | set(day_cogs))
+
     if span <= 62:
         grain = 'day'
         cursor = start
-        while cursor <= end:
+        # Hard cap: never emit more than 62 points even if span is wrong
+        points = 0
+        while cursor <= end and points < 62:
             labels.append(cursor.strftime('%b %d'))
             date_labels.append(cursor.strftime('%Y-%m-%d (%a)'))
             sales_trend.append(round(day_sales.get(cursor, 0.0), 2))
@@ -269,68 +278,73 @@ def _build_meter_trend(start, end):
             gross_trend.append(round(day_gross.get(cursor, 0.0), 2))
             cogs_trend.append(round(day_cogs.get(cursor, 0.0), 2))
             cursor += timedelta(days=1)
+            points += 1
     elif span <= 400:
         grain = 'week'
-        cursor = start
-        while cursor <= end:
-            week_end = min(cursor + timedelta(days=6), end)
-            s = p = ex = g = c = 0.0
-            d = cursor
-            while d <= week_end:
-                s += day_sales.get(d, 0.0)
-                p += day_net.get(d, 0.0)
-                ex += day_expenses.get(d, 0.0)
-                g += day_gross.get(d, 0.0)
-                c += day_cogs.get(d, 0.0)
-                d += timedelta(days=1)
-            if cursor == week_end:
-                labels.append(cursor.strftime('%b %d'))
-                date_labels.append(cursor.strftime('%Y-%m-%d (%a)'))
+        # Bucket active days into ISO weeks — O(activity), not O(calendar days)
+        buckets = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0, 0.0, None, None])
+        for d in active_days:
+            if d < start or d > end:
+                continue
+            week_start = d - timedelta(days=d.weekday())
+            if week_start < start:
+                week_start = start
+            b = buckets[week_start]
+            b[0] += day_sales.get(d, 0.0)
+            b[1] += day_net.get(d, 0.0)
+            b[2] += day_expenses.get(d, 0.0)
+            b[3] += day_gross.get(d, 0.0)
+            b[4] += day_cogs.get(d, 0.0)
+            b[5] = d if b[5] is None else min(b[5], d)
+            b[6] = d if b[6] is None else max(b[6], d)
+        for week_start in sorted(buckets):
+            s, p, ex, g, c, d0, d1 = buckets[week_start]
+            week_end = min(week_start + timedelta(days=6), end)
+            if d0 == d1:
+                labels.append(d0.strftime('%b %d'))
+                date_labels.append(d0.strftime('%Y-%m-%d (%a)'))
             else:
-                labels.append(f"{cursor.strftime('%b %d')}–{week_end.strftime('%b %d')}")
+                labels.append(f"{week_start.strftime('%b %d')}–{week_end.strftime('%b %d')}")
                 date_labels.append(
-                    f"{cursor.strftime('%Y-%m-%d')} → {week_end.strftime('%Y-%m-%d')}"
+                    f"{week_start.strftime('%Y-%m-%d')} → {week_end.strftime('%Y-%m-%d')}"
                 )
             sales_trend.append(round(s, 2))
             profit_trend.append(round(p, 2))
             expense_trend.append(round(ex, 2))
             gross_trend.append(round(g, 2))
             cogs_trend.append(round(c, 2))
-            cursor = week_end + timedelta(days=1)
     else:
         grain = 'month'
-        y, m = start.year, start.month
-        while True:
+        # Month buckets from activity days only — no while True calendar walk
+        buckets = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0, 0.0])
+        for d in active_days:
+            if d < start or d > end:
+                continue
+            key = (d.year, d.month)
+            b = buckets[key]
+            b[0] += day_sales.get(d, 0.0)
+            b[1] += day_net.get(d, 0.0)
+            b[2] += day_expenses.get(d, 0.0)
+            b[3] += day_gross.get(d, 0.0)
+            b[4] += day_cogs.get(d, 0.0)
+        for (y, m) in sorted(buckets):
+            s, p, ex, g, c = buckets[(y, m)]
             month_start = datetime(y, m, 1).date()
-            if month_start > end:
-                break
             if m == 12:
-                next_month = datetime(y + 1, 1, 1).date()
+                month_end = datetime(y + 1, 1, 1).date() - timedelta(days=1)
             else:
-                next_month = datetime(y, m + 1, 1).date()
-            month_end = min(next_month - timedelta(days=1), end)
+                month_end = datetime(y, m + 1, 1).date() - timedelta(days=1)
             range_start = max(month_start, start)
-            s = p = ex = g = c = 0.0
-            d = range_start
-            while d <= month_end:
-                s += day_sales.get(d, 0.0)
-                p += day_net.get(d, 0.0)
-                ex += day_expenses.get(d, 0.0)
-                g += day_gross.get(d, 0.0)
-                c += day_cogs.get(d, 0.0)
-                d += timedelta(days=1)
+            range_end = min(month_end, end)
             labels.append(range_start.strftime('%b %Y'))
             date_labels.append(
-                f"{range_start.strftime('%Y-%m-%d')} → {month_end.strftime('%Y-%m-%d')}"
+                f"{range_start.strftime('%Y-%m-%d')} → {range_end.strftime('%Y-%m-%d')}"
             )
             sales_trend.append(round(s, 2))
             profit_trend.append(round(p, 2))
             expense_trend.append(round(ex, 2))
             gross_trend.append(round(g, 2))
             cogs_trend.append(round(c, 2))
-            if next_month > end:
-                break
-            y, m = next_month.year, next_month.month
 
     return {
         'labels': labels,
@@ -447,12 +461,13 @@ def index():
         ).all()
     }
     total_stock_value = 0.0
-    cost_as_of = datetime.combine(today, datetime.min.time())
+    # One cost timeline for all fuel stock rows (not get_cost_for_sale per row)
+    fuel_cost_as_of = _fuel_cost_timeline(today)
     for inv in inventory_items:
         liters = float(inv.current_stock_liters or 0)
         if liters <= 0:
             continue
-        cost = get_cost_for_sale(inv.fuel_type_id, cost_as_of)
+        cost = fuel_cost_as_of(inv.fuel_type_id, today)
         total_stock_value += liters * float(cost or 0)
     for item in other_items:
         cost = float(item.cost_price or 0)
@@ -546,6 +561,7 @@ def _dashboard_insights(start, end, stock_summary, other_items):
     for e in apply_agency_filter(
         CreditSale.query.options(
             joinedload(CreditSale.fuel_type),
+            joinedload(CreditSale.other_item),
         ).filter(
             CreditSale.sale_date >= start,
             CreditSale.sale_date <= end,
@@ -711,7 +727,11 @@ def reports():
     if report_type == 'sales':
         headers = ['ID', 'Customer', 'Type', 'Item', 'Qty', 'Amount', 'Paid', 'Credit', 'Status', 'Date']
         records = apply_agency_filter(
-            CreditSale.query.filter(
+            CreditSale.query.options(
+                joinedload(CreditSale.customer),
+                joinedload(CreditSale.fuel_type),
+                joinedload(CreditSale.other_item),
+            ).filter(
                 CreditSale.sale_date >= start_d,
                 CreditSale.sale_date <= end_d,
             ),
@@ -733,8 +753,10 @@ def reports():
 
     elif report_type == 'profit':
         headers = ['Date', 'Fuel', 'Liters', 'Rate', 'Cost/L', 'Revenue', 'Profit']
+        rate_as_of = build_fuel_rate_lookup(FuelPrice)
+        cost_as_of = _fuel_cost_timeline(end_d)
         records = apply_agency_filter(
-            MeterReading.query.filter(
+            MeterReading.query.options(joinedload(MeterReading.fuel_type)).filter(
                 MeterReading.reading_date >= start_d,
                 MeterReading.reading_date <= end_d,
                 MeterReading.closing_reading.isnot(None),
@@ -744,10 +766,10 @@ def reports():
         for r in records:
             liters = float(r.liters_sold or 0)
             stored = getattr(r, 'sale_rate', None)
-            rate = float(stored) if stored is not None else fuel_rate_for(
-                r.fuel_type_id, FuelPrice, as_of_date=r.reading_date
+            rate = float(stored) if stored is not None else rate_as_of(
+                r.fuel_type_id, r.reading_date
             )
-            cost = get_cost_for_sale(r.fuel_type_id, datetime.combine(r.reading_date, datetime.min.time()))
+            cost = cost_as_of(r.fuel_type_id, r.reading_date)
             preview_data.append([
                 r.reading_date.strftime('%Y-%m-%d'),
                 r.fuel_type.name if r.fuel_type else r.fuel_type_id,
@@ -761,7 +783,10 @@ def reports():
     elif report_type == 'stock':
         headers = ['Entry ID', 'Fuel Type', 'Liters Added', 'Cost/L', 'Total Delivery Cost', 'Supplier', 'Recorded By', 'Date']
         records = apply_agency_filter(
-            StockEntry.query.filter(
+            StockEntry.query.options(
+                joinedload(StockEntry.fuel_type),
+                joinedload(StockEntry.creator),
+            ).filter(
                 StockEntry.entry_date >= start_dt,
                 StockEntry.entry_date <= end_dt,
             ),
@@ -770,7 +795,7 @@ def reports():
         for r in records:
             preview_data.append([
                 r.id,
-                r.fuel_type.name,
+                r.fuel_type.name if r.fuel_type else '-',
                 f"{r.liters_added:.2f}L",
                 f"PKR {float(r.cost_per_liter):,.2f}",
                 f"PKR {float(r.liters_added * r.cost_per_liter):,.2f}",

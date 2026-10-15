@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/loader.css') }}?v=10">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toasts.css') }}?v=2">
     <meta name="turbo-cache-control" content="no-preview">
+    <meta name="turbo-prefetch" content="false">
     <script>
     /* Nav handoff: page 1 marks flag; page 2 runs cool loader until DOM ready */
     (function () {
@@ -400,7 +401,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.12/dist/turbo.es2017-umd.js"></script>
     <script src="{{ url_for('static', filename='js/charts.js') }}?v=5"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}?v=37"></script>
-    <script src="{{ url_for('static', filename='js/turbo-nav.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='js/turbo-nav.js') }}?v=7"></script>
 
     {% block scripts %}{% endblock %}
 </body>

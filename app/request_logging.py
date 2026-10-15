@@ -59,13 +59,19 @@ def setup_request_logging(app):
     skip_prefixes = (
         '/static/',
         '/favicon.ico',
+        '/media/',
+    )
+    # Default OFF on shared hosting — per-request logging + user lookup
+    # was amplifying LiteSpeed/MySQL CPU. Set LOG_REQUESTS=1 to enable.
+    log_requests = (os.environ.get('LOG_REQUESTS') or '').strip().lower() in (
+        '1', 'true', 'yes', 'on',
     )
 
     @app.before_request
     def _log_request_start():
         g._req_started = time.perf_counter()
         path = request.path or ''
-        if any(path.startswith(p) for p in skip_prefixes):
+        if (not log_requests) or any(path.startswith(p) for p in skip_prefixes):
             g._req_skip_log = True
             return
         g._req_skip_log = False

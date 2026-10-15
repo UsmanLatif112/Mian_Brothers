@@ -231,7 +231,9 @@ def build_fuel_rate_lookup(FuelPrice):
 
     as_of (date or datetime): latest price with effective_at <= as_of.
     None: current pump price (latest effective_at <= now).
+    Uses bisect — O(log n) per lookup, not a full scan.
     """
+    import bisect
     from collections import defaultdict
     from app.tenancy import apply_agency_filter
 
@@ -242,23 +244,27 @@ def build_fuel_rate_lookup(FuelPrice):
             continue
         by_fuel[fp.fuel_type_id].append((at, float(fp.price_per_liter or 0), fp.id))
 
-    for fuel_id in by_fuel:
-        by_fuel[fuel_id].sort(key=lambda x: (x[0], x[2]))
+    # Parallel arrays for bisect: times[i] pairs with prices[i]
+    indexed = {}
+    for fuel_id, entries in by_fuel.items():
+        entries.sort(key=lambda x: (x[0], x[2]))
+        indexed[fuel_id] = (
+            [e[0] for e in entries],
+            [e[1] for e in entries],
+        )
 
     def rate(fuel_type_id, as_of_date=None):
-        entries = by_fuel.get(fuel_type_id) or []
-        if not entries:
+        pair = indexed.get(fuel_type_id)
+        if not pair:
             return 0.0
+        times, prices = pair
         as_of = _as_plain_datetime(as_of_date)
         if as_of is None:
             as_of = datetime.utcnow().replace(microsecond=0)
-        best = None
-        for at, price, _fid in entries:
-            if at <= as_of:
-                best = price
-            else:
-                break
-        return best if best is not None else entries[0][1]
+        i = bisect.bisect_right(times, as_of) - 1
+        if i >= 0:
+            return prices[i]
+        return prices[0]
 
     return rate
 
@@ -270,37 +276,20 @@ def fuel_rate_for(fuel_type_id, FuelPrice, as_of_date=None):
     as_of_date: date or datetime — price effective at that moment
     (effective_at <= as_of). Same calendar day can have multiple rates.
     None: current pump price (latest effective_at <= now).
+
+    Within a request, reuses one cached lookup (no per-call full table scan).
     """
-    from app.tenancy import apply_agency_filter
-
-    as_of = _as_plain_datetime(as_of_date)
-    if as_of is None:
-        as_of = datetime.utcnow().replace(microsecond=0)
-
-    rows = apply_agency_filter(
-        FuelPrice.query.filter_by(fuel_type_id=fuel_type_id), FuelPrice
-    ).all()
-    if not rows:
-        return 0.0
-
-    best = None
-    earliest = None
-    for row in rows:
-        at = _fuel_price_effective_at(row)
-        if at is None:
-            continue
-        price = float(row.price_per_liter or 0)
-        if earliest is None or at < earliest[0] or (at == earliest[0] and row.id < earliest[2]):
-            earliest = (at, price, row.id)
-        if at <= as_of:
-            if best is None or at > best[0] or (at == best[0] and row.id > best[2]):
-                best = (at, price, row.id)
-
-    if best is not None:
-        return best[1]
-    if earliest is not None:
-        return earliest[1]
-    return 0.0
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            cache = getattr(g, '_of_fuel_rate_lookup', None)
+            if cache is None:
+                g._of_fuel_rate_lookup = build_fuel_rate_lookup(FuelPrice)
+                cache = g._of_fuel_rate_lookup
+            return cache(fuel_type_id, as_of_date)
+    except RuntimeError:
+        pass
+    return build_fuel_rate_lookup(FuelPrice)(fuel_type_id, as_of_date)
 
 
 def paginate(query_or_list, page, per_page=15):
@@ -370,8 +359,9 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     rate_as_of = build_fuel_rate_lookup(FuelPrice)
 
     # All meter readings in range — value each row at its reading-date rate
+    from sqlalchemy.orm import joinedload
     meter_rows = apply_agency_filter(
-        MeterReading.query.filter(
+        MeterReading.query.options(joinedload(MeterReading.fuel_type)).filter(
             MeterReading.reading_date >= start,
             MeterReading.reading_date <= end,
             MeterReading.closing_reading.isnot(None),
@@ -410,7 +400,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
             diesel_liters += liters
 
     entries = apply_agency_filter(
-        CreditSale.query.filter(
+        CreditSale.query.options(
+            joinedload(CreditSale.other_item),
+            joinedload(CreditSale.fuel_type),
+        ).filter(
             CreditSale.sale_date >= start,
             CreditSale.sale_date <= end,
         ),

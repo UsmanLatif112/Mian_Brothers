@@ -100,17 +100,11 @@ def create_app():
                         brand_tag = ''
                         use_platform_logo = False
             elif not current_user.is_authenticated:
-                agency = Agency.query.filter(
-                    Agency.name.ilike('%octane%')
-                ).order_by(Agency.id.asc()).first()
-                if agency is None:
-                    agency = Agency.query.order_by(Agency.id.asc()).first()
-                if agency:
-                    brand_address = agency.address or 'U. Technologies'
-                    brand_phone = agency.phone
-                    brand_email = agency.email
+                # Guests: static platform brand — no Agency query (avoids MySQL
+                # hit on every login/public page render under LiteSpeed).
                 brand_name = 'OctaneFlow'
                 brand_tag = 'U. Technologies'
+                brand_address = 'U. Technologies'
                 use_platform_logo = True
         except Exception:
             agency = None
@@ -179,17 +173,18 @@ def create_app():
 
     @app.before_request
     def _recover_db_session():
-        """Clear a leftover invalid transaction so login/queries can proceed."""
+        """Only clear a broken session — do NOT open a DB connection every request.
+
+        Touching db.session.connection() on every hit made LiteSpeed workers
+        hammer MySQL (spawn → query → timeout → respawn loop).
+        """
+        sess = db.session
         try:
-            # Touch the connection; PendingRollbackError → rollback + fresh use
-            db.session.connection()
+            if not sess.is_active:
+                sess.rollback()
         except Exception:
             try:
-                db.session.rollback()
-            except Exception:
-                pass
-            try:
-                db.session.remove()
+                sess.remove()
             except Exception:
                 pass
 

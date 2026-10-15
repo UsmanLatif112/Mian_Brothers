@@ -31,9 +31,14 @@ class Config:
         SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', f'sqlite:///{_db_path}')
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Shared hosting: many LiteSpeed workers × large pools = MySQL CPU kill.
+    # Keep pools tiny; recycle before wait_timeout.
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 280,
+        'pool_size': int(os.environ.get('DB_POOL_SIZE', '2')),
+        'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '1')),
+        'pool_timeout': int(os.environ.get('DB_POOL_TIMEOUT', '20')),
     }
 
     BACKUP_DIR = os.environ.get('BACKUP_DIR', os.path.join(_BASE_DIR, 'backups'))

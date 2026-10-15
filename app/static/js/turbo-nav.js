@@ -7,6 +7,16 @@
     if (window.__ofTurboNavBound) return;
     window.__ofTurboNavBound = true;
 
+    // Prefetch on hover floods shared hosting with dashboard/journal queries
+    try {
+        if (window.Turbo.session && window.Turbo.session.drive) {
+            window.Turbo.session.drive.prefetch = null;
+        }
+        if (window.Turbo.config && window.Turbo.config.drive) {
+            window.Turbo.config.drive.prefetch = 'none';
+        }
+    } catch (e) { /* ignore */ }
+
     const MAX_MS = 45000;
     let safetyTimer = null;
     let visitPending = false;
