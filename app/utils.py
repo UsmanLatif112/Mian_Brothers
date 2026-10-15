@@ -225,10 +225,11 @@ def _fuel_price_effective_at(fp):
     return datetime.combine(day, time.min)
 
 
-def build_fuel_rate_lookup(FuelPrice):
+def build_fuel_rate_lookup(FuelPrice, include_shared=False):
     """
     Load all FuelPrice rows once and return rate(fuel_type_id, as_of=None).
 
+    Pass the FuelPrice model, not an already-filtered query.
     as_of (date or datetime): latest price with effective_at <= as_of.
     None: current pump price (latest effective_at <= now).
     Uses bisect — O(log n) per lookup, not a full scan.
@@ -238,7 +239,10 @@ def build_fuel_rate_lookup(FuelPrice):
     from app.tenancy import apply_agency_filter
 
     by_fuel = defaultdict(list)
-    for fp in apply_agency_filter(FuelPrice.query, FuelPrice).order_by(FuelPrice.id.asc()).all():
+    prices = apply_agency_filter(
+        FuelPrice.query, FuelPrice, include_shared=include_shared
+    ).order_by(FuelPrice.id.asc())
+    for fp in prices.all():
         at = _fuel_price_effective_at(fp)
         if at is None:
             continue
@@ -819,7 +823,6 @@ def build_period_cash_entries(stats):
     from app.vendors.service import purchase_log_total
     from app.account.service import cash_taken_journal_rows, previous_balance_journal_row
     from app.models import FuelPrice
-    from app.tenancy import apply_agency_filter
 
     entries = stats.get('entries') or []
     payments = stats.get('payments') or []
@@ -841,9 +844,7 @@ def build_period_cash_entries(stats):
         rows.append(prev_row)
 
     # Pump / meter cash sales (main fuel IN — not stored as CreditSale rows)
-    rate_as_of = build_fuel_rate_lookup(
-        apply_agency_filter(FuelPrice.query, FuelPrice, include_shared=True)
-    )
+    rate_as_of = build_fuel_rate_lookup(FuelPrice, include_shared=True)
     for r in stats.get('meter_rows') or []:
         liters = float(getattr(r, 'liters_sold', 0) or 0)
         if liters <= 0:
