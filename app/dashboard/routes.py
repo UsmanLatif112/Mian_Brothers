@@ -381,13 +381,34 @@ def _models_ns():
 @dashboard_bp.route('/')
 @login_required
 def index():
+    # Set / clear operational “today” for the whole app (session)
+    if (request.args.get('clear_working_date') or '').strip() in ('1', 'true', 'yes'):
+        set_working_date(None)
+        args = request.args.to_dict(flat=True)
+        args.pop('clear_working_date', None)
+        args.pop('working_date', None)
+        if 'period' not in args:
+            args['period'] = 'today'
+        return redirect(url_for('dashboard.index', **args))
+
     wd_raw = (request.args.get('working_date') or '').strip()
     if wd_raw:
-        set_working_date(parse_form_date(wd_raw))
+        try:
+            day = datetime.strptime(wd_raw[:10], '%Y-%m-%d').date()
+        except ValueError:
+            day = parse_form_date(wd_raw)
+        # Same as calendar day → stay live (don’t lock yesterday after midnight)
+        if day == calendar_today():
+            set_working_date(None)
+        else:
+            set_working_date(day)
         args = request.args.to_dict(flat=True)
         args.pop('working_date', None)
+        # After setting a working day, default view to that day’s “Today”
         if 'period' not in request.args:
             args['period'] = 'today'
+        else:
+            args['period'] = request.args.get('period') or 'today'
         return redirect(url_for('dashboard.index', **args))
 
     if not request.args:
