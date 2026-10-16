@@ -250,12 +250,25 @@
                     </div>
                     <div class="mb-3 d-none" id="settle_customer_wrap">
                         <label class="form-label form-label-custom" for="settle_customer_id">Customer</label>
-                        <select id="settle_customer_id" name="settle_customer_id" class="form-select form-control-custom">
-                            <option value="">Select customer…</option>
-                            {% for c in customers %}
-                            <option value="{{ c.id }}">{{ c.name }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="of-select-with-add">
+                            <select id="settle_customer_id" name="settle_customer_id"
+                                    class="form-select form-control-custom js-search-customer js-create-customer"
+                                    data-placeholder="Search or add customer..."
+                                    data-create-url="{{ url_for('sales.quick_customer') }}">
+                                <option value="">Search or add customer...</option>
+                                {% for c in customers %}
+                                <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
+                                    {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                    data-of-create-modal="#createCustomerModal"
+                                    data-of-select-target="#settle_customer_id"
+                                    title="Register customer" aria-label="Register customer">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
                         <small class="text-muted-custom">No cash change now — amount added to their balance due.</small>
                     </div>
                     <div class="mb-3">
@@ -327,6 +340,8 @@
         </div>
     </div>
 </div>
+
+{% include 'partials/create_customer_modal.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -339,10 +354,19 @@
         const customerWrap = document.getElementById('settle_customer_wrap');
         const customerSelect = document.getElementById('settle_customer_id');
         const submitLabel = document.getElementById('settle_submit_label');
+        const customerValue = () => {
+            if (!customerSelect) return '';
+            if (customerSelect.tomselect) return customerSelect.tomselect.getValue() || '';
+            return customerSelect.value || '';
+        };
+        const clearCustomer = () => {
+            if (!customerSelect) return;
+            if (customerSelect.tomselect) customerSelect.tomselect.clear(true);
+            else customerSelect.value = '';
+        };
         const syncSettleMethod = () => {
             const isCredit = creditRadio && creditRadio.checked;
             if (customerWrap) customerWrap.classList.toggle('d-none', !isCredit);
-            if (customerSelect) customerSelect.required = !!isCredit;
             if (submitLabel) {
                 submitLabel.textContent = isCredit ? 'Settle to Customer Credit' : 'Settle & Clear Cash';
             }
@@ -361,13 +385,13 @@
             document.getElementById('settle_expense_amount').textContent = 'PKR ' + Number(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('settle_expense_date').textContent = date;
             if (cashRadio) cashRadio.checked = true;
-            if (customerSelect) customerSelect.value = '';
+            clearCustomer();
             syncSettleMethod();
         });
         const form = document.getElementById('settle-expense-form');
         if (form) {
             form.addEventListener('submit', (e) => {
-                if (creditRadio && creditRadio.checked && customerSelect && !customerSelect.value) {
+                if (creditRadio && creditRadio.checked && !customerValue()) {
                     e.preventDefault();
                     if (window.ofAlert) window.ofAlert({ message: 'Select a customer for credit settle.' });
                     else alert('Select a customer for credit settle.');
