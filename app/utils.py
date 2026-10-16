@@ -763,13 +763,13 @@ def _purchase_log_description(log):
 
 def build_sales_price_bands(stats):
     """
-    Group meter segments by date for the Sales “by price” summary.
+    Sales “by price” summary — one row per date + fuel + rate.
 
-    Each band = one meter reading (start→end) at its locked sale_rate.
-    Credit sales on that date/fuel are allocated to matching-rate bands
-    (else split across that fuel’s bands). Cash = band sale − credit gross.
+    All machines at the same rate are combined into one liters/sale line.
+    A later meter segment after a price change becomes a new rate row.
+    Credit is matched by date/fuel/rate; cash = sale − credit gross.
     """
-    from collections import defaultdict, OrderedDict
+    from collections import defaultdict
     from app.models import FuelPrice
 
     rate_as_of = build_fuel_rate_lookup(FuelPrice, include_shared=True)
@@ -784,8 +784,50 @@ def build_sales_price_bands(stats):
             return val.date()
         return val
 
-    # Fuel credit sales → (date, fuel_type_id)
-    credit_by_key = defaultdict(list)
+    def _rate_key(rate):
+        return round(float(rate or 0), 2)
+
+    # Aggregate meters: (day, fuel_id, rate_key) → liters + meta
+    band_map = {}  # key -> SimpleNamespace
+    band_order = []  # first-seen order within day
+
+    for r in stats.get('meter_rows') or []:
+        liters = float(getattr(r, 'liters_sold', 0) or 0)
+        if liters <= 0:
+            continue
+        day = _plain_day(getattr(r, 'reading_date', None))
+        if day is None:
+            continue
+        stored = getattr(r, 'sale_rate', None)
+        rate = float(stored) if stored is not None else float(
+            rate_as_of(r.fuel_type_id, day) or 0
+        )
+        rk = _rate_key(rate)
+        key = (day, r.fuel_type_id, rk)
+        ft = getattr(r, 'fuel_type', None)
+        if key not in band_map:
+            band_map[key] = SimpleNamespace(
+                date=day,
+                fuel_type_id=r.fuel_type_id,
+                fuel_name=(ft.name if ft else 'Fuel'),
+                rate=rate,
+                liters=0.0,
+                sale=0.0,
+                credit=0.0,
+                credit_liters=0.0,
+                credit_gross=0.0,
+                cash=0.0,
+                cash_liters=0.0,
+                _sort_id=getattr(r, 'id', 0) or 0,
+            )
+            band_order.append(key)
+        band = band_map[key]
+        band.liters += liters
+        band.sale += liters * rate
+        band._sort_id = min(band._sort_id, getattr(r, 'id', 0) or 0)
+
+    # Fuel credit sales
+    credit_rows = []
     for e in stats.get('entries') or []:
         et = (getattr(e, 'entry_type', None) or 'sale').lower()
         if et != 'sale' or not getattr(e, 'fuel_type_id', None):
@@ -807,79 +849,72 @@ def build_sales_price_bands(stats):
         credit_gross = credit_liters * sale_rate
         if credit_liters <= 0 and credit <= 0:
             continue
-        credit_by_key[(day, e.fuel_type_id)].append({
+        credit_rows.append({
+            'day': day,
+            'fuel_type_id': e.fuel_type_id,
             'rate': sale_rate,
             'credit_liters': credit_liters,
             'credit': credit,
             'credit_gross': credit_gross,
         })
 
-    day_map = OrderedDict()
-    for r in stats.get('meter_rows') or []:
-        liters = float(getattr(r, 'liters_sold', 0) or 0)
-        if liters <= 0:
+    bands_by_day_fuel = defaultdict(list)
+    for key, band in band_map.items():
+        bands_by_day_fuel[(band.date, band.fuel_type_id)].append(band)
+
+    for c in credit_rows:
+        candidates = bands_by_day_fuel.get((c['day'], c['fuel_type_id'])) or []
+        if not candidates:
             continue
-        day = _plain_day(getattr(r, 'reading_date', None))
-        if day is None:
+        matched = [b for b in candidates if _near(b.rate, c['rate'])]
+        targets = matched or candidates
+        total_L = sum(b.liters for b in targets) or 0.0
+        if total_L <= 0:
             continue
-        stored = getattr(r, 'sale_rate', None)
-        rate = float(stored) if stored is not None else float(
-            rate_as_of(r.fuel_type_id, day) or 0
-        )
-        sale = liters * rate
-        ft = getattr(r, 'fuel_type', None)
-        machine = getattr(r, 'machine', None)
-        machine_name = (
-            (machine.name if machine else None)
-            or getattr(r, 'dispenser_nozzle_id', None)
-            or '—'
-        )
-        band = SimpleNamespace(
-            id=getattr(r, 'id', 0),
-            fuel_type_id=r.fuel_type_id,
-            fuel_name=(ft.name if ft else 'Fuel'),
-            machine_name=machine_name,
-            opening=float(getattr(r, 'opening_reading', 0) or 0),
-            closing=float(getattr(r, 'closing_reading', 0) or 0),
-            liters=liters,
-            rate=rate,
-            sale=sale,
-            credit=0.0,
-            credit_liters=0.0,
-            credit_gross=0.0,
-            cash=sale,
-            cash_liters=liters,
-        )
-        if day not in day_map:
-            day_map[day] = SimpleNamespace(
-                date=day,
+        for b in targets:
+            share = b.liters / total_L
+            b.credit_liters += c['credit_liters'] * share
+            b.credit += c['credit'] * share
+            b.credit_gross += c['credit_gross'] * share
+
+    def _fuel_sort_key(name):
+        n = (name or '').lower()
+        if 'petrol' in n:
+            return (0, n)
+        if 'diesel' in n:
+            return (1, n)
+        return (2, n)
+
+    # day -> fuel_id -> fuel group
+    day_fuel = {}
+    for key in band_order:
+        b = band_map[key]
+        b.credit_liters = min(b.credit_liters, b.liters)
+        b.cash_liters = max(b.liters - b.credit_liters, 0.0)
+        b.credit_gross = min(b.credit_gross, b.sale)
+        b.cash = max(b.sale - b.credit_gross, 0.0)
+
+        if b.date not in day_fuel:
+            day_fuel[b.date] = {}
+        fuels = day_fuel[b.date]
+        if b.fuel_type_id not in fuels:
+            fuels[b.fuel_type_id] = SimpleNamespace(
+                fuel_type_id=b.fuel_type_id,
+                fuel_name=b.fuel_name,
                 bands=[],
                 total_liters=0.0,
                 total_sale=0.0,
                 total_cash=0.0,
                 total_credit=0.0,
+                _sort_id=b._sort_id,
             )
-        day_map[day].bands.append(band)
-
-    # Allocate credit onto bands
-    for (day, fuel_id), credits in credit_by_key.items():
-        group = day_map.get(day)
-        if not group:
-            continue
-        bands = [b for b in group.bands if b.fuel_type_id == fuel_id]
-        if not bands:
-            continue
-        for c in credits:
-            matched = [b for b in bands if _near(b.rate, c['rate'])]
-            targets = matched or bands
-            total_L = sum(b.liters for b in targets) or 0.0
-            if total_L <= 0:
-                continue
-            for b in targets:
-                share = b.liters / total_L
-                b.credit_liters += c['credit_liters'] * share
-                b.credit += c['credit'] * share
-                b.credit_gross += c['credit_gross'] * share
+        fg = fuels[b.fuel_type_id]
+        fg.bands.append(b)
+        fg.total_liters += b.liters
+        fg.total_sale += b.sale
+        fg.total_cash += b.cash
+        fg.total_credit += b.credit
+        fg._sort_id = min(fg._sort_id, b._sort_id)
 
     days = []
     grand = SimpleNamespace(
@@ -888,24 +923,23 @@ def build_sales_price_bands(stats):
         total_cash=0.0,
         total_credit=0.0,
     )
-    # Newest date first for the listing
-    for day in sorted(day_map.keys(), reverse=True):
-        group = day_map[day]
-        for b in group.bands:
-            b.credit_liters = min(b.credit_liters, b.liters)
-            b.cash_liters = max(b.liters - b.credit_liters, 0.0)
-            b.credit_gross = min(b.credit_gross, b.sale)
-            b.cash = max(b.sale - b.credit_gross, 0.0)
-            # Keep discounted credit amount for display
-            group.total_liters += b.liters
-            group.total_sale += b.sale
-            group.total_cash += b.cash
-            group.total_credit += b.credit
-        grand.total_liters += group.total_liters
-        grand.total_sale += group.total_sale
-        grand.total_cash += group.total_cash
-        grand.total_credit += group.total_credit
-        days.append(group)
+    for day in sorted(day_fuel.keys(), reverse=True):
+        fuels = list(day_fuel[day].values())
+        fuels.sort(key=lambda f: (_fuel_sort_key(f.fuel_name), f._sort_id))
+        for fg in fuels:
+            # Rate rows in chronological order (first meter segment first)
+            fg.bands.sort(key=lambda x: (x._sort_id, x.rate))
+            grand.total_liters += fg.total_liters
+            grand.total_sale += fg.total_sale
+            grand.total_cash += fg.total_cash
+            grand.total_credit += fg.total_credit
+        day_total = SimpleNamespace(
+            liters=sum(f.total_liters for f in fuels),
+            sale=sum(f.total_sale for f in fuels),
+            cash=sum(f.total_cash for f in fuels),
+            credit=sum(f.total_credit for f in fuels),
+        )
+        days.append(SimpleNamespace(date=day, fuels=fuels, day_total=day_total))
 
     return SimpleNamespace(days=days, grand=grand)
 

@@ -117,19 +117,9 @@
 {% if price_bands and price_bands.days %}
 <section class="mb-4" aria-label="Sales by price">
     <div class="card card-premium list-panel">
-        <div class="card-header-premium d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <div>
-                <h5 class="mb-0 fw-bold">Sales by price</h5>
-                <small class="text-muted-custom">Meter segments at each rate · cash / credit split</small>
-            </div>
-            {% if price_bands.grand %}
-            <div class="small text-muted-custom text-end">
-                Period · {{ "{:,.2f}".format(price_bands.grand.total_liters) }} L
-                · Sale {{ price_bands.grand.total_sale | money }}
-                · Cash {{ price_bands.grand.total_cash | money }}
-                · Credit {{ price_bands.grand.total_credit | money }}
-            </div>
-            {% endif %}
+        <div class="card-header-premium">
+            <h5 class="mb-0 fw-bold">Sales by price</h5>
+            <small class="text-muted-custom">Combined machines at each rate · new meter after price change = new row</small>
         </div>
         <div class="table-responsive">
             <table class="table table-custom table-hover mb-0 list-table price-band-table">
@@ -137,47 +127,44 @@
                     <tr>
                         <th>Date</th>
                         <th>Fuel</th>
-                        <th>Machine</th>
-                        <th>Start</th>
-                        <th>End</th>
                         <th class="text-end">Liters</th>
                         <th class="text-end">Rate</th>
-                        <th class="text-end">Sale</th>
+                        <th class="text-end">Total sale</th>
                         <th class="text-end">Cash</th>
                         <th class="text-end">Credit</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for day in price_bands.days %}
-                        {% for b in day.bands %}
-                        <tr>
-                            <td class="text-nowrap">{% if loop.first %}{{ day.date }}{% endif %}</td>
-                            <td class="fw-semibold">{{ b.fuel_name }}</td>
-                            <td>{{ b.machine_name }}</td>
-                            <td class="text-nowrap">{{ "{:,.2f}".format(b.opening) }}</td>
-                            <td class="text-nowrap">{{ "{:,.2f}".format(b.closing) }}</td>
-                            <td class="text-end text-nowrap">{{ "{:,.2f}".format(b.liters) }}</td>
-                            <td class="text-end text-nowrap">{{ b.rate | money }}</td>
-                            <td class="text-end text-nowrap">{{ b.sale | money }}</td>
-                            <td class="text-end text-nowrap text-success">{{ b.cash | money }}</td>
-                            <td class="text-end text-nowrap text-warning">{{ b.credit | money }}</td>
-                        </tr>
+                        {% for fuel in day.fuels %}
+                            {% for b in fuel.bands %}
+                            <tr>
+                                <td class="text-nowrap">{% if loop.parent.first and loop.first %}{{ day.date }}{% endif %}</td>
+                                <td class="fw-semibold">{% if loop.first %}{{ fuel.fuel_name }}{% endif %}</td>
+                                <td class="text-end text-nowrap">{{ "{:,.2f}".format(b.liters) }} L</td>
+                                <td class="text-end text-nowrap">{{ b.rate | money }}</td>
+                                <td class="text-end text-nowrap">{{ b.sale | money }}</td>
+                                <td class="text-end text-nowrap text-success">{{ b.cash | money }}</td>
+                                <td class="text-end text-nowrap text-warning">{{ b.credit | money }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="price-band-subtotal">
+                                <td></td>
+                                <td class="fw-semibold">{{ fuel.fuel_name }} day total</td>
+                                <td class="text-end fw-semibold text-nowrap">{{ "{:,.2f}".format(fuel.total_liters) }} L</td>
+                                <td></td>
+                                <td class="text-end fw-semibold text-nowrap">{{ fuel.total_sale | money }}</td>
+                                <td class="text-end fw-semibold text-nowrap text-success">{{ fuel.total_cash | money }}</td>
+                                <td class="text-end fw-semibold text-nowrap text-warning">{{ fuel.total_credit | money }}</td>
+                            </tr>
                         {% endfor %}
-                        <tr class="price-band-subtotal">
-                            <td colspan="5" class="fw-semibold">{{ day.date }} total</td>
-                            <td class="text-end fw-semibold text-nowrap">{{ "{:,.2f}".format(day.total_liters) }}</td>
-                            <td></td>
-                            <td class="text-end fw-semibold text-nowrap">{{ day.total_sale | money }}</td>
-                            <td class="text-end fw-semibold text-nowrap text-success">{{ day.total_cash | money }}</td>
-                            <td class="text-end fw-semibold text-nowrap text-warning">{{ day.total_credit | money }}</td>
-                        </tr>
                     {% endfor %}
                 </tbody>
                 {% if price_bands.days|length > 1 and price_bands.grand %}
                 <tfoot>
                     <tr class="fw-semibold">
-                        <td colspan="5">Period total</td>
-                        <td class="text-end text-nowrap">{{ "{:,.2f}".format(price_bands.grand.total_liters) }}</td>
+                        <td colspan="2">Period total</td>
+                        <td class="text-end text-nowrap">{{ "{:,.2f}".format(price_bands.grand.total_liters) }} L</td>
                         <td></td>
                         <td class="text-end text-nowrap">{{ price_bands.grand.total_sale | money }}</td>
                         <td class="text-end text-nowrap text-success">{{ price_bands.grand.total_cash | money }}</td>
