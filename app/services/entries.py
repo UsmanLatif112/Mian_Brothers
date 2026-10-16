@@ -314,8 +314,80 @@ def edit_payment(payment, form):
     return payment
 
 
+def _expense_settle_remark(name, settle_note=None):
+    remark = f'Expense settle — {name}'
+    note = (settle_note or '').strip()
+    if note:
+        remark = f'{remark} — {note}'
+    return remark
+
+
+def _sync_expense_credit_sale(expense, customer, settled_date, settle_note, current_user_id=None):
+    """Create/update linked CreditSale for credit settle; returns (sale, customers_to_recalc)."""
+    from app.tenancy import stamp_agency
+
+    amount = float(expense.amount or 0)
+    remark = _expense_settle_remark(expense.name, settle_note)
+    touched = set()
+    old_customer_id = expense.settle_customer_id
+    cs = None
+    if expense.settle_credit_sale_id:
+        cs = CreditSale.query.get(expense.settle_credit_sale_id)
+
+    if cs is None:
+        cs = stamp_agency(CreditSale(
+            customer_id=customer.id,
+            sale_date=settled_date,
+            liters=0,
+            rate=0,
+            amount=amount,
+            amount_paid=0,
+            entry_type='loan',
+            payment_status='unpaid',
+            remarks=remark,
+            recorded_by=current_user_id or expense.recorded_by,
+        ))
+        db.session.add(cs)
+        db.session.flush()
+        expense.settle_credit_sale_id = cs.id
+    else:
+        if cs.customer_id and cs.customer_id != customer.id:
+            touched.add(cs.customer_id)
+        cs.customer_id = customer.id
+        cs.sale_date = settled_date
+        cs.amount = amount
+        cs.amount_paid = 0
+        cs.entry_type = 'loan'
+        cs.payment_status = 'unpaid'
+        cs.remarks = remark
+        db.session.flush()
+
+    expense.settle_customer_id = customer.id
+    touched.add(customer.id)
+    if old_customer_id:
+        touched.add(old_customer_id)
+    return cs, touched
+
+
+def _clear_expense_credit_sale(expense):
+    """Remove linked credit sale; returns customer ids to recalc."""
+    touched = set()
+    if expense.settle_customer_id:
+        touched.add(expense.settle_customer_id)
+    if expense.settle_credit_sale_id:
+        cs = CreditSale.query.get(expense.settle_credit_sale_id)
+        if cs:
+            if cs.customer_id:
+                touched.add(cs.customer_id)
+            db.session.delete(cs)
+            db.session.flush()
+    expense.settle_credit_sale_id = None
+    expense.settle_customer_id = None
+    return touched
+
+
 def edit_expense(expense, form, current_user_id=None):
-    """Update an Expense (including settle fields when settled)."""
+    """Update an Expense and cascade settle → customer credit sale when needed."""
     require_agency_access(expense)
     name = (form.get('name') or '').strip()
     if not name:
@@ -336,15 +408,55 @@ def edit_expense(expense, form, current_user_id=None):
     expense.amount = amount
     expense.expense_date = expense_date
 
-    if expense.is_settled:
+    is_settled = bool(expense.is_settled or expense.settled_date)
+    customers_to_recalc = set()
+
+    if is_settled:
         settle_raw = (form.get('settled_date') or '').strip()
-        if settle_raw:
-            settled_date = parse_form_date(settle_raw, expense.settled_date)
-            expense.settled_date = settled_date
+        settled_date = parse_form_date(
+            settle_raw, expense.settled_date or expense_date
+        ) if settle_raw or expense.settled_date else expense_date
+        expense.settled_date = settled_date
+
         settle_note = (form.get('settle_note') or '').strip() or None
         if 'settle_note' in form:
             expense.settle_note = settle_note
+        else:
+            settle_note = expense.settle_note
+
+        method = (form.get('settle_method') or expense.settle_method or 'cash').strip().lower()
+        if method not in ('cash', 'credit'):
+            method = 'cash'
+        old_method = (expense.settle_method or 'cash').strip().lower()
+        expense.settle_method = method
+
         if current_user_id and not expense.settled_by:
             expense.settled_by = current_user_id
 
+        if method == 'credit':
+            try:
+                customer_id = int(form.get('settle_customer_id') or expense.settle_customer_id or 0)
+            except (TypeError, ValueError):
+                customer_id = int(expense.settle_customer_id or 0)
+            customer = Customer.query.get(customer_id) if customer_id else None
+            if not customer:
+                raise EntryError('Select a customer for credit settle.')
+            require_agency_access(customer)
+            _, touched = _sync_expense_credit_sale(
+                expense, customer, settled_date, settle_note, current_user_id
+            )
+            customers_to_recalc |= touched
+        else:
+            # Switched to cash (or stayed cash): drop any linked receivable
+            if old_method == 'credit' or expense.settle_credit_sale_id:
+                customers_to_recalc |= _clear_expense_credit_sale(expense)
+            else:
+                expense.settle_customer_id = None
+                expense.settle_credit_sale_id = None
+
+    db.session.flush()
+    for cid in customers_to_recalc:
+        c = Customer.query.get(cid)
+        if c:
+            _recalc_balance(c)
     return expense

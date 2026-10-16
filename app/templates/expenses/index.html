@@ -111,13 +111,15 @@
                                             data-expense-description="{{ e.description or '' }}"
                                             data-expense-amount="{{ '%.2f'|format(e.amount|float) }}"
                                             data-expense-date="{{ e.expense_date }}"
-                                            data-is-settled="{{ '1' if e.is_settled else '0' }}"
+                                            data-is-settled="{{ '1' if (e.is_settled or e.settled_date) else '0' }}"
                                             data-settled-date="{{ e.settled_date or '' }}"
                                             data-settle-note="{{ e.settle_note or '' }}"
+                                            data-settle-method="{{ (e.settle_method or 'cash')|lower }}"
+                                            data-settle-customer-id="{{ e.settle_customer_id or '' }}"
                                             title="Edit">
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
-                                        {% if not e.is_settled %}
+                                        {% if not (e.is_settled or e.settled_date) %}
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-primary border-0"
@@ -321,7 +323,42 @@
                     </div>
                     <div id="edit_settle_fields" class="d-none">
                         <div class="mb-3">
-                            <label class="form-label form-label-custom" for="edit_settled_date">Settle / return date</label>
+                            <label class="form-label form-label-custom">Settle as</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                    <input class="form-check-input" type="radio" name="settle_method" id="edit_settle_method_cash" value="cash">
+                                    Cash back to till
+                                </label>
+                                <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                    <input class="form-check-input" type="radio" name="settle_method" id="edit_settle_method_credit" value="credit">
+                                    Customer credit
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3 d-none" id="edit_settle_customer_wrap">
+                            <label class="form-label form-label-custom" for="edit_settle_customer_id">Customer</label>
+                            <div class="of-select-with-add">
+                                <select id="edit_settle_customer_id" name="settle_customer_id"
+                                        class="form-select form-control-custom js-search-customer js-create-customer"
+                                        data-placeholder="Search or add customer..."
+                                        data-create-url="{{ url_for('sales.quick_customer') }}">
+                                    <option value="">Search or add customer...</option>
+                                    {% for c in customers %}
+                                    <option value="{{ c.id }}" data-phone="{{ c.phone or '' }}">
+                                        {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %} (Due: {{ c.current_balance_due | money }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                        data-of-create-modal="#createCustomerModal"
+                                        data-of-select-target="#edit_settle_customer_id"
+                                        title="Register customer" aria-label="Register customer">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label form-label-custom" for="edit_settled_date">Settle date</label>
                             <input type="date" id="edit_settled_date" name="settled_date" class="form-control form-control-custom">
                         </div>
                         <div class="mb-1">
@@ -402,6 +439,27 @@
 
     const editModal = document.getElementById('editExpenseModal');
     if (editModal) {
+        const editCashRadio = document.getElementById('edit_settle_method_cash');
+        const editCreditRadio = document.getElementById('edit_settle_method_credit');
+        const editCustomerWrap = document.getElementById('edit_settle_customer_wrap');
+        const editCustomerSelect = document.getElementById('edit_settle_customer_id');
+        const setEditCustomer = (id) => {
+            if (!editCustomerSelect) return;
+            const val = id ? String(id) : '';
+            if (editCustomerSelect.tomselect) {
+                if (val) editCustomerSelect.tomselect.setValue(val, true);
+                else editCustomerSelect.tomselect.clear(true);
+            } else {
+                editCustomerSelect.value = val;
+            }
+        };
+        const syncEditSettleMethod = () => {
+            const isCredit = editCreditRadio && editCreditRadio.checked;
+            if (editCustomerWrap) editCustomerWrap.classList.toggle('d-none', !isCredit);
+        };
+        if (editCashRadio) editCashRadio.addEventListener('change', syncEditSettleMethod);
+        if (editCreditRadio) editCreditRadio.addEventListener('change', syncEditSettleMethod);
+
         editModal.addEventListener('show.bs.modal', function (event) {
             const btn = event.relatedTarget;
             if (!btn) return;
@@ -417,7 +475,30 @@
             document.getElementById('edit_settle_note').value = btn.getAttribute('data-settle-note') || '';
             document.getElementById('edit_settled_date').disabled = !settled;
             document.getElementById('edit_settle_note').disabled = !settled;
+            const method = (btn.getAttribute('data-settle-method') || 'cash').toLowerCase();
+            if (editCashRadio) editCashRadio.checked = method !== 'credit';
+            if (editCreditRadio) editCreditRadio.checked = method === 'credit';
+            setEditCustomer(btn.getAttribute('data-settle-customer-id') || '');
+            syncEditSettleMethod();
         });
+
+        const editForm = editModal.querySelector('form');
+        if (editForm) {
+            editForm.addEventListener('submit', (e) => {
+                const settleFields = document.getElementById('edit_settle_fields');
+                if (settleFields && !settleFields.classList.contains('d-none')
+                    && editCreditRadio && editCreditRadio.checked) {
+                    const val = editCustomerSelect && editCustomerSelect.tomselect
+                        ? (editCustomerSelect.tomselect.getValue() || '')
+                        : (editCustomerSelect ? editCustomerSelect.value : '');
+                    if (!val) {
+                        e.preventDefault();
+                        if (window.ofAlert) window.ofAlert({ message: 'Select a customer for credit settle.' });
+                        else alert('Select a customer for credit settle.');
+                    }
+                }
+            });
+        }
     }
 })();
 </script>
