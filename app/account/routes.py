@@ -14,6 +14,33 @@ from app.tenancy import require_agency_access, stamp_agency
 from app.utils import PERIOD_CHOICES, compute_period_stats, parse_form_date, parse_period
 
 
+def _enrich_taken_rows(rows):
+    """Attach per-day previous / cash in hand / pending for the listing table."""
+    cache = {}
+    enriched = []
+    for row in rows:
+        day = _as_date(row.taken_date)
+        if day not in cache:
+            day_stats = compute_period_stats(day, day, _models_ns())
+            cache[day] = {
+                'previous_balance': float(day_stats.get('previous_balance') or 0),
+                'cash_in_hand': float(day_stats.get('cash_in_hand') or 0),
+                'pending_balance': float(day_stats.get('remaining_balance') or 0),
+            }
+        ctx = cache[day]
+        enriched.append(SimpleNamespace(
+            id=row.id,
+            taken_date=row.taken_date,
+            person_name=row.person_name,
+            note=row.note,
+            amount=float(row.amount or 0),
+            previous_balance=ctx['previous_balance'],
+            cash_in_hand=ctx['cash_in_hand'],
+            pending_balance=ctx['pending_balance'],
+        ))
+    return enriched
+
+
 def _today():
     return datetime.utcnow().date()
 
@@ -187,6 +214,7 @@ def index():
             or search_q in (getattr(r, 'note', '') or '').lower()
             or search_q in str(getattr(r, 'taken_date', '') or '').lower()
         ]
+    taken_rows = _enrich_taken_rows(taken_rows)
 
     return render_template(
         'account/index.html',
