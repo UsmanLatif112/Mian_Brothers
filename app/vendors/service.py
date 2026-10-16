@@ -274,6 +274,9 @@ def find_auto_payments_for_log(log):
 
 def reverse_purchase_stock(log):
     """Undo stock added by this purchase batch (floor at 0)."""
+    from app.services.stock_batches import delete_batch_for_purchase_log
+    delete_batch_for_purchase_log(log)
+
     liters = float(log.liters or 0) if log.liters is not None else 0.0
     qty = int(log.quantity or 0) if log.quantity is not None else 0
 
@@ -305,8 +308,19 @@ def reverse_purchase_stock(log):
 
 def apply_purchase_stock_delta(log, old_liters, old_qty, new_liters, new_qty):
     """Adjust live stock when a purchase log quantity/liters changes."""
+    from app.services.stock_batches import adjust_batch_for_purchase_log
+
     d_liters = float(new_liters or 0) - float(old_liters or 0)
     d_qty = int(new_qty or 0) - int(old_qty or 0)
+    old_batch_qty = float(old_liters or 0) if (
+        log.category in ('fuel', 'ft_mobile') or float(old_liters or 0) > 0
+    ) else float(old_qty or 0)
+    new_batch_qty = float(new_liters or 0) if (
+        log.category in ('fuel', 'ft_mobile') or float(new_liters or 0) > 0
+    ) else float(new_qty or 0)
+    adjust_batch_for_purchase_log(
+        log, old_batch_qty, new_batch_qty, unit_cost=float(log.cost_price or 0)
+    )
 
     if log.category == 'fuel' and log.fuel_type_id:
         if abs(d_liters) < 1e-9:

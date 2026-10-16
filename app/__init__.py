@@ -286,6 +286,7 @@ def run_schema_boot():
             pass
     ensure_meter_sale_rate_schema()
     ensure_fuel_price_effective_at_schema()
+    ensure_stock_batch_schema()
     # Wider liter columns: scripts/migrate_liter_precision.py (optional, one-time)
 
 
@@ -327,6 +328,8 @@ def ensure_agency_schema():
         'other_items',
         'item_purchase_logs',
         'item_price_logs',
+        'stock_batches',
+        'stock_batch_consumptions',
     ]
 
     for table in tenant_tables:
@@ -749,6 +752,48 @@ def ensure_meter_sale_rate_schema():
         conn.execute(text(
             "ALTER TABLE meter_readings ADD COLUMN sale_rate NUMERIC(10, 2) NULL"
         ))
+
+
+def ensure_stock_batch_schema():
+    """FIFO batch tables + cogs_total on sales/meter; backfill batches once."""
+    from sqlalchemy import text, inspect
+    from app.models import StockBatch, StockBatchConsumption  # noqa: F401 — register for create_all
+
+    db.create_all()
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+    alters = []
+
+    if 'meter_readings' in tables:
+        cols = {c['name'] for c in inspector.get_columns('meter_readings')}
+        if 'cogs_total' not in cols:
+            alters.append('ALTER TABLE meter_readings ADD COLUMN cogs_total NUMERIC(12, 2) NULL')
+    if 'credit_sales' in tables:
+        cols = {c['name'] for c in inspector.get_columns('credit_sales')}
+        if 'cogs_total' not in cols:
+            alters.append('ALTER TABLE credit_sales ADD COLUMN cogs_total NUMERIC(12, 2) NULL')
+
+    for stmt in alters:
+        try:
+            with db.engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as e:
+            print(f'stock batch column alter skipped: {e}')
+
+    try:
+        if 'stock_batches' in set(inspect(db.engine).get_table_names()):
+            if StockBatch.query.count() == 0:
+                from app.services.stock_batches import backfill_batches_from_purchases
+                n = backfill_batches_from_purchases()
+                db.session.commit()
+                print(f'FIFO stock batches backfilled ({n} from purchases).')
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print(f'FIFO batch backfill skipped: {e}')
 
 
 def ensure_item_price_log_schema():

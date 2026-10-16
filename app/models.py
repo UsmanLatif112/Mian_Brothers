@@ -166,6 +166,7 @@ class MeterReading(db.Model):
     closing_reading = db.Column(db.Numeric(12, 3), nullable=True)
     liters_sold = db.Column(db.Numeric(12, 3), nullable=True, default=0.00)
     sale_rate = db.Column(db.Numeric(10, 2), nullable=True)  # snapshot at save (mid-day price splits)
+    cogs_total = db.Column(db.Numeric(12, 2), nullable=True)  # FIFO batch cost for liters_sold
     reading_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     closed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -204,6 +205,7 @@ class CreditSale(db.Model):
     entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan | opening
     payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid / partial
     remarks = db.Column(db.String(255), nullable=True)
+    cogs_total = db.Column(db.Numeric(12, 2), nullable=True)  # FIFO batch cost snapshot
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -588,6 +590,49 @@ class ItemPriceLog(db.Model):
 
     def __repr__(self):
         return f"<ItemPriceLog item={self.other_item_id} price={self.sale_price}>"
+
+
+class StockBatch(db.Model):
+    """FIFO purchase batch for fuel tank liters or shop/FT stock."""
+    __tablename__ = 'stock_batches'
+
+    id = db.Column(db.Integer, primary_key=True)
+    agency_id = db.Column(db.Integer, db.ForeignKey('agencies.id'), nullable=True, index=True)
+    fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), nullable=True, index=True)
+    other_item_id = db.Column(db.Integer, db.ForeignKey('other_items.id'), nullable=True, index=True)
+    purchase_log_id = db.Column(db.Integer, db.ForeignKey('item_purchase_logs.id'), nullable=True, index=True)
+    qty_received = db.Column(db.Numeric(12, 3), nullable=False, default=0)
+    qty_remaining = db.Column(db.Numeric(12, 3), nullable=False, default=0)
+    unit_cost = db.Column(db.Numeric(12, 4), nullable=False, default=0)
+    received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    fuel_type = db.relationship('FuelType', foreign_keys=[fuel_type_id])
+    other_item = db.relationship('OtherItem', foreign_keys=[other_item_id])
+    purchase_log = db.relationship('ItemPurchaseLog', foreign_keys=[purchase_log_id])
+
+    def __repr__(self):
+        return f"<StockBatch {self.id} rem={self.qty_remaining} @{self.unit_cost}>"
+
+
+class StockBatchConsumption(db.Model):
+    """FIFO qty taken from a batch for a meter reading or credit sale."""
+    __tablename__ = 'stock_batch_consumptions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    agency_id = db.Column(db.Integer, db.ForeignKey('agencies.id'), nullable=True, index=True)
+    stock_batch_id = db.Column(db.Integer, db.ForeignKey('stock_batches.id'), nullable=False, index=True)
+    qty_consumed = db.Column(db.Numeric(12, 3), nullable=False, default=0)
+    unit_cost = db.Column(db.Numeric(12, 4), nullable=False, default=0)
+    cogs_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    source_type = db.Column(db.String(30), nullable=False)  # meter_reading | credit_sale
+    source_id = db.Column(db.Integer, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    batch = db.relationship('StockBatch', foreign_keys=[stock_batch_id], backref='consumptions')
+
+    def __repr__(self):
+        return f"<StockBatchConsumption {self.source_type}:{self.source_id} qty={self.qty_consumed}>"
 
 
 class BackupLog(db.Model):

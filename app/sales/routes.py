@@ -14,6 +14,9 @@ from app.utils import (
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale,
 )
+from app.services.stock_batches import (
+    consume_fifo, BatchStockError, SOURCE_METER, SOURCE_CREDIT,
+)
 from app.customers.service import recalculate_customer_balance
 from datetime import datetime
 from types import SimpleNamespace
@@ -201,6 +204,7 @@ def index():
 
                 stock_delta = 0.0
                 day_liters_before = 0.0
+                touched_readings = []
                 for machine in machines:
                     for existing in MeterReading.query.filter_by(
                         machine_id=machine.id,
@@ -244,11 +248,12 @@ def index():
                         # Keep existing sale_rate on re-edit so a later price
                         # change does not rewrite earlier same-day liters.
                         stock_delta += liters - old_liters
+                        touched_readings.append(match)
                     elif latest and latest.closing_reading is not None and _near(
                         opening, latest.closing_reading
                     ):
                         # Next segment after price change — append
-                        db.session.add(stamp_agency(MeterReading(
+                        row = stamp_agency(MeterReading(
                             machine_id=machine.id,
                             dispenser_nozzle_id=machine.name,
                             fuel_type_id=fuel_type.id,
@@ -260,10 +265,12 @@ def index():
                             recorded_by=current_user.id,
                             closed_by=current_user.id,
                             closed_at=datetime.utcnow(),
-                        )))
+                        ))
+                        db.session.add(row)
+                        touched_readings.append(row)
                         stock_delta += liters
                     elif not latest:
-                        db.session.add(stamp_agency(MeterReading(
+                        row = stamp_agency(MeterReading(
                             machine_id=machine.id,
                             dispenser_nozzle_id=machine.name,
                             fuel_type_id=fuel_type.id,
@@ -275,7 +282,9 @@ def index():
                             recorded_by=current_user.id,
                             closed_by=current_user.id,
                             closed_at=datetime.utcnow(),
-                        )))
+                        ))
+                        db.session.add(row)
+                        touched_readings.append(row)
                         stock_delta += liters
                     elif len(readings) == 1:
                         # Legacy single-row replace for the day
@@ -288,6 +297,7 @@ def index():
                         latest.closed_at = datetime.utcnow()
                         latest.fuel_type_id = fuel_type.id
                         stock_delta += liters - old_liters
+                        touched_readings.append(latest)
                     else:
                         last_close = float(latest.closing_reading or latest.opening_reading)
                         raise ValueError(
@@ -304,6 +314,22 @@ def index():
                     )
 
                 inventory.current_stock_liters = available - stock_delta
+                db.session.flush()
+                for reading in touched_readings:
+                    sold = float(reading.liters_sold or 0)
+                    if sold <= 0:
+                        reading.cogs_total = 0
+                        continue
+                    try:
+                        reading.cogs_total = consume_fifo(
+                            qty=sold,
+                            source_type=SOURCE_METER,
+                            source_id=reading.id,
+                            fuel_type_id=fuel_type.id,
+                            allow_short=True,
+                        )
+                    except BatchStockError as e:
+                        raise ValueError(str(e)) from e
                 db.session.commit()
 
                 day_liters_after = day_liters_before + stock_delta
@@ -366,7 +392,7 @@ def index():
             other_item = None
             rate = None
             item_label = ''
-            stock_note = 'ledger only — fuel stock unchanged'
+            stock_note = 'stock updated'
 
             if is_fuel_sale:
                 fuel_type = FuelType.query.get(item_key.split(':', 1)[1])
@@ -378,6 +404,15 @@ def index():
                 item_label = fuel_type.name
                 if not rate:
                     flash(f'No active price for {fuel_type.name}.', 'danger')
+                    return _sales_redirect()
+                inv = Inventory.query.filter_by(fuel_type_id=fuel_type.id).first()
+                available_fuel = float(inv.current_stock_liters or 0) if inv else 0.0
+                if available_fuel + 0.0001 < qty_val:
+                    flash(
+                        f'Insufficient {fuel_type.name} stock. '
+                        f'Available: {available_fuel:.2f}L, requested: {qty_val:.2f}L.',
+                        'danger',
+                    )
                     return _sales_redirect()
             elif is_shop_sale:
                 other_item = OtherItem.query.get(item_key.split(':', 1)[1])
@@ -482,7 +517,11 @@ def index():
                         )
                         return _sales_redirect()
 
-            db.session.add(stamp_agency(CreditSale(
+            if is_fuel_sale and inv:
+                inv.current_stock_liters = float(inv.current_stock_liters or 0) - qty_val
+                stock_note = f'tank −{qty_val:.2f}L (left {float(inv.current_stock_liters):.2f}L)'
+
+            cs = stamp_agency(CreditSale(
                 customer_id=customer.id if customer else None,
                 fuel_type_id=fuel_type.id if fuel_type else None,
                 other_item_id=other_item.id if other_item else None,
@@ -497,8 +536,30 @@ def index():
                 payment_status=payment_status,
                 remarks=remarks,
                 recorded_by=current_user.id
-            )))
+            ))
+            db.session.add(cs)
             db.session.flush()
+            try:
+                if fuel_type:
+                    cs.cogs_total = consume_fifo(
+                        qty=qty_val,
+                        source_type=SOURCE_CREDIT,
+                        source_id=cs.id,
+                        fuel_type_id=fuel_type.id,
+                        allow_short=True,
+                    )
+                elif other_item:
+                    cs.cogs_total = consume_fifo(
+                        qty=qty_val,
+                        source_type=SOURCE_CREDIT,
+                        source_id=cs.id,
+                        other_item_id=other_item.id,
+                        allow_short=True,
+                    )
+            except BatchStockError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+                return _sales_redirect()
 
             cleared_due = 0.0
             advance_amt = 0.0
@@ -631,7 +692,7 @@ def index():
 
             other_item.liters = available - liters_val
 
-            db.session.add(stamp_agency(CreditSale(
+            cs = stamp_agency(CreditSale(
                 customer_id=customer.id if customer else None,
                 fuel_type_id=None,
                 other_item_id=other_item.id,
@@ -645,7 +706,21 @@ def index():
                 payment_status=payment_status,
                 remarks=remarks or f'FT sale · cost {cost_rate:.2f}/L',
                 recorded_by=current_user.id,
-            )))
+            ))
+            db.session.add(cs)
+            db.session.flush()
+            try:
+                cs.cogs_total = consume_fifo(
+                    qty=liters_val,
+                    source_type=SOURCE_CREDIT,
+                    source_id=cs.id,
+                    other_item_id=other_item.id,
+                    allow_short=True,
+                )
+            except BatchStockError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+                return _sales_redirect()
             db.session.commit()
 
             who = customer.name if customer else 'Walk-in'

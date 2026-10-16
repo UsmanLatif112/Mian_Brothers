@@ -18,6 +18,9 @@
             <h1 class="page-title">Inventory Control</h1>
         </div>
         <div class="page-header-actions">
+            <a href="{{ url_for('inventory.batches') }}" class="btn btn-outline-secondary" title="FIFO cost layers">
+                <i class="bi bi-layers me-1"></i><span class="btn-label"> FIFO layers</span>
+            </a>
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#addInventoryModal" id="open-add-inventory-btn" title="Add Inventory">
                 <i class="bi bi-plus-circle me-1"></i><span class="btn-label"> Add Inventory</span>
             </button>

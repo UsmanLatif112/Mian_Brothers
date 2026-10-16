@@ -1,8 +1,11 @@
 """Shared edit/delete for CreditSale, Payment, and Expense with stock + balance side effects."""
 
-from app.models import db, CreditSale, Payment, Expense, Customer, OtherItem
+from app.models import db, CreditSale, Payment, Expense, Customer, OtherItem, Inventory
 from app.tenancy import require_agency_access
 from app.utils import parse_form_date, datetime_from_date
+from app.services.stock_batches import (
+    reverse_consumptions, consume_fifo, BatchStockError, SOURCE_CREDIT,
+)
 
 
 class EntryError(ValueError):
@@ -26,32 +29,35 @@ def _is_ft_item(item):
 
 
 def restore_sale_stock(cs):
-    """Put back shop/FT stock consumed by a sale CreditSale."""
+    """Put back stock + FIFO batches consumed by a sale CreditSale."""
     if (cs.entry_type or 'sale').lower() != 'sale':
         return
     qty = float(cs.liters or 0)
     if qty <= 0:
         return
 
-    if not cs.other_item_id:
-        # Fuel credit sales are ledger-only; tank stock comes from meter sales.
+    reverse_consumptions(SOURCE_CREDIT, cs.id)
+
+    if cs.other_item_id:
+        item = OtherItem.query.get(cs.other_item_id)
+        if not item:
+            return
+        require_agency_access(item)
+        if _is_ft_item(item):
+            item.liters = float(item.liters or 0) + qty
+        else:
+            item.quantity = int(item.quantity or 0) + int(round(qty))
         return
 
-    item = OtherItem.query.get(cs.other_item_id)
-    if not item:
+    if not cs.fuel_type_id:
         return
-    require_agency_access(item)
-    if _is_ft_item(item):
-        item.liters = float(item.liters or 0) + qty
-    else:
-        item.quantity = int(item.quantity or 0) + int(round(qty))
+    inv = Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id).first()
+    if inv:
+        inv.current_stock_liters = float(inv.current_stock_liters or 0) + qty
 
 
 def apply_sale_stock_delta(item, old_qty, new_qty):
-    """Adjust shop/FT stock when sale quantity changes (new - old consumed).
-
-    Fuel tank stock is owned by meter sales — credit fuel ledger edits do not touch it.
-    """
+    """Adjust shop/FT stock when sale quantity changes (new - old consumed)."""
     delta = float(new_qty) - float(old_qty)
     if abs(delta) < 1e-9 or not item:
         return
@@ -271,7 +277,21 @@ def edit_credit_sale(cs, form):
 
     old_qty = float(cs.liters or 0)
     item = OtherItem.query.get(cs.other_item_id) if cs.other_item_id else None
-    apply_sale_stock_delta(item, old_qty, qty)
+
+    # Reverse previous FIFO layers, adjust physical stock, then re-consume for new qty
+    reverse_consumptions(SOURCE_CREDIT, cs.id)
+
+    if item:
+        apply_sale_stock_delta(item, old_qty, qty)
+    elif cs.fuel_type_id:
+        inv = Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id).first()
+        if inv:
+            available = float(inv.current_stock_liters or 0) + old_qty
+            if qty > available + 1e-9:
+                raise EntryError(
+                    f'Not enough fuel in tank. Available {available:.2f} L, need {qty:.2f} L.'
+                )
+            inv.current_stock_liters = available - qty
 
     old_customer_id = cs.customer_id
     cs.sale_date = entry_date
@@ -283,8 +303,30 @@ def edit_credit_sale(cs, form):
     cs.payment_status = payment_status
     cs.remarks = note
     cs.customer_id = new_customer_id
+    cs.cogs_total = None
 
     db.session.flush()
+
+    if qty > 0:
+        try:
+            if item:
+                cs.cogs_total = consume_fifo(
+                    qty=qty,
+                    source_type=SOURCE_CREDIT,
+                    source_id=cs.id,
+                    other_item_id=item.id,
+                    allow_short=True,
+                )
+            elif cs.fuel_type_id:
+                cs.cogs_total = consume_fifo(
+                    qty=qty,
+                    source_type=SOURCE_CREDIT,
+                    source_id=cs.id,
+                    fuel_type_id=cs.fuel_type_id,
+                    allow_short=True,
+                )
+        except BatchStockError as e:
+            raise EntryError(str(e)) from e
 
     # Recalc both old and new customer if changed
     ids = {cid for cid in (old_customer_id, new_customer_id) if cid}

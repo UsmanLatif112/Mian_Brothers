@@ -21,6 +21,11 @@ from app.vendors.service import (
     purchase_log_payment_status,
     normalize_purchase_payment_status,
 )
+from app.services.stock_batches import (
+    create_batch_from_purchase_log,
+    list_batches_for_fuel,
+    list_batches_for_item,
+)
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
     category_has_linked_activity, option_has_linked_activity, ensure_shop_categories,
@@ -211,6 +216,7 @@ def index():
             apply_purchase_vendor_payment(
                 vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
             )
+            create_batch_from_purchase_log(purchase_log)
             db.session.commit()
             batch_total = purchase_log_total(purchase_log)
             if payment_status == 'paid':
@@ -299,6 +305,7 @@ def index():
             apply_purchase_vendor_payment(
                 vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
             )
+            create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
             db.session.commit()
             batch_total = purchase_log_total(purchase_log)
             if payment_status == 'paid':
@@ -406,6 +413,7 @@ def index():
             apply_purchase_vendor_payment(
                 vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
             )
+            create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
             db.session.commit()
             flash(
                 f"Purchase logged: {liters_val:,.2f}L {item_name} "
@@ -486,6 +494,7 @@ def index():
         apply_purchase_vendor_payment(
             vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
         )
+        create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
         db.session.commit()
         batch_total = purchase_log_total(purchase_log)
         if payment_status == 'paid':
@@ -1139,3 +1148,49 @@ def api_delete_category(category_id):
     db.session.delete(cat)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@inventory_bp.route('/batches')
+@login_required
+def batches():
+    """FIFO stock layers still on hand (oldest sold first)."""
+    fuel_types = apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all()
+    fuel_sections = []
+    for ft in fuel_types:
+        rows = list_batches_for_fuel(ft.id, include_empty=False)
+        if not rows:
+            continue
+        rem = sum(float(b.qty_remaining or 0) for b in rows)
+        value = sum(float(b.qty_remaining or 0) * float(b.unit_cost or 0) for b in rows)
+        fuel_sections.append({
+            'label': ft.name,
+            'remaining': rem,
+            'value': value,
+            'batches': rows,
+            'unit': 'L',
+        })
+
+    shop_items = apply_agency_filter(OtherItem.query, OtherItem).order_by(
+        OtherItem.category.asc(), OtherItem.name.asc()
+    ).all()
+    shop_sections = []
+    for item in shop_items:
+        rows = list_batches_for_item(item.id, include_empty=False)
+        if not rows:
+            continue
+        rem = sum(float(b.qty_remaining or 0) for b in rows)
+        value = sum(float(b.qty_remaining or 0) * float(b.unit_cost or 0) for b in rows)
+        is_ft = (item.category or '') == 'ft_mobile'
+        shop_sections.append({
+            'label': item.name,
+            'remaining': rem,
+            'value': value,
+            'batches': rows,
+            'unit': 'L' if is_ft else 'pcs',
+        })
+
+    return render_template(
+        'inventory/batches.html',
+        fuel_sections=fuel_sections,
+        shop_sections=shop_sections,
+    )

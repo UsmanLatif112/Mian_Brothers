@@ -180,7 +180,7 @@
             </a>
             {% endif %}
             {% if can_access_module('inventory') %}
-            <a class="sidebar-link {% if request.endpoint == 'inventory.index' %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
+            <a class="sidebar-link {% if request.endpoint and request.endpoint.startswith('inventory.') and not request.endpoint.startswith('inventory.categories') %}active{% endif %}" href="{{ url_for('inventory.index') }}" data-search-label="Inventory">
                 <i class="bi bi-box-seam"></i><span>Inventory</span>
             </a>
             {% endif %}

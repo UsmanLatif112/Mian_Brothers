@@ -74,7 +74,7 @@ def _set_fuel_opening(name, liters, cost_per_liter, sale_per_liter, user_id, as_
             entry_date=as_of,
             added_by=user_id,
         )))
-        db.session.add(stamp_agency(ItemPurchaseLog(
+        log = stamp_agency(ItemPurchaseLog(
             category='fuel',
             item_name=fuel.name,
             vendor=None,
@@ -85,7 +85,11 @@ def _set_fuel_opening(name, liters, cost_per_liter, sale_per_liter, user_id, as_
             fuel_type_id=fuel.id,
             entry_date=as_of,
             added_by=user_id,
-        )))
+        ))
+        db.session.add(log)
+        db.session.flush()
+        from app.services.stock_batches import create_batch_from_purchase_log
+        create_batch_from_purchase_log(log)
     return fuel
 
 
@@ -153,7 +157,7 @@ def _upsert_shop_item(
             updated_by=user_id,
             created_at=as_of,
         )))
-        db.session.add(stamp_agency(ItemPurchaseLog(
+        log = stamp_agency(ItemPurchaseLog(
             category=category,
             item_name=name,
             company=company,
@@ -166,7 +170,11 @@ def _upsert_shop_item(
             liters=liters,
             entry_date=as_of,
             added_by=user_id,
-        )))
+        ))
+        db.session.add(log)
+        db.session.flush()
+        from app.services.stock_batches import create_batch_from_purchase_log
+        create_batch_from_purchase_log(log, other_item_id=item.id)
     return item
 
 

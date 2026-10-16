@@ -196,9 +196,11 @@ def _build_meter_trend(start, end):
         liters = float(reading.liters_sold or 0)
         stored = getattr(reading, 'sale_rate', None)
         rate = float(stored) if stored is not None else rate_as_of(reading.fuel_type_id, d)
-        cost = fuel_cost_as_of(reading.fuel_type_id, d)
         sale_val = liters * rate
-        cogs_val = liters * cost
+        if reading.cogs_total is not None:
+            cogs_val = float(reading.cogs_total)
+        else:
+            cogs_val = liters * fuel_cost_as_of(reading.fuel_type_id, d)
         day_sales[d] += sale_val
         day_cogs[d] += cogs_val
         day_gross[d] += sale_val - cogs_val
@@ -224,13 +226,14 @@ def _build_meter_trend(start, end):
             continue
         sale_val = float(e.amount or 0)
         qty = float(e.liters or 0)
-        cogs_val = 0.0
-
-        if e.fuel_type_id:
+        if e.cogs_total is not None:
+            cogs_val = float(e.cogs_total)
+        elif e.fuel_type_id:
             cogs_val = qty * fuel_cost_as_of(e.fuel_type_id, d)
         elif e.other_item_id:
-            unit_cost = item_costs.get(e.other_item_id, 0.0)
-            cogs_val = qty * unit_cost
+            cogs_val = qty * item_costs.get(e.other_item_id, 0.0)
+        else:
+            cogs_val = 0.0
 
         day_sales[d] += sale_val
         day_cogs[d] += cogs_val
@@ -597,9 +600,13 @@ def _dashboard_insights(start, end, stock_summary, other_items):
         liters = float(reading.liters_sold or 0)
         stored = getattr(reading, 'sale_rate', None)
         rate = float(stored) if stored is not None else rate_as_of(reading.fuel_type_id, d)
-        cost = fuel_cost_as_of(reading.fuel_type_id, d)
+        sale_val = liters * rate
+        if reading.cogs_total is not None:
+            cogs = float(reading.cogs_total)
+        else:
+            cogs = liters * fuel_cost_as_of(reading.fuel_type_id, d)
         name = reading.fuel_type.name if reading.fuel_type else f'Fuel #{reading.fuel_type_id}'
-        profit_by[name] += liters * (rate - cost)
+        profit_by[name] += sale_val - cogs
 
     for e in apply_agency_filter(
         CreditSale.query.options(
@@ -616,12 +623,17 @@ def _dashboard_insights(start, end, stock_summary, other_items):
             continue
         sale_val = float(e.amount or 0)
         qty = float(e.liters or 0)
-        cogs = 0.0
-        if e.fuel_type_id:
+        if e.cogs_total is not None:
+            cogs = float(e.cogs_total)
+        elif e.fuel_type_id:
             cogs = qty * fuel_cost_as_of(e.fuel_type_id, e.sale_date)
-            name = e.fuel_type.name if e.fuel_type else e.item_name
         elif e.other_item_id:
             cogs = qty * item_costs.get(e.other_item_id, 0.0)
+        else:
+            cogs = 0.0
+        if e.fuel_type_id:
+            name = e.fuel_type.name if e.fuel_type else e.item_name
+        elif e.other_item_id:
             name = e.item_name
         else:
             name = e.item_name or 'Sale'
@@ -812,7 +824,12 @@ def reports():
             rate = float(stored) if stored is not None else rate_as_of(
                 r.fuel_type_id, r.reading_date
             )
-            cost = cost_as_of(r.fuel_type_id, r.reading_date)
+            if r.cogs_total is not None and liters > 0:
+                cogs = float(r.cogs_total)
+                cost = cogs / liters
+            else:
+                cost = cost_as_of(r.fuel_type_id, r.reading_date)
+                cogs = liters * cost
             preview_data.append([
                 r.reading_date.strftime('%Y-%m-%d'),
                 r.fuel_type.name if r.fuel_type else r.fuel_type_id,
@@ -820,7 +837,7 @@ def reports():
                 f"PKR {rate:,.2f}",
                 f"PKR {cost:,.2f}",
                 f"PKR {liters * rate:,.2f}",
-                f"PKR {liters * (rate - cost):,.2f}",
+                f"PKR {liters * rate - cogs:,.2f}",
             ])
 
     elif report_type == 'stock':

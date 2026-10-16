@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}FIFO Batches — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Stock</p>
+            <h1 class="page-title">FIFO Cost Layers</h1>
+            <p class="text-muted-custom mb-0 mt-1" style="font-size: 0.95rem;">
+                Oldest purchases are sold first. Remaining qty still on hand is listed below.
+            </p>
+        </div>
+        <div class="page-header-actions">
+            <a href="{{ url_for('inventory.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-box-seam me-1"></i><span class="btn-label"> Inventory</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+{% macro batch_section(sections) %}
+{% for sec in sections %}
+<div class="card card-premium mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-3">
+            <h2 class="h5 mb-0">{{ sec.label }}</h2>
+            <div class="text-muted-custom" style="font-size: 0.9rem;">
+                Remaining <strong>{{ "{:,.3f}".format(sec.remaining) }} {{ sec.unit }}</strong>
+                · Value <strong>{{ sec.value | money }}</strong>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Received</th>
+                        <th class="text-end">Received</th>
+                        <th class="text-end">Remaining</th>
+                        <th class="text-end">Unit cost</th>
+                        <th class="text-end">Layer value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in sec.batches %}
+                    {% set rem = b.qty_remaining | float %}
+                    {% set unit = b.unit_cost | float %}
+                    <tr>
+                        <td>{{ b.received_at.strftime('%Y-%m-%d') if b.received_at else '—' }}</td>
+                        <td class="text-end">{{ "{:,.3f}".format(b.qty_received | float) }} {{ sec.unit }}</td>
+                        <td class="text-end">{{ "{:,.3f}".format(rem) }} {{ sec.unit }}</td>
+                        <td class="text-end">{{ unit | money }}</td>
+                        <td class="text-end">{{ (rem * unit) | money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card card-premium mb-4">
+    <div class="card-body text-center text-muted-custom py-4">No open layers.</div>
+</div>
+{% endfor %}
+{% endmacro %}
+
+<h2 class="h6 text-uppercase text-muted-custom mb-3">Fuel tanks</h2>
+{{ batch_section(fuel_sections) }}
+
+<h2 class="h6 text-uppercase text-muted-custom mb-3">Shop &amp; FT</h2>
+{{ batch_section(shop_sections) }}
+{% endblock %}
