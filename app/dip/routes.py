@@ -1,4 +1,6 @@
 """Dip stick calculator — admin / super_admin only."""
+import re
+
 from flask import render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required
 
@@ -221,19 +223,79 @@ def api_delete_row(row_id):
     return jsonify({'ok': True})
 
 
+def _parse_bulk_pairs(raw_text):
+    """Parse lines like '220-818', '220 818', or '220,818' into (dip, liters)."""
+    pairs = []
+    errors = []
+    for i, line in enumerate((raw_text or '').splitlines(), start=1):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        parts = re.split(r'[-–,;\s]+', line)
+        parts = [p for p in parts if p]
+        if len(parts) < 2:
+            errors.append(f'Line {i}: need dip and liters (e.g. 220-818)')
+            continue
+        try:
+            dip = float(parts[0])
+            liters = float(parts[1])
+            if dip <= 0 or liters < 0:
+                raise ValueError('out of range')
+            pairs.append((dip, liters))
+        except (TypeError, ValueError):
+            errors.append(f'Line {i}: invalid numbers "{line}"')
+    return pairs, errors
+
+
 @dip_bp.route('/rows/add', methods=['POST'])
 @login_required
 @role_required('super_admin', 'admin')
 def add_row_form():
+    """Add one or many chart rows. Prefers bulk textarea when present."""
     kind = _normalize_kind(request.form.get('fuel_kind'))
+    if not kind:
+        flash('Invalid fuel type.', 'danger')
+        return redirect(url_for('dip.index'))
+
+    bulk = (request.form.get('bulk_rows') or '').strip()
+    if bulk:
+        pairs, errors = _parse_bulk_pairs(bulk)
+        if errors and not pairs:
+            flash(errors[0], 'danger')
+            return redirect(url_for('dip.index', tab=kind))
+        if not pairs:
+            flash('No valid dip lines found.', 'danger')
+            return redirect(url_for('dip.index', tab=kind))
+
+        aid = get_write_agency_id()
+        added = updated = 0
+        for dip, liters in pairs:
+            existing = apply_agency_filter(
+                DipChart.query.filter_by(fuel_kind=kind, dip=dip), DipChart
+            ).first()
+            if existing:
+                existing.liters = liters
+                updated += 1
+            else:
+                db.session.add(stamp_agency(DipChart(
+                    fuel_kind=kind, dip=dip, liters=liters, agency_id=aid
+                )))
+                added += 1
+        db.session.commit()
+        msg = f'Added {added}, updated {updated} {kind} entr{"y" if (added + updated) == 1 else "ies"}.'
+        if errors:
+            msg += f' Skipped {len(errors)} invalid line(s).'
+        flash(msg, 'success' if (added or updated) else 'warning')
+        return redirect(url_for('dip.index', tab=kind))
+
     try:
         dip = float(request.form.get('dip'))
         liters = float(request.form.get('liters'))
-        if not kind or dip <= 0 or liters < 0:
+        if dip <= 0 or liters < 0:
             raise ValueError('invalid')
     except (TypeError, ValueError):
         flash('Invalid dip entry.', 'danger')
-        return redirect(url_for('dip.index'))
+        return redirect(url_for('dip.index', tab=kind))
 
     aid = get_write_agency_id()
     existing = apply_agency_filter(
@@ -241,13 +303,43 @@ def add_row_form():
     ).first()
     if existing:
         existing.liters = liters
-        flash(f'Updated {kind} dip {dip:g} → {liters:g} L.', 'success')
+        flash(f'Updated {kind} dip {dip:g} → {liters:g}.', 'success')
     else:
         db.session.add(stamp_agency(DipChart(
             fuel_kind=kind, dip=dip, liters=liters, agency_id=aid
         )))
-        flash(f'Added {kind} dip {dip:g} → {liters:g} L.', 'success')
+        flash(f'Added {kind} dip {dip:g} → {liters:g}.', 'success')
     db.session.commit()
+    return redirect(url_for('dip.index', tab=kind))
+
+
+@dip_bp.route('/rows/<int:row_id>/edit', methods=['POST'])
+@login_required
+@role_required('super_admin', 'admin')
+def edit_row_form(row_id):
+    row = DipChart.query.get_or_404(row_id)
+    require_agency_access(row)
+    kind = row.fuel_kind
+    try:
+        dip = float(request.form.get('dip'))
+        liters = float(request.form.get('liters'))
+        if dip <= 0 or liters < 0:
+            raise ValueError('invalid')
+    except (TypeError, ValueError):
+        flash('Invalid dip entry.', 'danger')
+        return redirect(url_for('dip.index', tab=kind))
+
+    clash = apply_agency_filter(
+        DipChart.query.filter_by(fuel_kind=kind, dip=dip), DipChart
+    ).filter(DipChart.id != row.id).first()
+    if clash:
+        flash(f'A {kind} entry for dip {dip:g} already exists.', 'danger')
+        return redirect(url_for('dip.index', tab=kind))
+
+    row.dip = dip
+    row.liters = liters
+    db.session.commit()
+    flash(f'Updated {kind} dip {dip:g} → {liters:g}.', 'success')
     return redirect(url_for('dip.index', tab=kind))
 
 
