@@ -505,7 +505,12 @@ class ShopCategoryOption(db.Model):
     __tablename__ = 'shop_category_options'
 
     id = db.Column(db.Integer, primary_key=True)
-    category_id = db.Column(db.Integer, db.ForeignKey('shop_categories.id'), nullable=False)
+    category_id = db.Column(
+        db.Integer,
+        db.ForeignKey('shop_categories.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
     kind = db.Column(db.String(20), nullable=False)  # company | type
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -26,7 +26,8 @@ SYSTEM_DEFAULTS = [
         'name': 'FT Mobile Oil',
         'unit_mode': 'liters',
         'sort_order': 20,
-        'companies': ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
+        # Companies are managed on Categories — never re-seed after delete.
+        'companies': [],
         'types': [],
     },
     {
@@ -109,25 +110,28 @@ def ensure_shop_categories(agency_id=None):
             cat.sort_order = spec['sort_order']
             changed = True
 
+        # Seed company/type options only when that kind is still empty.
+        # Never re-add names the user deleted from Categories.
         for kind, names in (('company', spec['companies']), ('type', spec['types'])):
+            if not names:
+                continue
+            has_any = ShopCategoryOption.query.filter_by(
+                category_id=cat.id, kind=kind
+            ).first()
+            if has_any:
+                continue
             for name in names:
-                exists = ShopCategoryOption.query.filter_by(
+                db.session.add(ShopCategoryOption(
                     category_id=cat.id, kind=kind, name=name
-                ).first()
-                if not exists:
-                    db.session.add(ShopCategoryOption(
-                        category_id=cat.id, kind=kind, name=name
-                    ))
-                    changed = True
+                ))
+                changed = True
 
-    # Deactivate legacy mobile / filter and any other non-main categories
-    for cat in ShopCategory.query.all():
-        if cat.key in MAIN_KEYS:
-            continue
+    # Deactivate legacy mobile / filter only (user-created customs stay active)
+    for cat in ShopCategory.query.filter(ShopCategory.key.in_(LEGACY_KEYS)).all():
         if cat.is_active:
             cat.is_active = False
             changed = True
-        if cat.key in LEGACY_KEYS and cat.is_system:
+        if cat.is_system:
             cat.is_system = False
             changed = True
 
@@ -200,10 +204,10 @@ def list_active_categories():
     aid = agency_scope()
     if aid is not None:
         q = q.filter(or_(ShopCategory.agency_id == aid, ShopCategory.agency_id.is_(None)))
-    # Prefer main three; hide deactivated legacy even if somehow active
+    # System mains + user-created customs; hide legacy mobile/filter
     return [
         c for c in q.order_by(ShopCategory.sort_order.asc(), ShopCategory.name.asc()).all()
-        if c.key in MAIN_KEYS
+        if c.key not in LEGACY_KEYS
     ]
 
 

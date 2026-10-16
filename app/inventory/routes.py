@@ -29,6 +29,7 @@ from app.services.stock_batches import (
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
     category_has_linked_activity, option_has_linked_activity, ensure_shop_categories,
+    MAIN_KEYS, LEGACY_KEYS,
 )
 from datetime import datetime
 
@@ -106,6 +107,9 @@ def index():
         cat_row = apply_agency_filter(
             ShopCategory.query.filter_by(key=category, is_active=True), ShopCategory
         ).first()
+        if not cat_row and category not in ('fuel', 'other', 'ft_mobile'):
+            # Allow shared/system rows when agency filter missed them
+            cat_row = ShopCategory.query.filter_by(key=category, is_active=True).first()
         if not cat_row and category not in ('fuel', 'other', 'ft_mobile'):
             flash('Please select a valid item category.', 'danger')
             return redirect(url_for('inventory.index'))
@@ -334,12 +338,16 @@ def index():
         item_type = (request.form.get('item_type') or '').strip() or None
         quantity_raw = request.form.get('quantity')
         liters_raw = request.form.get('liters')
-        # Other: pieces (qty) or liters — chosen on the form
+        is_custom = category not in ('fuel', 'ft_mobile', 'other')
+        cat_unit = ((cat_row.unit_mode if cat_row else None) or 'qty').lower()
+        # Other: pieces/liters chosen on the form; custom uses category unit_mode
         stock_unit = (request.form.get('stock_unit') or '').strip().lower()
-        if stock_unit not in ('qty', 'liters'):
+        if is_custom:
+            stock_unit = 'liters' if cat_unit == 'liters' else 'qty'
+        elif stock_unit not in ('qty', 'liters'):
             stock_unit = 'qty'
 
-        item_name = (request.form.get('item_name') or '').strip()
+        item_name = (request.form.get('item_name') or request.form.get('item_name_custom') or '').strip()
         if not item_name:
             if company and item_type:
                 item_name = f"{company} {item_type}"
@@ -349,8 +357,8 @@ def index():
                 flash('Item name is required.', 'danger')
                 return redirect(url_for('inventory.index'))
 
-        # Other + Liters (and any leftover custom liter categories)
-        if category == 'other' and stock_unit == 'liters':
+        # Liters stock: Other (unit=Liters) or custom category with unit_mode=liters
+        if stock_unit == 'liters' and category != 'ft_mobile':
             try:
                 liters_val = float(liters_raw)
                 if liters_val <= 0:
@@ -853,11 +861,30 @@ def categories():
 @inventory_bp.route('/categories/create', methods=['POST'])
 @login_required
 def categories_create():
-    flash(
-        'Only Fuel, FT Mobile Oil, and Other are used. '
-        'Put mobiles, filters, and similar under Other (Pieces or Liters).',
-        'warning',
+    name = (request.form.get('name') or '').strip()
+    unit_mode = (request.form.get('unit_mode') or 'qty').strip().lower()
+    if unit_mode not in ('qty', 'liters'):
+        unit_mode = 'qty'
+    if not name:
+        flash('Category name is required.', 'danger')
+        return redirect(url_for('inventory.categories'))
+
+    key = unique_category_key(name)
+    if key in MAIN_KEYS or key in LEGACY_KEYS:
+        key = unique_category_key(f'{name}_custom')
+
+    cat = ShopCategory(
+        key=key,
+        name=name,
+        unit_mode=unit_mode,
+        is_system=False,
+        is_active=True,
+        sort_order=200,
     )
+    stamp_agency(cat)
+    db.session.add(cat)
+    db.session.commit()
+    flash(f'Category “{name}” created. Add companies or types below.', 'success')
     return redirect(url_for('inventory.categories'))
 
 
@@ -877,9 +904,12 @@ def categories_delete(category_id):
         )
         return redirect(url_for('inventory.categories'))
     name = cat.name
+    # Cascade: remove company/type options with the category
+    for opt in list(cat.options or []):
+        db.session.delete(opt)
     db.session.delete(cat)
     db.session.commit()
-    flash(f'Deleted category “{name}”.', 'success')
+    flash(f'Deleted category “{name}” and its options.', 'success')
     return redirect(url_for('inventory.categories'))
 
 
@@ -1036,10 +1066,30 @@ def api_categories():
 @inventory_bp.route('/api/categories', methods=['POST'])
 @login_required
 def api_create_category():
-    return jsonify({
-        'ok': False,
-        'error': 'Only Fuel, FT Mobile Oil, and Other are available. Use Other with Pieces or Liters.',
-    }), 400
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    unit_mode = (data.get('unit_mode') or 'qty').strip().lower()
+    if unit_mode not in ('qty', 'liters'):
+        unit_mode = 'qty'
+    if not name:
+        return jsonify({'ok': False, 'error': 'Category name is required.'}), 400
+
+    key = unique_category_key(name)
+    if key in MAIN_KEYS or key in LEGACY_KEYS:
+        key = unique_category_key(f'{name}_custom')
+
+    cat = ShopCategory(
+        key=key,
+        name=name,
+        unit_mode=unit_mode,
+        is_system=False,
+        is_active=True,
+        sort_order=200,
+    )
+    stamp_agency(cat)
+    db.session.add(cat)
+    db.session.commit()
+    return jsonify({'ok': True, 'category': category_payload(cat)})
 
 
 @inventory_bp.route('/api/categories/<int:category_id>/options', methods=['POST'])
@@ -1095,6 +1145,8 @@ def api_delete_category(category_id):
             'ok': False,
             'error': f'Cannot delete “{cat.name}”. It already has inventory stock or purchase logs.',
         }), 400
+    for opt in list(cat.options or []):
+        db.session.delete(opt)
     db.session.delete(cat)
     db.session.commit()
     return jsonify({'ok': True})

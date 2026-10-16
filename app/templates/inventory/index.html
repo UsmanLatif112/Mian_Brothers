@@ -153,7 +153,7 @@
                             <div class="directory-card-info">
                                 <div class="directory-card-title of-clip" data-of-tip="{{ item.name }}">{{ item.name }}</div>
                                 <div class="directory-card-meta">
-                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.tracks_liters() %}Other · L{% else %}Other{% endif %}</span>
+                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.category == 'other' and item.tracks_liters() %}Other · L{% elif item.category == 'other' %}Other{% elif item.tracks_liters() %}{{ item.category }} · L{% else %}{{ item.category }}{% endif %}</span>
                                     {% if item.company %}<span class="of-clip" data-of-tip="{{ item.company }}">{{ item.company }}</span>{% endif %}
                                     {% if item.item_type %}<span class="of-item-type of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
                                 </div>
@@ -226,7 +226,7 @@
                         {% if shop_items %}
                             {% for item in shop_items %}
                             <tr>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.tracks_liters() %}Other · L{% else %}Other{% endif %}</span></td>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.category == 'other' and item.tracks_liters() %}Other · L{% elif item.category == 'other' %}Other{% elif item.tracks_liters() %}{{ item.category }} · L{% else %}{{ item.category }}{% endif %}</span></td>
                                 <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ item.name }}">{{ item.name }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.company or '-' }}">{{ item.company or '-' }}</span></td>
                                 <td class="of-item-type"><span class="of-clip-cell" data-of-tip="{{ item.item_type or '-' }}">{{ item.item_type or '-' }}</span></td>
@@ -386,11 +386,11 @@
                             <input type="text" class="form-control form-control-custom" id="custom_item_name" name="item_name_custom" placeholder="Product name">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other custom">
                             <hr class="my-1" style="border-color: var(--border-color); opacity: 0.4;">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other custom">
                             <label for="vendor_id" class="form-label form-label-custom">Vendor</label>
                             <div class="of-select-with-add">
                                 <select class="form-select form-control-custom js-search-vendor js-create-vendor" id="vendor_id" name="vendor_id"
@@ -413,7 +413,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other custom">
                             <label for="payment_status" class="form-label form-label-custom">Payment to Vendor</label>
                             <select class="form-select form-control-custom" id="payment_status" name="payment_status">
                                 <option value="unpaid" selected>Unpaid</option>
@@ -421,12 +421,12 @@
                             </select>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other custom">
                             <label for="entry_date" class="form-label form-label-custom">Purchase Date</label>
                             <input type="date" class="form-control form-control-custom" id="entry_date" name="entry_date" value="{{ today }}">
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other custom">
                             <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
                             <div class="input-group">
                                 <span class="input-group-text">PKR</span>
@@ -434,7 +434,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other custom">
                             <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
                             <div class="input-group">
                                 <span class="input-group-text">PKR</span>
@@ -442,7 +442,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel ft_mobile other_liters">
+                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel ft_mobile other_liters custom_liters">
                             <label for="liters" class="form-label form-label-custom">
                                 <span class="liters-label">Liters</span>
                             </label>
@@ -452,7 +452,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other">
+                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other custom">
                             <div class="p-3 rounded" style="background: rgba(2,132,199,0.08); font-size: 0.9rem;">
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted-custom">This purchase batch total</span>
@@ -462,7 +462,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="other_qty">
+                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="other_qty custom_qty">
                             <label for="quantity" class="form-label form-label-custom">Quantity</label>
                             <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="Enter quantity">
                         </div>
@@ -585,16 +585,13 @@
     const companyHidden = document.getElementById('company_hidden');
     const typeHidden = document.getElementById('item_type_hidden');
     const SYSTEM_CATS = new Set(['fuel', 'ft_mobile', 'other']);
-    const SYSTEM_OPTION_DEFAULTS = {
-        ft_mobile: {
-            companies: ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
-            types: [],
-        },
-    };
+    const SYSTEM_OPTION_DEFAULTS = {};
     let categoriesCache = [];
 
     const otherPairs = [
         { select: 'ft_mobile_company', wrap: 'ft_mobile_company_other_wrap', input: 'ft_mobile_company_other', match: 'Other' },
+        { select: 'custom_company', wrap: 'custom_company_other_wrap', input: 'custom_company_other', match: 'Other' },
+        { select: 'custom_type', wrap: 'custom_type_other_wrap', input: 'custom_type_other', match: 'Other' },
     ];
 
     const otherStockUnit = () => {
@@ -610,7 +607,9 @@
             const inputEl = document.getElementById(input);
             if (!sel || !wrapEl || !inputEl) return;
 
-            const categoryOk = select === 'ft_mobile_company' && cat === 'ft_mobile';
+            const isCustomCat = cat && !SYSTEM_CATS.has(cat);
+            let categoryOk = select === 'ft_mobile_company' && cat === 'ft_mobile';
+            if (['custom_company', 'custom_type'].includes(select)) categoryOk = isCustomCat;
             const visible = categoryOk && sel.value === match;
             wrapEl.classList.toggle('d-none', !visible);
             inputEl.required = visible;
@@ -829,12 +828,17 @@
 
         if (cat === 'ft_mobile') {
             fillSelectOptions(document.getElementById('ft_mobile_company'), companies, true);
+        } else if (isCustom) {
+            fillSelectOptions(document.getElementById('custom_company'), companies, true);
+            fillSelectOptions(document.getElementById('custom_type'), types, true);
         }
 
         document.querySelectorAll('#add-item-form .field-group').forEach(el => {
             const showFor = (el.dataset.show || '').split(/\s+/).filter(Boolean);
             const otherLiters = cat === 'other' && otherStockUnit() === 'liters';
             const otherQty = cat === 'other' && otherStockUnit() === 'qty';
+            const customLiters = isCustom && unit === 'liters';
+            const customQty = isCustom && unit === 'qty';
             let visible = cat && showFor.includes(showKey);
             if (showFor.includes('other_liters')) {
                 visible = otherLiters;
@@ -842,11 +846,17 @@
             if (showFor.includes('other_qty')) {
                 visible = otherQty;
             }
+            if (showFor.includes('custom_liters')) {
+                visible = customLiters;
+            }
+            if (showFor.includes('custom_qty')) {
+                visible = customQty;
+            }
             if (el.id === 'liters_field_wrap') {
-                visible = cat === 'fuel' || cat === 'ft_mobile' || otherLiters;
+                visible = cat === 'fuel' || cat === 'ft_mobile' || otherLiters || customLiters;
             }
             if (el.id === 'quantity_field_wrap') {
-                visible = otherQty;
+                visible = otherQty || customQty;
             }
             el.classList.toggle('d-none', !visible);
 
@@ -858,8 +868,11 @@
                     || (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id))
                     || (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id))
                     || (cat === 'other' && ['item_name', 'stock_unit'].includes(input.id))
+                    || (isCustom && input.id === 'custom_item_name')
                     || (otherLiters && input.id === 'liters')
-                    || (otherQty && input.id === 'quantity')) {
+                    || (otherQty && input.id === 'quantity')
+                    || (customLiters && input.id === 'liters')
+                    || (customQty && input.id === 'quantity')) {
                     input.required = true;
                 }
             });
@@ -881,7 +894,9 @@
         const isCustom = cat && !SYSTEM_CATS.has(cat);
         const cost = Number(document.getElementById('cost_price')?.value || 0);
         let qty = 0;
-        if (cat === 'fuel' || cat === 'ft_mobile' || (cat === 'other' && otherStockUnit() === 'liters')) {
+        if (cat === 'fuel' || cat === 'ft_mobile'
+            || (cat === 'other' && otherStockUnit() === 'liters')
+            || (isCustom && unit === 'liters')) {
             qty = Number(document.getElementById('liters')?.value || 0);
         } else {
             qty = Number(document.getElementById('quantity')?.value || 0);
@@ -911,7 +926,8 @@
     const submitBtn = document.getElementById('submit-btn');
     const PRODUCT_LOCK_IDS = [
         'fuel_type_id', 'ft_mobile_company', 'item_name', 'stock_unit',
-        'ft_mobile_company_other',
+        'ft_mobile_company_other', 'custom_company', 'custom_type',
+        'custom_item_name', 'custom_company_other', 'custom_type_other',
     ];
     let inventoryModalMode = 'add';
     let pendingEditData = null;
@@ -1046,6 +1062,11 @@
             const unitEl = document.getElementById('stock_unit');
             if (unitEl) unitEl.value = (d.stockUnit === 'liters') ? 'liters' : 'qty';
             syncVisibleFields();
+        } else if (cat) {
+            setNamedSelect('custom_company', 'custom_company_other', d.company);
+            setNamedSelect('custom_type', 'custom_type_other', d.itemType);
+            const customName = document.getElementById('custom_item_name');
+            if (customName) customName.value = d.item || '';
         }
 
         companyHidden.value = d.company || '';
@@ -1249,6 +1270,28 @@
             }
             companyHidden.value = '';
             typeHidden.value = '';
+        } else if (cat && !SYSTEM_CATS.has(cat)) {
+            let company = document.getElementById('custom_company')?.value || '';
+            let type = document.getElementById('custom_type')?.value || '';
+            if (company === 'Other') {
+                company = (document.getElementById('custom_company_other')?.value || '').trim();
+            }
+            if (type === 'Other') {
+                type = (document.getElementById('custom_type_other')?.value || '').trim();
+            }
+            let name = (document.getElementById('custom_item_name')?.value || '').trim();
+            if (!name) {
+                if (company && type) name = `${company} ${type}`;
+                else if (company) name = company;
+            }
+            if (!name) {
+                fail('Please enter an item name (or company / type).');
+                return;
+            }
+            const nameInput = document.getElementById('item_name');
+            if (nameInput) nameInput.value = name;
+            companyHidden.value = company || '';
+            typeHidden.value = type || '';
         } else {
             companyHidden.value = '';
             typeHidden.value = '';
