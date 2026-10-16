@@ -499,6 +499,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         sale_cash_paid += paid
         if e.other_item_id:
             oi = e.other_item
+            # FT Mobile Oil is sold via Other Sale — counts in other_* KPIs.
+            other_sale += amt
+            other_cash += paid
+            other_credit += credit
             if oi and oi.category == 'ft_mobile':
                 ft_sale += amt
                 ft_cash += paid
@@ -506,10 +510,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
                 ft_liters += liters
                 ft_cash_liters += paid_liters
                 ft_credit_liters += credit_liters
-            else:
-                other_sale += amt
-                other_cash += paid
-                other_credit += credit
+
         elif e.fuel_type_id:
             fuel_credit += credit
             fuel_cash_paid += paid
@@ -678,11 +679,11 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         if payment_funding_source(p) == 'account'
     )
 
-    # Total sale = fuel (meter) + other items + FT Mobile Oil
-    total_sale = meter_total + other_sale + ft_sale
+    # Total sale = fuel (meter) + other items (includes FT Mobile Oil)
+    total_sale = meter_total + other_sale
 
     # Activity credit (sales unpaid + cash loans) — cash-in-hand uses loans separately.
-    activity_credit = fuel_credit + other_credit + ft_credit + loans
+    activity_credit = fuel_credit + other_credit + loans
 
     # Credit KPI = full customer-ledger receivables in period:
     # unpaid sales + loans + expense settles + (optional) opening balances.
@@ -704,21 +705,21 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     #                − vendor payments funded from till.
     # Account-funded vendor pays use the cash-taken pool — till unchanged.
     cash_in_hand = (
-        petrol_cash + diesel_cash + other_cash + ft_cash
+        petrol_cash + diesel_cash + other_cash
         + previous_balance + total_receiving
         - loans - expense_cash_net
         - vendor_payments_till_total
     )
     # Same as cash in hand, but expenses (and expense settles) excluded.
     cash_in_hand_wo_expense = (
-        petrol_cash + diesel_cash + other_cash + ft_cash
+        petrol_cash + diesel_cash + other_cash
         + previous_balance + total_receiving
         - loans
         - vendor_payments_till_total
     )
     # Period cash only: no expenses, no previous balance (keeps sales, receiving, loans).
     cash_in_hand_wo_expense_prev = (
-        petrol_cash + diesel_cash + other_cash + ft_cash
+        petrol_cash + diesel_cash + other_cash
         + total_receiving
         - loans
         - vendor_payments_till_total

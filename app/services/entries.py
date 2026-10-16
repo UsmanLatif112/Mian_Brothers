@@ -25,7 +25,8 @@ def _payment_status(amount, amount_paid):
 
 
 def _is_ft_item(item):
-    return item is not None and (item.category or '') == 'ft_mobile'
+    """True when stock is tracked in liters (FT or Other·Liters)."""
+    return item is not None and item.tracks_liters()
 
 
 def restore_sale_stock(cs):

@@ -499,13 +499,6 @@ def index():
     ).order_by(OtherItem.name.asc()).all()
 
     today = business_today()
-    unit_by_key = {
-        key: (unit or 'qty')
-        for key, unit in apply_agency_filter(
-            db.session.query(ShopCategory.key, ShopCategory.unit_mode),
-            ShopCategory,
-        ).all()
-    }
     total_stock_value = 0.0
     # One cost timeline for all fuel stock rows (not get_cost_for_sale per row)
     fuel_cost_as_of = _fuel_cost_timeline(today)
@@ -517,9 +510,7 @@ def index():
         total_stock_value += liters * float(cost or 0)
     for item in other_items:
         cost = float(item.cost_price or 0)
-        cat_key = item.category or 'other'
-        unit_mode = unit_by_key.get(cat_key) or ('liters' if cat_key == 'ft_mobile' else 'qty')
-        if unit_mode == 'liters' or cat_key == 'ft_mobile':
+        if item.tracks_liters():
             qty = float(item.liters or 0)
         else:
             qty = float(item.quantity or 0)
@@ -568,7 +559,7 @@ def _dashboard_insights(start, end, stock_summary, other_items):
     other_labels = []
     other_values = []
     for item in other_items or []:
-        if (item.category or '') == 'ft_mobile':
+        if item.tracks_liters():
             qty = float(item.liters or 0)
         else:
             qty = float(item.quantity or 0)

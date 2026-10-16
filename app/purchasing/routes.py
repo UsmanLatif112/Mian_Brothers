@@ -45,9 +45,7 @@ def _category_choices():
         choices.append((key, label))
     known = {c[0] for c in choices}
     for key, label in (
-        ('mobile', 'Mobile Oil'),
         ('ft_mobile', 'FT Mobile Oil'),
-        ('filter', 'Filter'),
         ('other', 'Other'),
     ):
         if key not in known:

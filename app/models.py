@@ -532,7 +532,14 @@ class OtherItem(db.Model):
     sale_price = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
     liters = db.Column(db.Numeric(12, 3), nullable=True)
     quantity = db.Column(db.Integer, nullable=False, default=0)
+    # qty = piece stock in quantity; liters = liquid stock in liters (quantity kept 0)
+    stock_unit = db.Column(db.String(10), nullable=False, default='qty')
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def tracks_liters(self):
+        if (self.category or '') == 'ft_mobile':
+            return True
+        return (self.stock_unit or 'qty') == 'liters'
 
     def display_name(self):
         parts = [self.name]

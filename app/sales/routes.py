@@ -420,29 +420,39 @@ def index():
                     flash('Shop item not found.', 'danger')
                     return _sales_redirect()
                 require_agency_access(other_item)
-                if other_item.category == 'ft_mobile':
-                    flash('Use the FT Sale card for FT Mobile Oil.', 'warning')
-                    return _sales_redirect()
                 rate = float(other_item.sale_price or 0)
                 item_label = other_item.display_name()
                 if rate <= 0:
                     flash(f'No sale price for {item_label}. Set price first.', 'danger')
                     return _sales_redirect()
 
-                qty_units = int(round(qty_val))
-                if qty_units < 1:
-                    flash('Shop item quantity must be at least 1.', 'danger')
-                    return _sales_redirect()
-                available = int(other_item.quantity or 0)
-                if available < qty_units:
-                    flash(
-                        f'Insufficient stock for {item_label}. Available: {available}, requested: {qty_units}.',
-                        'danger'
-                    )
-                    return _sales_redirect()
-                other_item.quantity = available - qty_units
-                qty_val = float(qty_units)
-                stock_note = f'stock −{qty_units} (left {other_item.quantity})'
+                is_ft = other_item.tracks_liters()
+                if is_ft:
+                    available = float(other_item.liters or 0)
+                    if available + 0.0001 < qty_val:
+                        flash(
+                            f'Insufficient stock for {item_label}. '
+                            f'Available: {available:.2f}L, requested: {qty_val:.2f}L.',
+                            'danger',
+                        )
+                        return _sales_redirect()
+                    other_item.liters = available - qty_val
+                    stock_note = f'stock −{qty_val:.2f}L (left {float(other_item.liters):.2f}L)'
+                else:
+                    qty_units = int(round(qty_val))
+                    if qty_units < 1:
+                        flash('Shop item quantity must be at least 1.', 'danger')
+                        return _sales_redirect()
+                    available = int(other_item.quantity or 0)
+                    if available < qty_units:
+                        flash(
+                            f'Insufficient stock for {item_label}. Available: {available}, requested: {qty_units}.',
+                            'danger'
+                        )
+                        return _sales_redirect()
+                    other_item.quantity = available - qty_units
+                    qty_val = float(qty_units)
+                    stock_note = f'stock −{qty_units} (left {other_item.quantity})'
             else:
                 flash('Invalid item selection.', 'danger')
                 return _sales_redirect()
@@ -593,145 +603,6 @@ def index():
             )
             return _sales_redirect()
 
-        # ---------- FT Mobile Oil sale (liters stock, paid / unpaid) ----------
-        if action == 'ft_sale':
-            customer_id = (request.form.get('customer_id') or '').strip() or None
-            item_id = (request.form.get('ft_item_id') or '').strip()
-            qty_raw = request.form.get('liters')
-            discount_raw = request.form.get('discount')
-            remarks = (request.form.get('remarks') or '').strip() or None
-            payment_status = request.form.get('payment_status', 'paid')
-            if payment_status not in ('paid', 'unpaid'):
-                payment_status = 'unpaid'
-            amount_paid_raw = request.form.get('amount_paid')
-            sale_day = parse_form_date(request.form.get('entry_date'), today)
-
-            if not item_id or not qty_raw:
-                flash('FT Mobile Oil item and liters are required.', 'danger')
-                return _sales_redirect()
-
-            if not customer_id:
-                payment_status = 'paid'
-
-            try:
-                liters_val = float(qty_raw)
-                if liters_val <= 0:
-                    raise ValueError('Liters must be greater than zero.')
-            except ValueError as e:
-                flash(f'Invalid sale input: {e}', 'danger')
-                return _sales_redirect()
-
-            customer = Customer.query.get(customer_id) if customer_id else None
-            if customer_id and not customer:
-                flash('Customer not found.', 'danger')
-                return _sales_redirect()
-            if customer:
-                require_agency_access(customer)
-
-            other_item = OtherItem.query.get(item_id)
-            if not other_item or other_item.category != 'ft_mobile':
-                flash('FT Mobile Oil item not found.', 'danger')
-                return _sales_redirect()
-            require_agency_access(other_item)
-
-            rate = float(other_item.sale_price or 0)
-            cost_rate = float(other_item.cost_price or 0)
-            item_label = f"FT Mobile Oil — {other_item.display_name()}"
-            if rate <= 0:
-                flash(f'No sale price for {item_label}. Set price in inventory first.', 'danger')
-                return _sales_redirect()
-
-            available = float(other_item.liters or 0)
-            if available < liters_val:
-                flash(
-                    f'Insufficient FT Mobile Oil stock for {other_item.name}. '
-                    f'Available: {available:.2f}L, requested: {liters_val:.2f}L.',
-                    'danger',
-                )
-                return _sales_redirect()
-
-            gross = round(liters_val * rate, 2)
-            amount_raw = (request.form.get('amount') or '').strip()
-            try:
-                if amount_raw:
-                    amount = round(float(amount_raw), 2)
-                    if amount <= 0:
-                        raise ValueError('Total amount must be greater than zero.')
-                    discount = round(max(gross - amount, 0.0), 2)
-                else:
-                    discount = float(discount_raw or 0)
-                    if discount < 0:
-                        raise ValueError('Discount cannot be negative.')
-                    if discount > gross:
-                        raise ValueError(
-                            f'Discount PKR {discount:,.2f} cannot exceed sale total PKR {gross:,.2f}.'
-                        )
-                    amount = round(max(gross - discount, 0.0), 2)
-            except (TypeError, ValueError) as e:
-                flash(f'Invalid total/discount: {e}', 'danger')
-                return _sales_redirect()
-
-            amount_paid = amount if payment_status == 'paid' else 0.0
-
-            credit_amt = max(amount - amount_paid, 0.0)
-            payment_status = _payment_status(amount, amount_paid)
-
-            if credit_amt > 0:
-                if not customer:
-                    flash('Customer is required when any amount is on credit.', 'danger')
-                    return _sales_redirect()
-                if customer.credit_limit is not None:
-                    projected = float(customer.current_balance_due) + credit_amt
-                    if projected > float(customer.credit_limit):
-                        flash(
-                            f"Exceeds credit limit of PKR {float(customer.credit_limit):,.2f}.",
-                            'danger',
-                        )
-                        return _sales_redirect()
-                customer.current_balance_due = float(customer.current_balance_due) + credit_amt
-
-            other_item.liters = available - liters_val
-
-            cs = stamp_agency(CreditSale(
-                customer_id=customer.id if customer else None,
-                fuel_type_id=None,
-                other_item_id=other_item.id,
-                sale_date=sale_day,
-                liters=liters_val,
-                rate=rate,
-                amount=amount,
-                discount=discount,
-                amount_paid=amount_paid,
-                entry_type='sale',
-                payment_status=payment_status,
-                remarks=remarks or f'FT sale · cost {cost_rate:.2f}/L',
-                recorded_by=current_user.id,
-            ))
-            db.session.add(cs)
-            db.session.flush()
-            try:
-                cs.cogs_total = consume_fifo(
-                    qty=liters_val,
-                    source_type=SOURCE_CREDIT,
-                    source_id=cs.id,
-                    other_item_id=other_item.id,
-                    allow_short=True,
-                )
-            except BatchStockError as e:
-                db.session.rollback()
-                flash(str(e), 'danger')
-                return _sales_redirect()
-            db.session.commit()
-
-            who = customer.name if customer else 'Walk-in'
-            disc_note = f', discount {discount:,.2f}' if discount > 0 else ''
-            flash(
-                f'FT sale for {who}: {item_label} {liters_val:.2f}L — total {amount:,.2f}{disc_note} — '
-                f'paid {amount_paid:,.2f}, credit {credit_amt:,.2f} — stock left {float(other_item.liters):.2f}L.',
-                'success',
-            )
-            return _sales_redirect()
-
         # ---------- Customer advance / loan removed from Sales UI ----------
         if action in ('advance', 'loan'):
             flash('Advance and loan are not available on Sales. Use Customers later.', 'warning')
@@ -819,19 +690,8 @@ def index():
 
     customers = apply_agency_filter(Customer.query, Customer).order_by(Customer.name.asc()).all()
     shop_items = (
-        apply_agency_filter(
-            OtherItem.query.filter(OtherItem.category != 'ft_mobile'),
-            OtherItem,
-        )
+        apply_agency_filter(OtherItem.query, OtherItem)
         .order_by(OtherItem.category.asc(), OtherItem.name.asc())
-        .all()
-    )
-    ft_items = (
-        apply_agency_filter(
-            OtherItem.query.filter_by(category='ft_mobile'),
-            OtherItem,
-        )
-        .order_by(OtherItem.name.asc())
         .all()
     )
 
@@ -897,7 +757,6 @@ def index():
         today_readings=today_readings,
         customers=customers,
         shop_items=shop_items,
-        ft_items=ft_items,
         stats=stats,
         price_bands=price_bands,
         period_entries=period_entries,

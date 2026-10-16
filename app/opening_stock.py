@@ -106,7 +106,10 @@ def _upsert_shop_item(
     user_id,
     as_of,
     write_history=True,
+    stock_unit='qty',
 ):
+    if category == 'ft_mobile':
+        stock_unit = 'liters'
     query = apply_agency_filter(
         OtherItem.query.filter_by(category=category, name=name), OtherItem
     )
@@ -120,6 +123,7 @@ def _upsert_shop_item(
         query = query.filter(OtherItem.item_type.is_(None))
     item = query.first()
     created = item is None
+    liters_stock = stock_unit == 'liters'
 
     if item is None:
         item = OtherItem(
@@ -131,7 +135,8 @@ def _upsert_shop_item(
             cost_price=cost_price,
             sale_price=sale_price,
             liters=liters,
-            quantity=quantity if category != 'ft_mobile' else 0,
+            quantity=0 if liters_stock else quantity,
+            stock_unit=stock_unit,
         )
         stamp_agency(item)
         db.session.add(item)
@@ -140,7 +145,8 @@ def _upsert_shop_item(
         item.cost_price = cost_price
         item.sale_price = sale_price
         item.vendor = None
-        if category == 'ft_mobile':
+        item.stock_unit = stock_unit
+        if liters_stock:
             item.liters = liters
             item.quantity = 0
         else:
@@ -166,7 +172,7 @@ def _upsert_shop_item(
             vendor_id=None,
             cost_price=cost_price,
             sale_price=sale_price,
-            quantity=None if category == 'ft_mobile' else quantity,
+            quantity=None if liters_stock else quantity,
             liters=liters,
             entry_date=as_of,
             added_by=user_id,
@@ -212,7 +218,7 @@ def seed_opening_stock(force=False):
     )
 
     _upsert_shop_item(
-        category='mobile',
+        category='other',
         name='Caltex Havoline',
         company='Caltex',
         item_type='Havoline',
@@ -220,11 +226,12 @@ def seed_opening_stock(force=False):
         liters=0.75,
         cost_price=741.0,
         sale_price=850.0,
+        stock_unit='qty',
         **shop_kwargs,
     )
 
     _upsert_shop_item(
-        category='mobile',
+        category='other',
         name='Caltex Delo 20-50',
         company='Caltex',
         item_type='Delo 20-50',
@@ -232,11 +239,12 @@ def seed_opening_stock(force=False):
         liters=4.0,
         cost_price=4600.0,
         sale_price=5000.0,
+        stock_unit='qty',
         **shop_kwargs,
     )
 
     _upsert_shop_item(
-        category='filter',
+        category='other',
         name='Filter 480',
         company='Guard',
         item_type='Oil Filter',
@@ -244,10 +252,11 @@ def seed_opening_stock(force=False):
         liters=None,
         cost_price=550.0,
         sale_price=950.0,
+        stock_unit='qty',
         **shop_kwargs,
     )
     _upsert_shop_item(
-        category='filter',
+        category='other',
         name='Filter 385',
         company='Guard',
         item_type='Oil Filter',
@@ -255,6 +264,7 @@ def seed_opening_stock(force=False):
         liters=None,
         cost_price=540.0,
         sale_price=600.0,
+        stock_unit='qty',
         **shop_kwargs,
     )
 
@@ -267,6 +277,7 @@ def seed_opening_stock(force=False):
         liters=None,
         cost_price=170.0,
         sale_price=220.0,
+        stock_unit='qty',
         **shop_kwargs,
     )
 

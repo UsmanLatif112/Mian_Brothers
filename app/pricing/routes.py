@@ -142,7 +142,7 @@ def index():
             'category': record.item.category if record.item else 'other',
             'item_name': record.item.display_name() if record.item else 'Unknown',
             'price': float(record.sale_price),
-            'unit': 'L' if (record.item and record.item.category == 'ft_mobile') else 'unit',
+            'unit': 'L' if (record.item and record.item.tracks_liters()) else 'unit',
             'updated_by': record.updater.name if record.updater else '-',
             'logged_at': record.created_at,
             'effective_date': eff,

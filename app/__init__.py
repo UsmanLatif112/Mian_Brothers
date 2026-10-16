@@ -266,6 +266,11 @@ def run_schema_boot():
     ensure_till_schema()
     ensure_item_price_log_schema()
     try:
+        from app.inventory.categories import ensure_other_item_stock_unit_column
+        ensure_other_item_stock_unit_column()
+    except Exception as e:
+        print(f'stock_unit schema skipped: {e}')
+    try:
         ensure_default_fuel_types()
     except Exception as e:
         print(f'default fuels seed skipped: {e}')

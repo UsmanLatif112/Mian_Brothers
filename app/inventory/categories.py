@@ -5,11 +5,13 @@ from __future__ import annotations
 import re
 
 from sqlalchemy.orm import joinedload
+from sqlalchemy import or_, text
 
 from app.models import db, ShopCategory, ShopCategoryOption, OtherItem, ItemPurchaseLog
 from app.tenancy import apply_agency_filter, stamp_agency
 
 
+# Only three mains: Fuel tanks, FT Mobile Oil, and Other (qty or liters).
 SYSTEM_DEFAULTS = [
     {
         'key': 'fuel',
@@ -20,38 +22,26 @@ SYSTEM_DEFAULTS = [
         'types': [],
     },
     {
-        'key': 'mobile',
-        'name': 'Mobile (Oil)',
-        'unit_mode': 'qty',
-        'sort_order': 20,
-        'companies': ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
-        'types': ['5W-30', '10W-40', '15W-40', '20W-50', 'ATF', 'Gear Oil', 'Coolant', 'Brake Fluid'],
-    },
-    {
         'key': 'ft_mobile',
         'name': 'FT Mobile Oil',
         'unit_mode': 'liters',
-        'sort_order': 30,
+        'sort_order': 20,
         'companies': ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
         'types': [],
     },
     {
-        'key': 'filter',
-        'name': 'Filter',
-        'unit_mode': 'qty',
-        'sort_order': 40,
-        'companies': ['Bosch', 'Mann', 'Fram', 'Toyota', 'Honda'],
-        'types': ['Oil Filter', 'Air Filter', 'Fuel Filter', 'Cabin Filter'],
-    },
-    {
         'key': 'other',
-        'name': 'Other Item',
-        'unit_mode': 'qty',
-        'sort_order': 50,
+        'name': 'Other',
+        'unit_mode': 'qty',  # form also offers Liters per purchase
+        'sort_order': 30,
         'companies': [],
         'types': [],
     },
 ]
+
+# Legacy system keys folded into Other
+LEGACY_KEYS = ('mobile', 'filter')
+MAIN_KEYS = tuple(s['key'] for s in SYSTEM_DEFAULTS)
 
 
 def slugify_category(name: str) -> str:
@@ -61,13 +51,7 @@ def slugify_category(name: str) -> str:
 
 
 def ensure_shop_categories(agency_id=None):
-    """Create tables' seed rows (idempotent). Backfill missing system company/type options.
-
-    When agency_id is passed (boot / migrate), seed for that agency.
-    Otherwise use the current user's agency scope.
-    If a legacy unique on `key` blocks a second agency row, mark the row shared
-    (agency_id NULL) so all agencies can use the system catalog.
-    """
+    """Seed Fuel / FT / Other; fold legacy mobile+filter into Other; deactivate extras."""
     from sqlalchemy.exc import IntegrityError
 
     changed = False
@@ -79,7 +63,6 @@ def ensure_shop_categories(agency_id=None):
             q = apply_agency_filter(q, ShopCategory)
         cat = q.first()
         if not cat:
-            # Shared / other-agency row with same key (legacy unique)
             shared = ShopCategory.query.filter_by(key=spec['key']).first()
             if shared is not None:
                 if shared.agency_id not in (None, agency_id):
@@ -116,11 +99,14 @@ def ensure_shop_categories(agency_id=None):
         if not cat.is_active:
             cat.is_active = True
             changed = True
-        if not cat.name:
+        if cat.name != spec['name']:
             cat.name = spec['name']
             changed = True
-        if not cat.unit_mode:
+        if cat.unit_mode != spec['unit_mode']:
             cat.unit_mode = spec['unit_mode']
+            changed = True
+        if cat.sort_order != spec['sort_order']:
+            cat.sort_order = spec['sort_order']
             changed = True
 
         for kind, names in (('company', spec['companies']), ('type', spec['types'])):
@@ -133,12 +119,77 @@ def ensure_shop_categories(agency_id=None):
                         category_id=cat.id, kind=kind, name=name
                     ))
                     changed = True
+
+    # Deactivate legacy mobile / filter and any other non-main categories
+    for cat in ShopCategory.query.all():
+        if cat.key in MAIN_KEYS:
+            continue
+        if cat.is_active:
+            cat.is_active = False
+            changed = True
+        if cat.key in LEGACY_KEYS and cat.is_system:
+            cat.is_system = False
+            changed = True
+
+    if _migrate_legacy_items_to_other():
+        changed = True
+    if _backfill_stock_units():
+        changed = True
+
     if changed:
         db.session.commit()
 
 
+def _migrate_legacy_items_to_other():
+    """Move mobile/filter stock + purchase logs into category=other."""
+    changed = False
+    for key in LEGACY_KEYS:
+        for item in OtherItem.query.filter_by(category=key).all():
+            item.category = 'other'
+            if not getattr(item, 'stock_unit', None):
+                item.stock_unit = 'qty'
+            changed = True
+        for log in ItemPurchaseLog.query.filter_by(category=key).all():
+            log.category = 'other'
+            changed = True
+    return changed
+
+
+def _backfill_stock_units():
+    changed = False
+    for item in OtherItem.query.all():
+        unit = getattr(item, 'stock_unit', None) or 'qty'
+        if (item.category or '') == 'ft_mobile':
+            if unit != 'liters':
+                item.stock_unit = 'liters'
+                changed = True
+        elif unit not in ('qty', 'liters'):
+            item.stock_unit = 'qty'
+            changed = True
+    return changed
+
+
+def ensure_other_item_stock_unit_column():
+    """Add other_items.stock_unit if missing (SQLite + MySQL)."""
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    if 'other_items' not in inspector.get_table_names():
+        return
+    cols = {c['name'] for c in inspector.get_columns('other_items')}
+    if 'stock_unit' in cols:
+        return
+    try:
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE other_items ADD COLUMN stock_unit VARCHAR(10) NOT NULL DEFAULT 'qty'"
+            ))
+        print('other_items.stock_unit column added.')
+    except Exception as e:
+        print(f'stock_unit column alter skipped: {e}')
+
+
 def list_active_categories():
-    from sqlalchemy import or_
     from app.tenancy import agency_scope
 
     q = (
@@ -148,21 +199,24 @@ def list_active_categories():
     )
     aid = agency_scope()
     if aid is not None:
-        # Own agency rows + shared system catalog (agency_id NULL)
         q = q.filter(or_(ShopCategory.agency_id == aid, ShopCategory.agency_id.is_(None)))
-    return q.order_by(ShopCategory.sort_order.asc(), ShopCategory.name.asc()).all()
+    # Prefer main three; hide deactivated legacy even if somehow active
+    return [
+        c for c in q.order_by(ShopCategory.sort_order.asc(), ShopCategory.name.asc()).all()
+        if c.key in MAIN_KEYS
+    ]
 
 
 def category_payload(cat: ShopCategory) -> dict:
     company_opts = [
         {'id': o.id, 'name': o.name}
         for o in sorted(cat.options, key=lambda x: (x.name or '').lower())
-        if o.kind == 'company'
+        if (o.kind or '') == 'company'
     ]
     type_opts = [
         {'id': o.id, 'name': o.name}
         for o in sorted(cat.options, key=lambda x: (x.name or '').lower())
-        if o.kind == 'type'
+        if (o.kind or '') == 'type'
     ]
     return {
         'id': cat.id,
@@ -189,11 +243,10 @@ def category_has_linked_activity(cat: ShopCategory) -> bool:
 
 
 def option_has_linked_activity(opt: ShopCategoryOption) -> bool:
-    """True if company/type is used on stock items or purchase logs."""
     cat = opt.category or ShopCategory.query.get(opt.category_id)
     if not cat:
         return False
-    if opt.kind == 'company':
+    if (opt.kind or '') == 'company':
         if apply_agency_filter(
             OtherItem.query.filter_by(category=cat.key, company=opt.name), OtherItem
         ).first():
@@ -203,7 +256,7 @@ def option_has_linked_activity(opt: ShopCategoryOption) -> bool:
             ItemPurchaseLog,
         ).first():
             return True
-    elif opt.kind == 'type':
+    else:
         if apply_agency_filter(
             OtherItem.query.filter_by(category=cat.key, item_type=opt.name), OtherItem
         ).first():

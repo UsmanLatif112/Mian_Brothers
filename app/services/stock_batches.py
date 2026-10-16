@@ -24,7 +24,7 @@ def _as_dt(value):
 def _qty_from_log(log):
     liters = float(log.liters or 0) if log.liters is not None else 0.0
     qty = int(log.quantity or 0) if log.quantity is not None else 0
-    if (log.category or '') == 'fuel' or (log.category or '') == 'ft_mobile' or (liters > 0 and qty <= 0):
+    if (log.category or '') in ('fuel', 'ft_mobile') or (liters > 0 and qty <= 0):
         return liters
     return float(qty)
 
@@ -235,7 +235,7 @@ def backfill_batches_from_purchases():
         )
 
     for item in OtherItem.query.all():
-        if (item.category or '') == 'ft_mobile':
+        if item.tracks_liters():
             target = float(item.liters or 0)
         else:
             target = float(item.quantity or 0)

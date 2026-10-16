@@ -153,17 +153,17 @@
                             <div class="directory-card-info">
                                 <div class="directory-card-title of-clip" data-of-tip="{{ item.name }}">{{ item.name }}</div>
                                 <div class="directory-card-meta">
-                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span>
+                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.tracks_liters() %}Other · L{% else %}Other{% endif %}</span>
                                     {% if item.company %}<span class="of-clip" data-of-tip="{{ item.company }}">{{ item.company }}</span>{% endif %}
                                     {% if item.item_type %}<span class="of-item-type of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
                                 </div>
-                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}{% if item.category == 'ft_mobile' and item.liters is not none %} · {{ '{:,.2f}'.format(item.liters) }} L{% elif item.category != 'ft_mobile' %} · Qty {{ item.quantity }}{% endif %}">
+                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}{% if item.tracks_liters() %} · {{ '{:,.2f}'.format(item.liters or 0) }} L{% else %} · Qty {{ item.quantity }}{% endif %}">
                                     Vendor: {{ item.vendor or '—' }}
-                                    · Cost {{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}
-                                    · Sale {{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}/L{% endif %}
-                                    {% if item.category == 'ft_mobile' and item.liters is not none %}
-                                    · {{ "{:,.2f}".format(item.liters) }} L
-                                    {% elif item.category != 'ft_mobile' %}
+                                    · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %}
+                                    · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}
+                                    {% if item.tracks_liters() %}
+                                    · {{ "{:,.2f}".format(item.liters or 0) }} L
+                                    {% else %}
                                     · Qty {{ item.quantity }}
                                     {% endif %}
                                 </div>
@@ -226,15 +226,15 @@
                         {% if shop_items %}
                             {% for item in shop_items %}
                             <tr>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}{{ item.category }}{% endif %}</span></td>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.tracks_liters() %}Other · L{% else %}Other{% endif %}</span></td>
                                 <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ item.name }}">{{ item.name }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.company or '-' }}">{{ item.company or '-' }}</span></td>
                                 <td class="of-item-type"><span class="of-clip-cell" data-of-tip="{{ item.item_type or '-' }}">{{ item.item_type or '-' }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.vendor or '-' }}">{{ item.vendor or '-' }}</span></td>
-                                <td>{{ item.cost_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
-                                <td>{{ item.sale_price | money }}{% if item.category == 'ft_mobile' %}<small class="text-muted-custom">/L</small>{% endif %}</td>
-                                <td class="fw-bold">{% if item.liters is not none %}{{ "{:,.2f}".format(item.liters) }} L{% else %}-{% endif %}</td>
-                                <td>{% if item.category == 'ft_mobile' %}<span class="text-muted-custom">—</span>{% else %}<span class="fw-bold">{{ item.quantity }}</span>{% endif %}</td>
+                                <td>{{ item.cost_price | money }}{% if item.tracks_liters() %}<small class="text-muted-custom">/L</small>{% endif %}</td>
+                                <td>{{ item.sale_price | money }}{% if item.tracks_liters() %}<small class="text-muted-custom">/L</small>{% endif %}</td>
+                                <td class="fw-bold">{% if item.tracks_liters() %}{{ "{:,.2f}".format(item.liters or 0) }} L{% elif item.liters is not none %}{{ "{:,.2f}".format(item.liters) }}{% else %}—{% endif %}</td>
+                                <td>{% if item.tracks_liters() %}<span class="text-muted-custom">—</span>{% else %}<span class="fw-bold">{{ item.quantity }}</span>{% endif %}</td>
                                 <td class="text-end">
                                     <div class="btn-group gap-1">
                                         <button type="button"
@@ -332,8 +332,6 @@
                         </div>
 
                         {% set ft_cat = (shop_categories or [])|selectattr('key', 'equalto', 'ft_mobile')|list|first %}
-                        {% set mobile_cat = (shop_categories or [])|selectattr('key', 'equalto', 'mobile')|list|first %}
-                        {% set filter_cat = (shop_categories or [])|selectattr('key', 'equalto', 'filter')|list|first %}
 
                         <div class="col-12 field-group d-none" data-show="ft_mobile">
                             <label for="ft_mobile_company" class="form-label form-label-custom">Company Name</label>
@@ -350,69 +348,18 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="mobile">
-                            <label for="mobile_company" class="form-label form-label-custom">Mobile Company</label>
-                            <select class="form-select form-control-custom" id="mobile_company" name="company_mobile">
-                                <option value="" disabled selected>Select company...</option>
-                                {% for name in (mobile_cat.companies if mobile_cat else []) %}
-                                <option value="{{ name }}">{{ name }}</option>
-                                {% endfor %}
-                                <option value="Other">Other (add new)</option>
-                            </select>
-                            <div class="mt-2 d-none" id="mobile_company_other_wrap">
-                                <label for="mobile_company_other" class="form-label form-label-custom">Company Name</label>
-                                <input type="text" class="form-control form-control-custom" id="mobile_company_other" placeholder="Enter company name">
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 field-group d-none" data-show="mobile">
-                            <label for="mobile_type" class="form-label form-label-custom">Oil Type</label>
-                            <select class="form-select form-control-custom" id="mobile_type" name="item_type_mobile">
-                                <option value="" disabled selected>Select type...</option>
-                                {% for name in (mobile_cat.types if mobile_cat else []) %}
-                                <option value="{{ name }}">{{ name }}</option>
-                                {% endfor %}
-                                <option value="Other">Other (add new)</option>
-                            </select>
-                            <div class="mt-2 d-none" id="mobile_type_other_wrap">
-                                <label for="mobile_type_other" class="form-label form-label-custom">Oil Type Name</label>
-                                <input type="text" class="form-control form-control-custom" id="mobile_type_other" placeholder="Enter oil type name">
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 field-group d-none" data-show="filter">
-                            <label for="filter_type" class="form-label form-label-custom">Filter Type</label>
-                            <select class="form-select form-control-custom" id="filter_type" name="item_type_filter">
-                                <option value="" disabled selected>Select filter type...</option>
-                                {% for name in (filter_cat.types if filter_cat else []) %}
-                                <option value="{{ name }}">{{ name }}</option>
-                                {% endfor %}
-                                <option value="Other">Other (add new)</option>
-                            </select>
-                            <div class="mt-2 d-none" id="filter_type_other_wrap">
-                                <label for="filter_type_other" class="form-label form-label-custom">Filter Type Name</label>
-                                <input type="text" class="form-control form-control-custom" id="filter_type_other" placeholder="Enter filter type name">
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 field-group d-none" data-show="filter">
-                            <label for="filter_company" class="form-label form-label-custom">Company Name</label>
-                            <select class="form-select form-control-custom" id="filter_company" name="company_filter">
-                                <option value="" disabled selected>Select company...</option>
-                                {% for name in (filter_cat.companies if filter_cat else []) %}
-                                <option value="{{ name }}">{{ name }}</option>
-                                {% endfor %}
-                                <option value="Other">Other (add new)</option>
-                            </select>
-                            <div class="mt-2 d-none" id="filter_company_other_wrap">
-                                <label for="filter_company_other" class="form-label form-label-custom">Custom Company</label>
-                                <input type="text" class="form-control form-control-custom" id="filter_company_other" placeholder="Enter company name">
-                            </div>
-                        </div>
-
                         <div class="col-12 field-group d-none" data-show="other">
                             <label for="item_name" class="form-label form-label-custom">Item Name</label>
-                            <input type="text" class="form-control form-control-custom" id="item_name" name="item_name" placeholder="e.g. Air Freshener">
+                            <input type="text" class="form-control form-control-custom" id="item_name" name="item_name" placeholder="e.g. Havoline, Filter 480, Grease">
+                        </div>
+
+                        <div class="col-12 col-md-6 field-group d-none" data-show="other">
+                            <label for="stock_unit" class="form-label form-label-custom">Unit</label>
+                            <select class="form-select form-control-custom" id="stock_unit" name="stock_unit">
+                                <option value="qty" selected>Pieces (qty)</option>
+                                <option value="liters">Liters</option>
+                            </select>
+                            <small class="text-muted-custom">Oils / bulk liquid → Liters. Filters, bottles, grease → Pieces.</small>
                         </div>
 
                         {# Custom categories — company / type / name #}
@@ -439,11 +386,11 @@
                             <input type="text" class="form-control form-control-custom" id="custom_item_name" name="item_name_custom" placeholder="Product name">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other">
                             <hr class="my-1" style="border-color: var(--border-color); opacity: 0.4;">
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other">
                             <label for="vendor_id" class="form-label form-label-custom">Vendor</label>
                             <div class="of-select-with-add">
                                 <select class="form-select form-control-custom js-search-vendor js-create-vendor" id="vendor_id" name="vendor_id"
@@ -466,7 +413,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
                             <label for="payment_status" class="form-label form-label-custom">Payment to Vendor</label>
                             <select class="form-select form-control-custom" id="payment_status" name="payment_status">
                                 <option value="unpaid" selected>Unpaid</option>
@@ -474,12 +421,12 @@
                             </select>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
                             <label for="entry_date" class="form-label form-label-custom">Purchase Date</label>
                             <input type="date" class="form-control form-control-custom" id="entry_date" name="entry_date" value="{{ today }}">
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
                             <label for="cost_price" class="form-label form-label-custom">Cost Price</label>
                             <div class="input-group">
                                 <span class="input-group-text">PKR</span>
@@ -487,7 +434,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 col-md-6 field-group d-none" data-show="fuel ft_mobile other">
                             <label for="sale_price" class="form-label form-label-custom">Sale Price</label>
                             <div class="input-group">
                                 <span class="input-group-text">PKR</span>
@@ -495,7 +442,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel mobile ft_mobile custom_liters">
+                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel ft_mobile other_liters">
                             <label for="liters" class="form-label form-label-custom">
                                 <span class="liters-label">Liters</span>
                             </label>
@@ -505,7 +452,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 field-group d-none" data-show="fuel mobile ft_mobile filter other custom">
+                        <div class="col-12 field-group d-none" data-show="fuel ft_mobile other">
                             <div class="p-3 rounded" style="background: rgba(2,132,199,0.08); font-size: 0.9rem;">
                                 <div class="d-flex justify-content-between">
                                     <span class="text-muted-custom">This purchase batch total</span>
@@ -515,7 +462,7 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="mobile filter other custom_qty">
+                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="other_qty">
                             <label for="quantity" class="form-label form-label-custom">Quantity</label>
                             <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="Enter quantity">
                         </div>
@@ -637,48 +584,33 @@
     const form = document.getElementById('add-item-form');
     const companyHidden = document.getElementById('company_hidden');
     const typeHidden = document.getElementById('item_type_hidden');
-    const SYSTEM_CATS = new Set(['fuel', 'mobile', 'ft_mobile', 'filter', 'other']);
+    const SYSTEM_CATS = new Set(['fuel', 'ft_mobile', 'other']);
     const SYSTEM_OPTION_DEFAULTS = {
-        mobile: {
-            companies: ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
-            types: ['5W-30', '10W-40', '15W-40', '20W-50', 'ATF', 'Gear Oil', 'Coolant', 'Brake Fluid'],
-        },
         ft_mobile: {
             companies: ['Shell', 'Castrol', 'Mobil', 'Total', 'PSO', 'Caltex'],
             types: [],
-        },
-        filter: {
-            companies: ['Bosch', 'Mann', 'Fram', 'Toyota', 'Honda'],
-            types: ['Oil Filter', 'Air Filter', 'Fuel Filter', 'Cabin Filter'],
         },
     };
     let categoriesCache = [];
 
     const otherPairs = [
         { select: 'ft_mobile_company', wrap: 'ft_mobile_company_other_wrap', input: 'ft_mobile_company_other', match: 'Other' },
-        { select: 'mobile_company', wrap: 'mobile_company_other_wrap', input: 'mobile_company_other', match: 'Other' },
-        { select: 'mobile_type', wrap: 'mobile_type_other_wrap', input: 'mobile_type_other', match: 'Other' },
-        { select: 'filter_company', wrap: 'filter_company_other_wrap', input: 'filter_company_other', match: 'Other' },
-        { select: 'filter_type', wrap: 'filter_type_other_wrap', input: 'filter_type_other', match: 'Other' },
-        { select: 'custom_company', wrap: 'custom_company_other_wrap', input: 'custom_company_other', match: 'Other' },
-        { select: 'custom_type', wrap: 'custom_type_other_wrap', input: 'custom_type_other', match: 'Other' },
     ];
+
+    const otherStockUnit = () => {
+        const el = document.getElementById('stock_unit');
+        return (el && el.value) || 'qty';
+    };
 
     const syncOtherNameFields = () => {
         const cat = categorySelect.value;
-        const isCustom = cat && !SYSTEM_CATS.has(cat);
         otherPairs.forEach(({ select, wrap, input, match }) => {
             const sel = document.getElementById(select);
             const wrapEl = document.getElementById(wrap);
             const inputEl = document.getElementById(input);
             if (!sel || !wrapEl || !inputEl) return;
 
-            let categoryOk = false;
-            if (select === 'ft_mobile_company') categoryOk = cat === 'ft_mobile';
-            if (['mobile_company', 'mobile_type'].includes(select)) categoryOk = cat === 'mobile';
-            if (['filter_company', 'filter_type'].includes(select)) categoryOk = cat === 'filter';
-            if (['custom_company', 'custom_type'].includes(select)) categoryOk = isCustom;
-
+            const categoryOk = select === 'ft_mobile_company' && cat === 'ft_mobile';
             const visible = categoryOk && sel.value === match;
             wrapEl.classList.toggle('d-none', !visible);
             inputEl.required = visible;
@@ -895,29 +827,26 @@
             if (!types.length) types = defaults.types.slice();
         }
 
-        if (isCustom) {
-            fillSelectOptions(document.getElementById('custom_company'), companies, true);
-            fillSelectOptions(document.getElementById('custom_type'), types, true);
-        } else if (cat === 'mobile') {
-            fillSelectOptions(document.getElementById('mobile_company'), companies, true);
-            fillSelectOptions(document.getElementById('mobile_type'), types, true);
-        } else if (cat === 'ft_mobile') {
+        if (cat === 'ft_mobile') {
             fillSelectOptions(document.getElementById('ft_mobile_company'), companies, true);
-        } else if (cat === 'filter') {
-            fillSelectOptions(document.getElementById('filter_company'), companies, true);
-            fillSelectOptions(document.getElementById('filter_type'), types, true);
         }
 
         document.querySelectorAll('#add-item-form .field-group').forEach(el => {
             const showFor = (el.dataset.show || '').split(/\s+/).filter(Boolean);
+            const otherLiters = cat === 'other' && otherStockUnit() === 'liters';
+            const otherQty = cat === 'other' && otherStockUnit() === 'qty';
             let visible = cat && showFor.includes(showKey);
+            if (showFor.includes('other_liters')) {
+                visible = otherLiters;
+            }
+            if (showFor.includes('other_qty')) {
+                visible = otherQty;
+            }
             if (el.id === 'liters_field_wrap') {
-                visible = cat === 'fuel' || cat === 'ft_mobile' || cat === 'mobile'
-                    || (isCustom && unit === 'liters');
+                visible = cat === 'fuel' || cat === 'ft_mobile' || otherLiters;
             }
             if (el.id === 'quantity_field_wrap') {
-                visible = cat === 'mobile' || cat === 'filter' || cat === 'other'
-                    || (isCustom && unit === 'qty');
+                visible = otherQty;
             }
             el.classList.toggle('d-none', !visible);
 
@@ -928,11 +857,9 @@
                 if (['cost_price', 'sale_price', 'vendor_id', 'payment_status'].includes(input.id)
                     || (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id))
                     || (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id))
-                    || (cat === 'mobile' && ['mobile_company', 'mobile_type', 'quantity'].includes(input.id))
-                    || (cat === 'filter' && ['filter_type', 'filter_company', 'quantity'].includes(input.id))
-                    || (cat === 'other' && ['item_name', 'quantity'].includes(input.id))
-                    || (isCustom && unit === 'liters' && input.id === 'liters')
-                    || (isCustom && unit === 'qty' && input.id === 'quantity')) {
+                    || (cat === 'other' && ['item_name', 'stock_unit'].includes(input.id))
+                    || (otherLiters && input.id === 'liters')
+                    || (otherQty && input.id === 'quantity')) {
                     input.required = true;
                 }
             });
@@ -940,7 +867,7 @@
 
         const litersLabel = document.querySelector('.liters-label');
         if (litersLabel) {
-            litersLabel.textContent = cat === 'mobile' ? 'Liters (per unit)' : 'Liters';
+            litersLabel.textContent = 'Liters';
         }
         updateBatchTotal();
         syncOtherNameFields();
@@ -954,10 +881,8 @@
         const isCustom = cat && !SYSTEM_CATS.has(cat);
         const cost = Number(document.getElementById('cost_price')?.value || 0);
         let qty = 0;
-        if (cat === 'fuel' || cat === 'ft_mobile' || (isCustom && unit === 'liters')) {
+        if (cat === 'fuel' || cat === 'ft_mobile' || (cat === 'other' && otherStockUnit() === 'liters')) {
             qty = Number(document.getElementById('liters')?.value || 0);
-        } else if (cat === 'mobile') {
-            qty = Number(document.getElementById('quantity')?.value || 0);
         } else {
             qty = Number(document.getElementById('quantity')?.value || 0);
         }
@@ -985,11 +910,8 @@
     const modalTitle = document.getElementById('addInventoryModalLabel');
     const submitBtn = document.getElementById('submit-btn');
     const PRODUCT_LOCK_IDS = [
-        'fuel_type_id', 'ft_mobile_company', 'mobile_company', 'mobile_type',
-        'filter_type', 'filter_company', 'item_name', 'custom_company', 'custom_type',
-        'custom_item_name', 'ft_mobile_company_other', 'mobile_company_other',
-        'mobile_type_other', 'filter_type_other', 'filter_company_other',
-        'custom_company_other', 'custom_type_other',
+        'fuel_type_id', 'ft_mobile_company', 'item_name', 'stock_unit',
+        'ft_mobile_company_other',
     ];
     let inventoryModalMode = 'add';
     let pendingEditData = null;
@@ -1117,20 +1039,13 @@
             setSelectValue(document.getElementById('fuel_type_id'), d.fuelTypeId || '');
         } else if (cat === 'ft_mobile') {
             setNamedSelect('ft_mobile_company', 'ft_mobile_company_other', d.company);
-        } else if (cat === 'mobile') {
-            setNamedSelect('mobile_company', 'mobile_company_other', d.company);
-            setNamedSelect('mobile_type', 'mobile_type_other', d.itemType);
-        } else if (cat === 'filter') {
-            setNamedSelect('filter_company', 'filter_company_other', d.company);
-            setNamedSelect('filter_type', 'filter_type_other', d.itemType);
-        } else if (cat === 'other') {
+        } else if (cat === 'other' || cat === 'mobile' || cat === 'filter') {
+            if (cat !== 'other') setCategoryValue('other');
             const nameEl = document.getElementById('item_name');
             if (nameEl) nameEl.value = d.item || '';
-        } else if (cat) {
-            setNamedSelect('custom_company', 'custom_company_other', d.company);
-            setNamedSelect('custom_type', 'custom_type_other', d.itemType);
-            const customName = document.getElementById('custom_item_name');
-            if (customName) customName.value = d.item || '';
+            const unitEl = document.getElementById('stock_unit');
+            if (unitEl) unitEl.value = (d.stockUnit === 'liters') ? 'liters' : 'qty';
+            syncVisibleFields();
         }
 
         companyHidden.value = d.company || '';
@@ -1230,6 +1145,7 @@
     });
 
     categorySelect.addEventListener('change', syncVisibleFields);
+    document.getElementById('stock_unit')?.addEventListener('change', syncVisibleFields);
     otherPairs.forEach(({ select }) => {
         const sel = document.getElementById(select);
         if (sel) sel.addEventListener('change', syncOtherNameFields);
@@ -1314,26 +1230,7 @@
             }
         }
 
-        if (cat === 'mobile') {
-            let company = document.getElementById('mobile_company').value;
-            let type = document.getElementById('mobile_type').value;
-            if (company === 'Other') {
-                company = document.getElementById('mobile_company_other').value.trim();
-                if (!company) {
-                    fail('Please enter the company name.');
-                    return;
-                }
-            }
-            if (type === 'Other') {
-                type = document.getElementById('mobile_type_other').value.trim();
-                if (!type) {
-                    fail('Please enter the oil type name.');
-                    return;
-                }
-            }
-            companyHidden.value = company;
-            typeHidden.value = type;
-        } else if (cat === 'ft_mobile') {
+        if (cat === 'ft_mobile') {
             let company = document.getElementById('ft_mobile_company').value;
             if (company === 'Other') {
                 company = document.getElementById('ft_mobile_company_other').value.trim();
@@ -1344,47 +1241,14 @@
             }
             companyHidden.value = company;
             typeHidden.value = '';
-        } else if (cat === 'filter') {
-            let company = document.getElementById('filter_company').value;
-            let type = document.getElementById('filter_type').value;
-            if (company === 'Other') {
-                company = document.getElementById('filter_company_other').value.trim();
-                if (!company) {
-                    fail('Please enter the company name.');
-                    return;
-                }
-            }
-            if (type === 'Other') {
-                type = document.getElementById('filter_type_other').value.trim();
-                if (!type) {
-                    fail('Please enter the filter type name.');
-                    return;
-                }
-            }
-            companyHidden.value = company;
-            typeHidden.value = type;
-        } else if (cat && !SYSTEM_CATS.has(cat)) {
-            let company = document.getElementById('custom_company')?.value || '';
-            let type = document.getElementById('custom_type')?.value || '';
-            if (company === 'Other') {
-                company = (document.getElementById('custom_company_other')?.value || '').trim();
-            }
-            if (type === 'Other') {
-                type = (document.getElementById('custom_type_other')?.value || '').trim();
-            }
-            let name = (document.getElementById('custom_item_name')?.value || '').trim();
+        } else if (cat === 'other') {
+            const name = (document.getElementById('item_name')?.value || '').trim();
             if (!name) {
-                if (company && type) name = `${company} ${type}`;
-                else if (company) name = company;
-            }
-            if (!name) {
-                fail('Please enter an item name (or company / type).');
+                fail('Please enter an item name.');
                 return;
             }
-            const nameInput = document.getElementById('item_name');
-            if (nameInput) nameInput.value = name;
-            companyHidden.value = company || '';
-            typeHidden.value = type || '';
+            companyHidden.value = '';
+            typeHidden.value = '';
         } else {
             companyHidden.value = '';
             typeHidden.value = '';

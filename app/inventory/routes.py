@@ -106,7 +106,7 @@ def index():
         cat_row = apply_agency_filter(
             ShopCategory.query.filter_by(key=category, is_active=True), ShopCategory
         ).first()
-        if not cat_row and category not in ('fuel', 'mobile', 'filter', 'other', 'ft_mobile'):
+        if not cat_row and category not in ('fuel', 'other', 'ft_mobile'):
             flash('Please select a valid item category.', 'danger')
             return redirect(url_for('inventory.index'))
 
@@ -258,6 +258,7 @@ def index():
                 shop_item.liters = float(shop_item.liters or 0) + liters_val
                 shop_item.vendor = vendor.name
                 shop_item.cost_price = cost_val
+                shop_item.stock_unit = 'liters'
             else:
                 shop_item = OtherItem(
                     category='ft_mobile',
@@ -269,6 +270,7 @@ def index():
                     sale_price=sale_val,
                     liters=liters_val,
                     quantity=0,
+                    stock_unit='liters',
                 )
                 stamp_agency(shop_item)
                 db.session.add(shop_item)
@@ -284,6 +286,7 @@ def index():
             )
             shop_item.sale_price = sale_val
             shop_item.quantity = 0
+            shop_item.stock_unit = 'liters'
 
             purchase_log = ItemPurchaseLog(
                 category='ft_mobile',
@@ -331,34 +334,23 @@ def index():
         item_type = (request.form.get('item_type') or '').strip() or None
         quantity_raw = request.form.get('quantity')
         liters_raw = request.form.get('liters')
+        # Other: pieces (qty) or liters — chosen on the form
+        stock_unit = (request.form.get('stock_unit') or '').strip().lower()
+        if stock_unit not in ('qty', 'liters'):
+            stock_unit = 'qty'
 
-        unit_mode = (cat_row.unit_mode if cat_row else 'qty') or 'qty'
-
-        # Custom liter categories (not ft_mobile) use the liters shop path below via name.
-        if category == 'mobile':
-            if not company or not item_type:
-                flash('Mobile company name and type are required.', 'danger')
+        item_name = (request.form.get('item_name') or '').strip()
+        if not item_name:
+            if company and item_type:
+                item_name = f"{company} {item_type}"
+            elif company:
+                item_name = company
+            else:
+                flash('Item name is required.', 'danger')
                 return redirect(url_for('inventory.index'))
-            item_name = f"{company} {item_type}"
-        elif category == 'filter':
-            if not company or not item_type:
-                flash('Filter type and company name are required.', 'danger')
-                return redirect(url_for('inventory.index'))
-            item_name = f"{company} {item_type}"
-        else:
-            item_name = (request.form.get('item_name') or '').strip()
-            if not item_name:
-                # Custom category with company+type → build name
-                if company and item_type:
-                    item_name = f"{company} {item_type}"
-                elif company:
-                    item_name = company
-                else:
-                    flash('Item name is required.', 'danger')
-                    return redirect(url_for('inventory.index'))
 
-        # Liter-mode custom categories behave like FT Mobile (stock in liters)
-        if unit_mode == 'liters' and category not in ('ft_mobile', 'fuel', 'mobile', 'filter', 'other'):
+        # Other + Liters (and any leftover custom liter categories)
+        if category == 'other' and stock_unit == 'liters':
             try:
                 liters_val = float(liters_raw)
                 if liters_val <= 0:
@@ -372,6 +364,7 @@ def index():
                 shop_item.liters = float(shop_item.liters or 0) + liters_val
                 shop_item.vendor = vendor.name
                 shop_item.cost_price = cost_val
+                shop_item.stock_unit = 'liters'
             else:
                 shop_item = OtherItem(
                     category=category,
@@ -383,6 +376,7 @@ def index():
                     sale_price=sale_val,
                     liters=liters_val,
                     quantity=0,
+                    stock_unit='liters',
                 )
                 stamp_agency(shop_item)
                 db.session.add(shop_item)
@@ -393,6 +387,7 @@ def index():
             )
             shop_item.sale_price = sale_val
             shop_item.quantity = 0
+            shop_item.stock_unit = 'liters'
             purchase_log = ItemPurchaseLog(
                 category=category,
                 item_name=item_name,
@@ -431,22 +426,12 @@ def index():
             return redirect(url_for('inventory.index'))
 
         liters_val = None
-        if category == 'mobile' and liters_raw:
-            try:
-                liters_val = float(liters_raw)
-                if liters_val < 0:
-                    raise ValueError('Liters cannot be negative.')
-            except ValueError as e:
-                flash(f'Invalid liters value: {e}', 'danger')
-                return redirect(url_for('inventory.index'))
-
         shop_item = _find_or_create_shop_item(category, item_name, company, item_type)
         if shop_item:
-            shop_item.quantity = int(shop_item.quantity) + qty_val
+            shop_item.quantity = int(shop_item.quantity or 0) + qty_val
             shop_item.vendor = vendor.name
             shop_item.cost_price = cost_val
-            if liters_val is not None:
-                shop_item.liters = liters_val
+            shop_item.stock_unit = 'qty'
         else:
             shop_item = OtherItem(
                 category=category,
@@ -456,8 +441,9 @@ def index():
                 vendor=vendor.name,
                 cost_price=cost_val,
                 sale_price=sale_val,
-                liters=liters_val,
-                quantity=qty_val
+                liters=None,
+                quantity=qty_val,
+                stock_unit='qty',
             )
             stamp_agency(shop_item)
             db.session.add(shop_item)
@@ -473,6 +459,7 @@ def index():
             effective_date=entry_day,
         )
         shop_item.sale_price = sale_val
+        shop_item.stock_unit = 'qty'
 
         purchase_log = ItemPurchaseLog(
             category=category,
@@ -630,14 +617,16 @@ def edit_item(item_id):
     item.item_type = item_type
     item.cost_price = cost_val
     item.sale_price = sale_val
-    if item.category == 'ft_mobile':
+    if item.tracks_liters():
         item.quantity = 0
+        item.stock_unit = 'liters'
         if liters_val is None:
-            flash('Liters are required for FT Mobile Oil.', 'danger')
+            flash('Liters are required for liter-stock items.', 'danger')
             return redirect(url_for('inventory.index'))
         item.liters = liters_val
     else:
         item.quantity = qty_val
+        item.stock_unit = 'qty'
         if liters_val is not None:
             item.liters = liters_val
 
@@ -864,30 +853,11 @@ def categories():
 @inventory_bp.route('/categories/create', methods=['POST'])
 @login_required
 def categories_create():
-    name = (request.form.get('name') or '').strip()
-    unit_mode = (request.form.get('unit_mode') or 'qty').strip().lower()
-    if unit_mode not in ('qty', 'liters'):
-        unit_mode = 'qty'
-    if not name:
-        flash('Category name is required.', 'danger')
-        return redirect(url_for('inventory.categories'))
-
-    key = unique_category_key(name)
-    if key in ('fuel', 'mobile', 'ft_mobile', 'filter', 'other'):
-        key = unique_category_key(f'{name}_custom')
-
-    cat = ShopCategory(
-        key=key,
-        name=name,
-        unit_mode=unit_mode,
-        is_system=False,
-        is_active=True,
-        sort_order=200,
+    flash(
+        'Only Fuel, FT Mobile Oil, and Other are used. '
+        'Put mobiles, filters, and similar under Other (Pieces or Liters).',
+        'warning',
     )
-    stamp_agency(cat)
-    db.session.add(cat)
-    db.session.commit()
-    flash(f'Category “{name}” created. Add companies or types below.', 'success')
     return redirect(url_for('inventory.categories'))
 
 
@@ -1066,30 +1036,10 @@ def api_categories():
 @inventory_bp.route('/api/categories', methods=['POST'])
 @login_required
 def api_create_category():
-    data = request.get_json(silent=True) or {}
-    name = (data.get('name') or '').strip()
-    unit_mode = (data.get('unit_mode') or 'qty').strip().lower()
-    if unit_mode not in ('qty', 'liters'):
-        unit_mode = 'qty'
-    if not name:
-        return jsonify({'ok': False, 'error': 'Category name is required.'}), 400
-
-    key = unique_category_key(name)
-    if key in ('fuel', 'mobile', 'ft_mobile', 'filter', 'other'):
-        key = unique_category_key(f'{name}_custom')
-
-    cat = ShopCategory(
-        key=key,
-        name=name,
-        unit_mode=unit_mode,
-        is_system=False,
-        is_active=True,
-        sort_order=200,
-    )
-    stamp_agency(cat)
-    db.session.add(cat)
-    db.session.commit()
-    return jsonify({'ok': True, 'category': category_payload(cat)})
+    return jsonify({
+        'ok': False,
+        'error': 'Only Fuel, FT Mobile Oil, and Other are available. Use Other with Pieces or Liters.',
+    }), 400
 
 
 @inventory_bp.route('/api/categories/<int:category_id>/options', methods=['POST'])
@@ -1180,13 +1130,12 @@ def batches():
             continue
         rem = sum(float(b.qty_remaining or 0) for b in rows)
         value = sum(float(b.qty_remaining or 0) * float(b.unit_cost or 0) for b in rows)
-        is_ft = (item.category or '') == 'ft_mobile'
         shop_sections.append({
             'label': item.name,
             'remaining': rem,
             'value': value,
             'batches': rows,
-            'unit': 'L' if is_ft else 'pcs',
+            'unit': 'L' if item.tracks_liters() else 'pcs',
         })
 
     return render_template(
