@@ -15,14 +15,8 @@ def as_date(value):
 
 
 def previous_balance_for_date(day):
-    """Use a manual previous balance for this day, otherwise prior remaining."""
+    """Opening previous for this day: stored value, else prior day’s remaining."""
     day = as_date(day)
-    current = apply_agency_filter(
-        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
-    ).first()
-    if current:
-        return float(current.previous_balance or 0)
-
     prior = (
         apply_agency_filter(
             DailyTillBalance.query.filter(DailyTillBalance.balance_date < day),
@@ -31,7 +25,50 @@ def previous_balance_for_date(day):
         .order_by(DailyTillBalance.balance_date.desc())
         .first()
     )
-    return float(prior.remaining_balance or 0) if prior else 0.0
+    prior_remaining = float(prior.remaining_balance or 0) if prior else 0.0
+
+    current = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
+    if current:
+        stored = float(current.previous_balance or 0)
+        # Non-zero stored (or no prior day) wins; otherwise carry prior remaining
+        # so an auto-created till row with previous=0 does not block carry-forward.
+        if stored > 0 or prior is None:
+            return stored
+        return prior_remaining
+    return prior_remaining
+
+
+def day_account_figures(day, models_ns):
+    """
+    Figures for one calendar day (listing / till).
+    pending = cash_in_hand − amount taken that day (next-day opening).
+    """
+    from app.utils import compute_period_stats
+
+    day = as_date(day)
+    stats = compute_period_stats(day, day, models_ns)
+    previous = float(stats.get('previous_balance') or 0)
+    cash_in_hand = float(stats.get('cash_in_hand') or 0)
+    taken = float(stats.get('cash_taken_total') or 0)
+
+    till = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
+    if till:
+        # If live activity under-reports, rebuild from stored remaining + taken
+        reconstructed = float(till.remaining_balance or 0) + taken
+        if reconstructed > cash_in_hand:
+            cash_in_hand = reconstructed
+
+    pending = cash_in_hand - taken
+    return {
+        'previous_balance': previous,
+        'cash_in_hand': cash_in_hand,
+        'cash_taken_total': taken,
+        'pending_balance': pending,
+    }
 
 
 def cash_taken_total(start, end=None):

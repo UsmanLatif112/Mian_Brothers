@@ -5,7 +5,9 @@ from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.account import account_bp
-from app.account.service import cash_taken_rows, set_previous_balance, upsert_till_balance
+from app.account.service import (
+    cash_taken_rows, day_account_figures, set_previous_balance, upsert_till_balance,
+)
 from app.models import (
     db, CashTaken, CreditSale, Customer, DailyCashCount, Expense,
     FuelPrice, FuelType, MeterReading, Payment,
@@ -15,28 +17,32 @@ from app.utils import PERIOD_CHOICES, compute_period_stats, parse_form_date, par
 
 
 def _enrich_taken_rows(rows):
-    """Attach per-day previous / cash in hand / pending for the listing table."""
+    """
+    Per date: previous balance, cash in hand, pending (= cash in hand − day’s takes).
+    Row pending uses cash_in_hand − that row’s amount when it’s the only take;
+    with multiple takes same day, pending is after all takes (next-day balance).
+    """
     cache = {}
     enriched = []
+    models = _models_ns()
     for row in rows:
         day = _as_date(row.taken_date)
         if day not in cache:
-            day_stats = compute_period_stats(day, day, _models_ns())
-            cache[day] = {
-                'previous_balance': float(day_stats.get('previous_balance') or 0),
-                'cash_in_hand': float(day_stats.get('cash_in_hand') or 0),
-                'pending_balance': float(day_stats.get('remaining_balance') or 0),
-            }
+            cache[day] = day_account_figures(day, models)
         ctx = cache[day]
+        amount = float(row.amount or 0)
+        day_taken = float(ctx['cash_taken_total'] or 0)
+        # Next-day / pending balance for the date
+        pending = float(ctx['cash_in_hand'] or 0) - day_taken
         enriched.append(SimpleNamespace(
             id=row.id,
             taken_date=row.taken_date,
             person_name=row.person_name,
             note=row.note,
-            amount=float(row.amount or 0),
+            amount=amount,
             previous_balance=ctx['previous_balance'],
             cash_in_hand=ctx['cash_in_hand'],
-            pending_balance=ctx['pending_balance'],
+            pending_balance=pending,
         ))
     return enriched
 
