@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Dip Calculator — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Tools</p>
+            <h1 class="page-title">Dip Calculator</h1>
+            <p class="text-muted-custom mb-0 mt-1" style="font-size: 0.95rem;">
+                Finds the closest chart dip, then estimates liters:
+                <strong>(chart liters ÷ chart dip) × your dip</strong>.
+            </p>
+        </div>
+    </div>
+</header>
+
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-5">
+        <div class="card card-premium h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Calculate</h2>
+                <div class="mb-3">
+                    <label class="form-label form-label-custom" for="calc_fuel">Fuel</label>
+                    <select id="calc_fuel" class="form-select form-control-custom">
+                        <option value="petrol">Petrol</option>
+                        <option value="diesel">Diesel</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label form-label-custom" for="calc_dip">Dip reading</label>
+                    <input type="number" step="0.001" min="0.001" class="form-control form-control-custom"
+                           id="calc_dip" placeholder="e.g. 222" autocomplete="off">
+                </div>
+                <div class="p-3 rounded" style="background: rgba(94,94,94,0.06);">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted-custom">Closest chart dip</span>
+                        <strong id="out_closest_dip">—</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted-custom">Chart liters</span>
+                        <strong id="out_closest_liters">—</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted-custom">Formula</span>
+                        <span id="out_formula" class="text-muted-custom" style="font-size: 0.85rem;">—</span>
+                    </div>
+                    <hr class="my-2" style="border-color: var(--border-color); opacity: 0.4;">
+                    <div class="d-flex justify-content-between align-items-baseline">
+                        <span class="text-muted-custom">Estimated stock</span>
+                        <strong class="fs-4 text-success" id="out_estimated">—</strong>
+                    </div>
+                    <div id="calc_error" class="text-danger mt-2 d-none" style="font-size: 0.9rem;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        <div class="card card-premium">
+            <div class="card-body">
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if (request.args.get('tab') or 'petrol') == 'petrol' %}active{% endif %}"
+                                id="tab-petrol" data-bs-toggle="tab" data-bs-target="#panel-petrol"
+                                type="button" role="tab">Petrol chart</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if request.args.get('tab') == 'diesel' %}active{% endif %}"
+                                id="tab-diesel" data-bs-toggle="tab" data-bs-target="#panel-diesel"
+                                type="button" role="tab">Diesel chart</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    {% macro dip_table(kind, rows) %}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-custom align-middle mb-0" id="table-{{ kind }}">
+                            <thead>
+                                <tr>
+                                    <th>Dip</th>
+                                    <th>Liters</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in rows %}
+                                <tr data-id="{{ r.id }}">
+                                    <td class="fw-semibold">{{ r.dip | float }}</td>
+                                    <td>{{ "{:,.3f}".format(r.liters | float) }} L</td>
+                                    <td class="text-end">
+                                        <form method="POST" action="{{ url_for('dip.delete_row_form', row_id=r.id) }}" class="d-inline"
+                                              data-confirm="Remove dip {{ r.dip | float }}?"
+                                              data-confirm-title="Remove dip entry">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger border-0" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr class="empty-row">
+                                    <td colspan="3" class="text-center text-muted-custom py-3">No entries yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <form method="POST" action="{{ url_for('dip.add_row_form') }}" class="row g-2 align-items-end">
+                        <input type="hidden" name="fuel_kind" value="{{ kind }}">
+                        <div class="col-5 col-sm-4">
+                            <label class="form-label form-label-custom">Dip</label>
+                            <input type="number" step="0.001" min="0.001" name="dip" class="form-control form-control-custom" required placeholder="e.g. 220">
+                        </div>
+                        <div class="col-5 col-sm-4">
+                            <label class="form-label form-label-custom">Liters</label>
+                            <input type="number" step="0.001" min="0" name="liters" class="form-control form-control-custom" required placeholder="e.g. 818">
+                        </div>
+                        <div class="col-12 col-sm-4">
+                            <button type="submit" class="btn btn-primary-custom w-100">
+                                <i class="bi bi-plus-circle me-1"></i> Add row
+                            </button>
+                        </div>
+                    </form>
+                    {% endmacro %}
+
+                    <div class="tab-pane fade {% if (request.args.get('tab') or 'petrol') == 'petrol' %}show active{% endif %}"
+                         id="panel-petrol" role="tabpanel">
+                        {{ dip_table('petrol', petrol_rows) }}
+                    </div>
+                    <div class="tab-pane fade {% if request.args.get('tab') == 'diesel' %}show active{% endif %}"
+                         id="panel-diesel" role="tabpanel">
+                        {{ dip_table('diesel', diesel_rows) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const fuelEl = document.getElementById('calc_fuel');
+    const dipEl = document.getElementById('calc_dip');
+    const outClosest = document.getElementById('out_closest_dip');
+    const outLiters = document.getElementById('out_closest_liters');
+    const outFormula = document.getElementById('out_formula');
+    const outEst = document.getElementById('out_estimated');
+    const outErr = document.getElementById('calc_error');
+    const calcUrl = {{ url_for('dip.api_calculate') | tojson }};
+    let timer = null;
+
+    const showErr = (msg) => {
+        if (!outErr) return;
+        if (msg) {
+            outErr.textContent = msg;
+            outErr.classList.remove('d-none');
+        } else {
+            outErr.textContent = '';
+            outErr.classList.add('d-none');
+        }
+    };
+
+    const clearOut = () => {
+        if (outClosest) outClosest.textContent = '—';
+        if (outLiters) outLiters.textContent = '—';
+        if (outFormula) outFormula.textContent = '—';
+        if (outEst) outEst.textContent = '—';
+    };
+
+    const runCalc = async () => {
+        const dip = Number(dipEl && dipEl.value);
+        if (!Number.isFinite(dip) || dip <= 0) {
+            clearOut();
+            showErr('');
+            return;
+        }
+        try {
+            const res = await fetch(calcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({
+                    fuel_kind: fuelEl ? fuelEl.value : 'petrol',
+                    dip,
+                }),
+                ofSilent: true,
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                clearOut();
+                showErr(data.error || 'Calculation failed.');
+                return;
+            }
+            showErr('');
+            if (outClosest) outClosest.textContent = String(data.closest_dip);
+            if (outLiters) outLiters.textContent = `${Number(data.closest_liters).toLocaleString(undefined, { maximumFractionDigits: 3 })} L`;
+            if (outFormula) outFormula.textContent = data.formula || '—';
+            if (outEst) outEst.textContent = `${Number(data.estimated_liters).toLocaleString(undefined, { maximumFractionDigits: 3 })} L`;
+        } catch (err) {
+            clearOut();
+            showErr('Could not calculate. Try again.');
+        }
+    };
+
+    const schedule = () => {
+        clearTimeout(timer);
+        timer = setTimeout(runCalc, 220);
+    };
+
+    if (dipEl) {
+        dipEl.addEventListener('input', schedule);
+        dipEl.addEventListener('change', schedule);
+    }
+    if (fuelEl) fuelEl.addEventListener('change', schedule);
+})();
+</script>
+{% endblock %}

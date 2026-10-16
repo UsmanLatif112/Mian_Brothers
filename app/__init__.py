@@ -158,6 +158,7 @@ def create_app():
     from app.account import account_bp
     from app.journal import journal_bp
     from app.receipts import receipts_bp
+    from app.dip import dip_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -172,6 +173,7 @@ def create_app():
     app.register_blueprint(expenses_bp, url_prefix='/expenses')
     app.register_blueprint(backup_bp, url_prefix='/backup')
     app.register_blueprint(receipts_bp, url_prefix='/receipts')
+    app.register_blueprint(dip_bp, url_prefix='/dip')
 
     @app.before_request
     def _recover_db_session():
@@ -211,8 +213,8 @@ def create_app():
         endpoint = req.endpoint or ''
         if endpoint.startswith('static') or endpoint in ('auth.login', 'auth.logout', 'uploaded_file', 'root'):
             return None
-        # Auth users/team + backup are role-gated separately
-        if endpoint.startswith('auth.') or endpoint.startswith('backup.'):
+        # Auth users/team + backup + dip calculator are role-gated separately
+        if endpoint.startswith('auth.') or endpoint.startswith('backup.') or endpoint.startswith('dip.'):
             return None
         module = module_for_endpoint(endpoint)
         if not module:
@@ -292,7 +294,34 @@ def run_schema_boot():
     ensure_meter_sale_rate_schema()
     ensure_fuel_price_effective_at_schema()
     ensure_stock_batch_schema()
+    ensure_dip_chart_schema()
     # Wider liter columns: scripts/migrate_liter_precision.py (optional, one-time)
+
+
+def ensure_dip_chart_schema():
+    """Create dip_charts table and seed defaults per agency."""
+    from app.models import DipChart, Agency  # noqa: F401 — register model
+
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f'dip_charts create_all skipped: {e}')
+        return
+
+    try:
+        from app.dip.routes import ensure_dip_defaults
+        agencies = Agency.query.all()
+        if agencies:
+            for ag in agencies:
+                ensure_dip_defaults(agency_id=ag.id)
+        else:
+            ensure_dip_defaults(agency_id=None)
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print(f'dip chart seed skipped: {e}')
 
 
 def ensure_agency_schema():

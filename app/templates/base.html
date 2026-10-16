@@ -233,6 +233,11 @@
                 <i class="bi bi-people-fill"></i><span>Team</span>
             </a>
             {% endif %}
+            {% if is_super_admin or is_agency_admin %}
+            <a class="sidebar-link {% if request.blueprint == 'dip' %}active{% endif %}" href="{{ url_for('dip.index') }}" data-search-label="Dip Calculator">
+                <i class="bi bi-rulers"></i><span>Dip Calculator</span>
+            </a>
+            {% endif %}
         </nav>
 
         <div class="sidebar-footer">

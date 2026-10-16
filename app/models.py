@@ -647,6 +647,25 @@ class StockBatchConsumption(db.Model):
         return f"<StockBatchConsumption {self.source_type}:{self.source_id} qty={self.qty_consumed}>"
 
 
+class DipChart(db.Model):
+    """Tank dip stick chart: dip reading → liters for petrol or diesel."""
+    __tablename__ = 'dip_charts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    agency_id = db.Column(db.Integer, db.ForeignKey('agencies.id'), nullable=True, index=True)
+    fuel_kind = db.Column(db.String(20), nullable=False, index=True)  # petrol | diesel
+    dip = db.Column(db.Numeric(12, 3), nullable=False)  # stick reading
+    liters = db.Column(db.Numeric(12, 3), nullable=False)  # volume at that dip
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('agency_id', 'fuel_kind', 'dip', name='uq_dip_chart_agency_kind_dip'),
+    )
+
+    def __repr__(self):
+        return f"<DipChart {self.fuel_kind} dip={self.dip} L={self.liters}>"
+
+
 class BackupLog(db.Model):
     """Per-user backup / restore activity (super_admin & agency admin)."""
     __tablename__ = 'backup_logs'
