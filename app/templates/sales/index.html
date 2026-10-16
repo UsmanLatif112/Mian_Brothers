@@ -137,9 +137,10 @@
                 <tbody>
                     {% for day in price_bands.days %}
                         {% for fuel in day.fuels %}
+                            {% set fuel_first = loop.first %}
                             {% for b in fuel.bands %}
                             <tr>
-                                <td class="text-nowrap">{% if loop.parent.first and loop.first %}{{ day.date }}{% endif %}</td>
+                                <td class="text-nowrap">{% if fuel_first and loop.first %}{{ day.date }}{% endif %}</td>
                                 <td class="fw-semibold">{% if loop.first %}{{ fuel.fuel_name }}{% endif %}</td>
                                 <td class="text-end text-nowrap">{{ "{:,.2f}".format(b.liters) }} L</td>
                                 <td class="text-end text-nowrap">{{ b.rate | money }}</td>
