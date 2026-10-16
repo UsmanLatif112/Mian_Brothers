@@ -23,7 +23,7 @@ from app.vendors.service import (
     normalize_purchase_payment_status,
     counts_toward_purchase_kpis,
 )
-from app.inventory.categories import list_active_categories, ensure_shop_categories
+from app.inventory.categories import list_active_categories
 
 PER_PAGE = 20
 
@@ -35,7 +35,6 @@ STATUS_CHOICES = (
 
 
 def _category_choices():
-    ensure_shop_categories()
     choices = [('all', 'All categories'), ('fuel', 'Fuel')]
     for cat in list_active_categories():
         key = (cat.key or '').strip()
