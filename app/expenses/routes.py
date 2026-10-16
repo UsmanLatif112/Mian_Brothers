@@ -3,10 +3,11 @@ from flask_login import login_required, current_user
 from app.expenses import expenses_bp
 from app.models import db, Expense, Customer, CreditSale
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
-from app.utils import parse_period, PERIOD_CHOICES, paginate
+from app.utils import (
+    parse_period, PERIOD_CHOICES, paginate, parse_form_date, business_today,
+)
 from app.services.entries import EntryError, edit_expense, delete_expense
 from app.customers.service import recalculate_customer_balance
-from datetime import datetime
 from sqlalchemy import func
 
 PER_PAGE = 15
@@ -15,6 +16,8 @@ PER_PAGE = 15
 @expenses_bp.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
+    today = business_today()
+
     if request.method == 'POST':
         action = request.form.get('action', 'create')
 
@@ -22,7 +25,6 @@ def index():
             name = (request.form.get('name') or '').strip()
             description = (request.form.get('description') or '').strip() or None
             amount_raw = request.form.get('amount')
-            date_raw = (request.form.get('expense_date') or '').strip()
 
             if not name:
                 flash('Expense name is required.', 'danger')
@@ -36,14 +38,7 @@ def index():
                 flash(f'Invalid amount: {e}', 'danger')
                 return redirect(url_for('expenses.index'))
 
-            try:
-                expense_date = (
-                    datetime.strptime(date_raw, '%Y-%m-%d').date()
-                    if date_raw else datetime.utcnow().date()
-                )
-            except ValueError:
-                flash('Invalid expense date.', 'danger')
-                return redirect(url_for('expenses.index'))
+            expense_date = parse_form_date(request.form.get('expense_date'), today)
 
             db.session.add(stamp_agency(Expense(
                 name=name,
@@ -68,19 +63,11 @@ def index():
                 flash('Expense is already settled.', 'warning')
                 return redirect(url_for('expenses.index', **_filter_args()))
 
-            date_raw = (request.form.get('settled_date') or '').strip()
             settle_note = (request.form.get('settle_note') or '').strip() or None
             settle_method = (request.form.get('settle_method') or 'cash').strip().lower()
             if settle_method not in ('cash', 'credit'):
                 settle_method = 'cash'
-            try:
-                settled_date = (
-                    datetime.strptime(date_raw, '%Y-%m-%d').date()
-                    if date_raw else datetime.utcnow().date()
-                )
-            except ValueError:
-                flash('Invalid settle date.', 'danger')
-                return redirect(url_for('expenses.index', **_filter_args()))
+            settled_date = parse_form_date(request.form.get('settled_date'), today)
 
             customer = None
             credit_sale = None
@@ -260,7 +247,7 @@ def index():
         start_date=start.isoformat(),
         end_date=end.isoformat(),
         period_choices=PERIOD_CHOICES,
-        today=datetime.utcnow().date().isoformat(),
+        today=today.isoformat(),
         chart_series=expenses_listing_series(expenses),
         search=search_q,
     )
