@@ -678,6 +678,17 @@ h1, h2, h3, h4, h5, h6,
         linear-gradient(180deg, color-mix(in srgb, var(--sky) 5%, transparent), transparent);
 }
 
+.price-band-table .price-band-subtotal td {
+    background: color-mix(in srgb, var(--border-color) 35%, var(--card-bg));
+    border-top: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.price-band-table tfoot td {
+    background: color-mix(in srgb, var(--accent-blue) 8%, var(--card-bg));
+    border-top: 2px solid color-mix(in srgb, var(--accent-blue) 30%, var(--border-color));
+}
+
 .directory-card {
     border-radius: 16px;
     border: var(--card-border);

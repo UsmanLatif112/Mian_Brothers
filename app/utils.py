@@ -366,13 +366,16 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     # All meter readings in range — value each row at its reading-date rate
     from sqlalchemy.orm import joinedload
     meter_rows = apply_agency_filter(
-        MeterReading.query.options(joinedload(MeterReading.fuel_type)).filter(
+        MeterReading.query.options(
+            joinedload(MeterReading.fuel_type),
+            joinedload(MeterReading.machine),
+        ).filter(
             MeterReading.reading_date >= start,
             MeterReading.reading_date <= end,
             MeterReading.closing_reading.isnot(None),
         ),
         MeterReading,
-    ).all()
+    ).order_by(MeterReading.reading_date.asc(), MeterReading.id.asc()).all()
     liters_by_fuel = {}
     amount_by_fuel = {}
     for r in meter_rows:
@@ -756,6 +759,155 @@ def _purchase_log_description(log):
     if log.company:
         desc = f"{log.company} {desc}"
     return desc
+
+
+def build_sales_price_bands(stats):
+    """
+    Group meter segments by date for the Sales “by price” summary.
+
+    Each band = one meter reading (start→end) at its locked sale_rate.
+    Credit sales on that date/fuel are allocated to matching-rate bands
+    (else split across that fuel’s bands). Cash = band sale − credit gross.
+    """
+    from collections import defaultdict, OrderedDict
+    from app.models import FuelPrice
+
+    rate_as_of = build_fuel_rate_lookup(FuelPrice, include_shared=True)
+
+    def _near(a, b, eps=0.02):
+        return abs(float(a or 0) - float(b or 0)) <= eps
+
+    def _plain_day(val):
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val.date()
+        return val
+
+    # Fuel credit sales → (date, fuel_type_id)
+    credit_by_key = defaultdict(list)
+    for e in stats.get('entries') or []:
+        et = (getattr(e, 'entry_type', None) or 'sale').lower()
+        if et != 'sale' or not getattr(e, 'fuel_type_id', None):
+            continue
+        if getattr(e, 'other_item_id', None):
+            continue
+        day = _plain_day(getattr(e, 'sale_date', None))
+        if day is None:
+            continue
+        amt = float(getattr(e, 'amount', 0) or 0)
+        paid = float(getattr(e, 'amount_paid', 0) or 0)
+        status = (getattr(e, 'payment_status', None) or 'unpaid').lower()
+        if status == 'paid' and paid <= 0:
+            paid = amt
+        credit = max(amt - paid, 0.0)
+        liters = float(getattr(e, 'liters', 0) or 0)
+        sale_rate = float(getattr(e, 'rate', 0) or 0)
+        credit_liters = 0.0 if amt <= 0 else liters * (credit / amt)
+        credit_gross = credit_liters * sale_rate
+        if credit_liters <= 0 and credit <= 0:
+            continue
+        credit_by_key[(day, e.fuel_type_id)].append({
+            'rate': sale_rate,
+            'credit_liters': credit_liters,
+            'credit': credit,
+            'credit_gross': credit_gross,
+        })
+
+    day_map = OrderedDict()
+    for r in stats.get('meter_rows') or []:
+        liters = float(getattr(r, 'liters_sold', 0) or 0)
+        if liters <= 0:
+            continue
+        day = _plain_day(getattr(r, 'reading_date', None))
+        if day is None:
+            continue
+        stored = getattr(r, 'sale_rate', None)
+        rate = float(stored) if stored is not None else float(
+            rate_as_of(r.fuel_type_id, day) or 0
+        )
+        sale = liters * rate
+        ft = getattr(r, 'fuel_type', None)
+        machine = getattr(r, 'machine', None)
+        machine_name = (
+            (machine.name if machine else None)
+            or getattr(r, 'dispenser_nozzle_id', None)
+            or '—'
+        )
+        band = SimpleNamespace(
+            id=getattr(r, 'id', 0),
+            fuel_type_id=r.fuel_type_id,
+            fuel_name=(ft.name if ft else 'Fuel'),
+            machine_name=machine_name,
+            opening=float(getattr(r, 'opening_reading', 0) or 0),
+            closing=float(getattr(r, 'closing_reading', 0) or 0),
+            liters=liters,
+            rate=rate,
+            sale=sale,
+            credit=0.0,
+            credit_liters=0.0,
+            credit_gross=0.0,
+            cash=sale,
+            cash_liters=liters,
+        )
+        if day not in day_map:
+            day_map[day] = SimpleNamespace(
+                date=day,
+                bands=[],
+                total_liters=0.0,
+                total_sale=0.0,
+                total_cash=0.0,
+                total_credit=0.0,
+            )
+        day_map[day].bands.append(band)
+
+    # Allocate credit onto bands
+    for (day, fuel_id), credits in credit_by_key.items():
+        group = day_map.get(day)
+        if not group:
+            continue
+        bands = [b for b in group.bands if b.fuel_type_id == fuel_id]
+        if not bands:
+            continue
+        for c in credits:
+            matched = [b for b in bands if _near(b.rate, c['rate'])]
+            targets = matched or bands
+            total_L = sum(b.liters for b in targets) or 0.0
+            if total_L <= 0:
+                continue
+            for b in targets:
+                share = b.liters / total_L
+                b.credit_liters += c['credit_liters'] * share
+                b.credit += c['credit'] * share
+                b.credit_gross += c['credit_gross'] * share
+
+    days = []
+    grand = SimpleNamespace(
+        total_liters=0.0,
+        total_sale=0.0,
+        total_cash=0.0,
+        total_credit=0.0,
+    )
+    # Newest date first for the listing
+    for day in sorted(day_map.keys(), reverse=True):
+        group = day_map[day]
+        for b in group.bands:
+            b.credit_liters = min(b.credit_liters, b.liters)
+            b.cash_liters = max(b.liters - b.credit_liters, 0.0)
+            b.credit_gross = min(b.credit_gross, b.sale)
+            b.cash = max(b.sale - b.credit_gross, 0.0)
+            # Keep discounted credit amount for display
+            group.total_liters += b.liters
+            group.total_sale += b.sale
+            group.total_cash += b.cash
+            group.total_credit += b.credit
+        grand.total_liters += group.total_liters
+        grand.total_sale += group.total_sale
+        grand.total_cash += group.total_cash
+        grand.total_credit += group.total_credit
+        days.append(group)
+
+    return SimpleNamespace(days=days, grand=grand)
 
 
 def _purchase_log_qty(log):

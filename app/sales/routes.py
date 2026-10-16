@@ -9,6 +9,7 @@ from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import (
     parse_period, PERIOD_CHOICES, compute_period_stats, fuel_rate_for,
     paginate, parse_form_date, datetime_from_date, infer_sale_overpayments,
+    build_sales_price_bands,
 )
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale,
@@ -810,6 +811,7 @@ def index():
 
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
+    price_bands = build_sales_price_bands(stats)
     from app.charts_data import sales_listing_series
 
     return render_template(
@@ -822,6 +824,7 @@ def index():
         shop_items=shop_items,
         ft_items=ft_items,
         stats=stats,
+        price_bands=price_bands,
         period_entries=period_entries,
         entries_pagination=entries_pagination,
         sale_overs=sale_overs,
