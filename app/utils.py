@@ -459,6 +459,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
             advances += amt
             continue
         if et == 'loan':
+            # Expense→customer credit settle: receivable only (cash already left as expense).
+            remarks = (getattr(e, 'remarks', None) or '').strip()
+            if remarks.lower().startswith('expense settle'):
+                continue
             loans += amt
             continue
         if et == 'opening':
@@ -534,9 +538,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     )
     settled_expense_total = expense_total - unsettled_expense_total
 
-    # Money returned to till on settle date (may differ from expense_date).
-    # Do not rely only on is_settled IS TRUE — some SQLite/MySQL rows keep
-    # settled_date but a non-true boolean, which used to drop the cash return.
+    # Settles in period by settled_date (may differ from expense_date).
     expense_settlements = apply_agency_filter(
         Expense.query.filter(
             Expense.settled_date.isnot(None),
@@ -546,9 +548,22 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         Expense,
     ).order_by(Expense.settled_date.desc(), Expense.id.desc()).all()
     expense_settlements = [x for x in expense_settlements if _expense_is_settled(x)]
-    expense_return_total = sum(float(x.amount or 0) for x in expense_settlements)
-    # Net till effect of expenses in this period (0 when out + get-back same day).
-    expense_net = expense_total - expense_return_total
+
+    def _settle_method(row):
+        return (getattr(row, 'settle_method', None) or 'cash').strip().lower()
+
+    # Cash returns only — these reverse till drain.
+    expense_return_total = sum(
+        float(x.amount or 0) for x in expense_settlements if _settle_method(x) != 'credit'
+    )
+    # Credit settles — recover expense for P&L, no till movement.
+    expense_credit_settle_total = sum(
+        float(x.amount or 0) for x in expense_settlements if _settle_method(x) == 'credit'
+    )
+    # P&L / “net expense cost” after all recoveries.
+    expense_net = expense_total - expense_return_total - expense_credit_settle_total
+    # Till still holds cash-settled returns only (credit settle does not refill till).
+    expense_cash_net = expense_total - expense_return_total
 
     payments = apply_agency_filter(
         Payment.query.filter(
@@ -617,13 +632,14 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     total_receiving = deposits
 
     # Cash in hand = cash sales + previous balance + customer receiving
-    #                − customer cash loans − net expenses (out − settled returns).
-    # Same-day expense + get-back → expense_net 0 (cash case / wash).
-    # Credit sale amounts are shown separately and do not reduce this formula.
+    #                − customer cash loans − expense cash net (out − cash settles).
+    # Credit-settle expenses stay in cash net (no till refill); receivable is
+    # tracked on the customer, not as a second cash loan.
+    # Same-day expense + cash get-back → expense_cash_net 0 (wash).
     cash_in_hand = (
         petrol_cash + diesel_cash + other_cash + ft_cash
         + previous_balance + total_receiving
-        - loans - expense_net
+        - loans - expense_cash_net
     )
     # Same as cash in hand, but expenses (and expense settles) excluded.
     cash_in_hand_wo_expense = (
@@ -720,6 +736,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'unsettled_expense_total': unsettled_expense_total,
         'settled_expense_total': settled_expense_total,
         'expense_return_total': expense_return_total,
+        'expense_credit_settle_total': expense_credit_settle_total,
+        'expense_cash_net': expense_cash_net,
         'expense_net': expense_net,
         'expenses': expenses,
         'expense_settlements': expense_settlements,
@@ -1101,6 +1119,10 @@ def build_period_cash_entries(stats):
             over = 0.0
             status = 'paid'
         elif et == 'loan':
+            # Expense→credit settle is on the customer ledger; skip cash journal
+            # (expense out already posted; till must not move again).
+            if remarks.lower().startswith('expense settle'):
+                continue
             credit = amt
             paid = 0.0
             over = 0.0
@@ -1341,6 +1363,10 @@ def build_period_cash_entries(stats):
     for exp in stats.get('expense_settlements') or []:
         amt = float(exp.amount or 0)
         note = (getattr(exp, 'settle_note', None) or '').strip()
+        method = (getattr(exp, 'settle_method', None) or 'cash').strip().lower()
+        if method == 'credit':
+            # No till movement — receivable lives on the customer credit sale.
+            continue
         item_name = f'Settle return · {exp.name}'
         if note:
             item_name = f'{item_name} — {note}'

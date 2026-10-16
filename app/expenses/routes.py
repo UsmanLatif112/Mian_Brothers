@@ -1,10 +1,11 @@
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app.expenses import expenses_bp
-from app.models import db, Expense
+from app.models import db, Expense, Customer, CreditSale
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import parse_period, PERIOD_CHOICES, paginate
 from app.services.entries import EntryError, edit_expense, delete_expense
+from app.customers.service import recalculate_customer_balance
 from datetime import datetime
 from sqlalchemy import func
 
@@ -63,12 +64,15 @@ def index():
                 return redirect(url_for('expenses.index', **_filter_args()))
             require_agency_access(expense)
 
-            if expense.is_settled:
+            if expense.is_settled or expense.settled_date:
                 flash('Expense is already settled.', 'warning')
                 return redirect(url_for('expenses.index', **_filter_args()))
 
             date_raw = (request.form.get('settled_date') or '').strip()
             settle_note = (request.form.get('settle_note') or '').strip() or None
+            settle_method = (request.form.get('settle_method') or 'cash').strip().lower()
+            if settle_method not in ('cash', 'credit'):
+                settle_method = 'cash'
             try:
                 settled_date = (
                     datetime.strptime(date_raw, '%Y-%m-%d').date()
@@ -78,16 +82,60 @@ def index():
                 flash('Invalid settle date.', 'danger')
                 return redirect(url_for('expenses.index', **_filter_args()))
 
+            customer = None
+            credit_sale = None
+            if settle_method == 'credit':
+                try:
+                    customer_id = int(request.form.get('settle_customer_id') or 0)
+                except (TypeError, ValueError):
+                    customer_id = 0
+                customer = Customer.query.get(customer_id) if customer_id else None
+                if not customer:
+                    flash('Select a customer to settle this expense as credit.', 'danger')
+                    return redirect(url_for('expenses.index', **_filter_args()))
+                require_agency_access(customer)
+                amount = float(expense.amount or 0)
+                remark = f'Expense settle — {expense.name}'
+                if settle_note:
+                    remark = f'{remark} — {settle_note}'
+                credit_sale = stamp_agency(CreditSale(
+                    customer_id=customer.id,
+                    sale_date=settled_date,
+                    liters=0,
+                    rate=0,
+                    amount=amount,
+                    amount_paid=0,
+                    entry_type='loan',
+                    payment_status='unpaid',
+                    remarks=remark,
+                    recorded_by=current_user.id,
+                ))
+                db.session.add(credit_sale)
+                db.session.flush()
+
             expense.is_settled = True
             expense.settled_date = settled_date
             expense.settled_by = current_user.id
             expense.settle_note = settle_note
+            expense.settle_method = settle_method
+            expense.settle_customer_id = customer.id if customer else None
+            expense.settle_credit_sale_id = credit_sale.id if credit_sale else None
+            if customer:
+                recalculate_customer_balance(customer)
             db.session.commit()
-            flash(
-                f'Settled "{expense.name}" — {float(expense.amount):,.2f} PKR returned to cash '
-                f'({settled_date.isoformat()}).',
-                'success',
-            )
+            if settle_method == 'credit':
+                flash(
+                    f'Settled "{expense.name}" → credit on {customer.name}: '
+                    f'PKR {float(expense.amount):,.2f} (no cash change). '
+                    f'Balance due PKR {float(customer.current_balance_due):,.2f}.',
+                    'success',
+                )
+            else:
+                flash(
+                    f'Settled "{expense.name}" — {float(expense.amount):,.2f} PKR returned to cash '
+                    f'({settled_date.isoformat()}).',
+                    'success',
+                )
             return redirect(url_for('expenses.index', **_filter_args()))
 
         if action == 'unsettle':
@@ -97,17 +145,32 @@ def index():
                 return redirect(url_for('expenses.index', **_filter_args()))
             require_agency_access(expense)
 
-            if not expense.is_settled:
+            if not (expense.is_settled or expense.settled_date):
                 flash('Expense is not settled.', 'warning')
                 return redirect(url_for('expenses.index', **_filter_args()))
+
+            customer = None
+            if expense.settle_credit_sale_id:
+                cs = CreditSale.query.get(expense.settle_credit_sale_id)
+                if cs:
+                    customer = Customer.query.get(cs.customer_id) if cs.customer_id else None
+                    db.session.delete(cs)
+            elif expense.settle_customer_id:
+                customer = Customer.query.get(expense.settle_customer_id)
 
             expense.is_settled = False
             expense.settled_date = None
             expense.settled_by = None
             expense.settle_note = None
+            expense.settle_method = 'cash'
+            expense.settle_customer_id = None
+            expense.settle_credit_sale_id = None
+            if customer:
+                recalculate_customer_balance(customer)
             db.session.commit()
             flash(
-                f'Unsettled "{expense.name}" — amount again deducted from cash in hand.',
+                f'Unsettled "{expense.name}" — open again'
+                f'{" (customer credit removed)" if customer else ""}.',
                 'success',
             )
             return redirect(url_for('expenses.index', **_filter_args()))
@@ -181,6 +244,7 @@ def index():
             )
         )
     expenses, expenses_pagination = paginate(expenses_q, request.args.get('page', 1), PER_PAGE)
+    customers = apply_agency_filter(Customer.query, Customer).order_by(Customer.name.asc()).all()
 
     from app.charts_data import expenses_listing_series
 
@@ -188,6 +252,7 @@ def index():
         'expenses/index.html',
         expenses=expenses,
         expenses_pagination=expenses_pagination,
+        customers=customers,
         total=total,
         unsettled_total=unsettled_total,
         settled_total=settled_total,

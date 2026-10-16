@@ -133,9 +133,21 @@ def delete_payment(payment):
 
 
 def delete_expense(expense):
-    """Delete an Expense (settle fields go with the row)."""
+    """Delete an Expense; remove linked settle-to-credit sale if any."""
     require_agency_access(expense)
+    customer = None
+    sale_id = getattr(expense, 'settle_credit_sale_id', None)
+    if sale_id:
+        from app.models import CreditSale, Customer
+        cs = CreditSale.query.get(sale_id)
+        if cs:
+            customer = Customer.query.get(cs.customer_id) if cs.customer_id else None
+            db.session.delete(cs)
+            db.session.flush()
     db.session.delete(expense)
+    db.session.flush()
+    if customer:
+        _recalc_balance(customer)
 
 
 def edit_credit_sale(cs, form):

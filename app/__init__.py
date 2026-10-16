@@ -948,6 +948,12 @@ def ensure_expenses_schema():
         alters.append("ALTER TABLE expenses ADD COLUMN settled_by INTEGER NULL")
     if 'settle_note' not in existing:
         alters.append("ALTER TABLE expenses ADD COLUMN settle_note VARCHAR(255) NULL")
+    if 'settle_method' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settle_method VARCHAR(20) NOT NULL DEFAULT 'cash'")
+    if 'settle_customer_id' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settle_customer_id INTEGER NULL")
+    if 'settle_credit_sale_id' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settle_credit_sale_id INTEGER NULL")
 
     if not alters:
         return

@@ -55,7 +55,7 @@
     </div>
     <div class="col-12 col-md-4">
         <div class="stat-card">
-            <div class="stat-card-label">Settled (returned)</div>
+            <div class="stat-card-label">Settled (cash or credit)</div>
             <div class="stat-card-value text-success">{{ settled_total | money }}</div>
         </div>
     </div>
@@ -89,8 +89,11 @@
                                 <td class="text-muted-custom exp-col-desc" title="{{ e.description or '' }}">{{ e.description or '—' }}</td>
                                 <td class="text-end text-nowrap fw-semibold exp-col-amount">{{ e.amount | money }}</td>
                                 <td class="exp-col-status">
-                                    {% if e.is_settled %}
-                                        <span class="badge badge-custom badge-success-custom" {% if e.settled_date %}title="Settled {{ e.settled_date }}"{% endif %}>Settled</span>
+                                    {% if e.is_settled or e.settled_date %}
+                                        {% set method = (e.settle_method or 'cash')|lower %}
+                                        <span class="badge badge-custom badge-success-custom" title="Settled {{ e.settled_date or '' }}{% if method == 'credit' and e.settle_customer %} → {{ e.settle_customer.name }}{% endif %}">
+                                            {% if method == 'credit' %}Credit{% else %}Settled{% endif %}
+                                        </span>
                                     {% else %}
                                         <span class="badge badge-custom badge-danger-custom">Open</span>
                                     {% endif %}
@@ -129,7 +132,7 @@
                                         </button>
                                         {% else %}
                                         <form method="POST" class="d-inline"
-                                              data-confirm="Unsettle this expense? Cash in hand will decrease again."
+                                              data-confirm="Unsettle this expense? Cash settle returns open again; credit settle removes the customer receivable."
                                               data-confirm-title="Unsettle expense"
                                               data-confirm-btn="Unsettle"
                                               data-confirm-danger="0">
@@ -216,7 +219,7 @@
 <div class="modal fade" id="settleExpenseModal" tabindex="-1" aria-labelledby="settleExpenseModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" id="settle-expense-form">
                 <input type="hidden" name="action" value="settle">
                 <input type="hidden" name="expense_id" id="settle_expense_id" value="">
                 <div class="modal-header border-0 pb-0">
@@ -228,24 +231,47 @@
                     <div class="mb-3 p-3 rounded" style="background: var(--bg-secondary, rgba(0,0,0,0.03));">
                         <div class="small text-muted-custom">Expense</div>
                         <div class="fw-semibold" id="settle_expense_name">—</div>
-                        <div class="mt-2 small text-muted-custom">Amount taken from cash</div>
+                        <div class="mt-2 small text-muted-custom">Amount</div>
                         <div class="fw-bold" id="settle_expense_amount">—</div>
                         <div class="mt-1 small text-muted-custom">Expense date: <span id="settle_expense_date">—</span></div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label form-label-custom" for="settled_date">Settle / return date</label>
+                        <label class="form-label form-label-custom">Settle as</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="settle_method" id="settle_method_cash" value="cash" checked>
+                                Cash back to till
+                            </label>
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="settle_method" id="settle_method_credit" value="credit">
+                                Customer credit
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3 d-none" id="settle_customer_wrap">
+                        <label class="form-label form-label-custom" for="settle_customer_id">Customer</label>
+                        <select id="settle_customer_id" name="settle_customer_id" class="form-select form-control-custom">
+                            <option value="">Select customer…</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted-custom">No cash change now — amount added to their balance due.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="settled_date">Settle date</label>
                         <input type="date" id="settled_date" name="settled_date" class="form-control form-control-custom" value="{{ today }}" required>
                     </div>
                     <div class="mb-1">
                         <label class="form-label form-label-custom" for="settle_note">Note</label>
-                        <input type="text" id="settle_note" name="settle_note" class="form-control form-control-custom" placeholder="Optional — e.g. returned to till">
+                        <input type="text" id="settle_note" name="settle_note" class="form-control form-control-custom" placeholder="Optional">
                     </div>
                 </div>
 
                 <div class="modal-footer border-0 pt-0 pb-3 gap-2">
                     <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary-custom px-4">
-                        <i class="bi bi-check2-circle me-1"></i> Settle &amp; Clear Cash
+                    <button type="submit" class="btn btn-primary-custom px-4" id="settle_submit_btn">
+                        <i class="bi bi-check2-circle me-1"></i> <span id="settle_submit_label">Settle &amp; Clear Cash</span>
                     </button>
                 </div>
             </form>
@@ -308,6 +334,21 @@
 (function () {
     const settleModal = document.getElementById('settleExpenseModal');
     if (settleModal) {
+        const cashRadio = document.getElementById('settle_method_cash');
+        const creditRadio = document.getElementById('settle_method_credit');
+        const customerWrap = document.getElementById('settle_customer_wrap');
+        const customerSelect = document.getElementById('settle_customer_id');
+        const submitLabel = document.getElementById('settle_submit_label');
+        const syncSettleMethod = () => {
+            const isCredit = creditRadio && creditRadio.checked;
+            if (customerWrap) customerWrap.classList.toggle('d-none', !isCredit);
+            if (customerSelect) customerSelect.required = !!isCredit;
+            if (submitLabel) {
+                submitLabel.textContent = isCredit ? 'Settle to Customer Credit' : 'Settle & Clear Cash';
+            }
+        };
+        if (cashRadio) cashRadio.addEventListener('change', syncSettleMethod);
+        if (creditRadio) creditRadio.addEventListener('change', syncSettleMethod);
         settleModal.addEventListener('show.bs.modal', function (event) {
             const btn = event.relatedTarget;
             if (!btn) return;
@@ -319,7 +360,20 @@
             document.getElementById('settle_expense_name').textContent = name;
             document.getElementById('settle_expense_amount').textContent = 'PKR ' + Number(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('settle_expense_date').textContent = date;
+            if (cashRadio) cashRadio.checked = true;
+            if (customerSelect) customerSelect.value = '';
+            syncSettleMethod();
         });
+        const form = document.getElementById('settle-expense-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                if (creditRadio && creditRadio.checked && customerSelect && !customerSelect.value) {
+                    e.preventDefault();
+                    if (window.ofAlert) window.ofAlert({ message: 'Select a customer for credit settle.' });
+                    else alert('Select a customer for credit settle.');
+                }
+            });
+        }
     }
 
     const editModal = document.getElementById('editExpenseModal');
