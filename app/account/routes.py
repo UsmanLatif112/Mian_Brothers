@@ -10,7 +10,7 @@ from app.models import (
     db, CashTaken, CreditSale, Customer, DailyCashCount, Expense,
     FuelPrice, FuelType, MeterReading, Payment,
 )
-from app.tenancy import stamp_agency
+from app.tenancy import require_agency_access, stamp_agency
 from app.utils import PERIOD_CHOICES, compute_period_stats, parse_form_date, parse_period
 
 
@@ -32,7 +32,7 @@ def _models_ns():
 
 
 def _filter_args():
-    """Preserve period filter after create."""
+    """Preserve period filter after create/edit."""
     args = {}
     period = (request.args.get('period') or request.form.get('period') or '').strip()
     if period:
@@ -44,6 +44,42 @@ def _filter_args():
     if end_date:
         args['end_date'] = end_date
     return args
+
+
+def _as_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def _refresh_till(day):
+    stats = compute_period_stats(day, day, _models_ns())
+    upsert_till_balance(day, stats['cash_in_hand'], current_user.id)
+    return stats
+
+
+def _parse_cash_taken_form(today):
+    taken_date = parse_form_date(request.form.get('taken_date'), today)
+    person_name = (request.form.get('person_name') or '').strip()
+    note = (request.form.get('note') or '').strip() or None
+    try:
+        amount = float(request.form.get('amount') or 0)
+        if amount <= 0:
+            raise ValueError('Amount must be greater than zero.')
+    except (TypeError, ValueError) as e:
+        raise ValueError(f'Invalid cash taken amount: {e}') from e
+    if not person_name:
+        raise ValueError('Person name is required.')
+    return taken_date, person_name, note, amount
+
+
+def _available_to_take(taken_date, exclude_row=None):
+    """Remaining cash on taken_date, adding back exclude_row if it falls on that day."""
+    stats = compute_period_stats(taken_date, taken_date, _models_ns())
+    available = float(stats.get('remaining_balance') or 0)
+    if exclude_row is not None and _as_date(exclude_row.taken_date) == taken_date:
+        available += float(exclude_row.amount or 0)
+    return available, stats
 
 
 @account_bp.route('/', methods=['GET', 'POST'])
@@ -65,29 +101,58 @@ def index():
 
             set_previous_balance(balance_date, previous_amount, current_user.id)
             db.session.flush()
-            stats = compute_period_stats(balance_date, balance_date, _models_ns())
-            upsert_till_balance(balance_date, stats['cash_in_hand'], current_user.id)
+            _refresh_till(balance_date)
             db.session.commit()
             flash(f'Previous balance set for {balance_date}: PKR {previous_amount:,.2f}.', 'success')
             return redirect(url_for('account.index', **_filter_args()))
 
-        taken_date = parse_form_date(request.form.get('taken_date'), today)
-        person_name = (request.form.get('person_name') or '').strip()
-        note = (request.form.get('note') or '').strip() or None
+        if action == 'edit_cash_taken':
+            try:
+                taken_id = int(request.form.get('taken_id') or 0)
+            except (TypeError, ValueError):
+                taken_id = 0
+            row = CashTaken.query.get(taken_id)
+            if not row:
+                flash('Cash taken entry not found.', 'danger')
+                return redirect(url_for('account.index', **_filter_args()))
+            require_agency_access(row)
+
+            try:
+                taken_date, person_name, note, amount = _parse_cash_taken_form(today)
+            except ValueError as e:
+                flash(str(e), 'danger')
+                return redirect(url_for('account.index', **_filter_args()))
+
+            available, _ = _available_to_take(taken_date, exclude_row=row)
+            if amount > available + 0.01:
+                flash(
+                    f'Amount PKR {amount:,.2f} exceeds available cash PKR {available:,.2f}.',
+                    'danger',
+                )
+                return redirect(url_for('account.index', **_filter_args()))
+
+            old_date = _as_date(row.taken_date)
+            row.taken_date = taken_date
+            row.amount = amount
+            row.person_name = person_name
+            row.note = note
+            db.session.flush()
+
+            _refresh_till(taken_date)
+            if old_date != taken_date:
+                _refresh_till(old_date)
+            db.session.commit()
+            flash(f'Cash taken updated for {person_name}: PKR {amount:,.2f}.', 'success')
+            return redirect(url_for('account.index', **_filter_args()))
+
+        # Create cash taken
         try:
-            amount = float(request.form.get('amount') or 0)
-            if amount <= 0:
-                raise ValueError('Amount must be greater than zero.')
-        except (TypeError, ValueError) as e:
-            flash(f'Invalid cash taken amount: {e}', 'danger')
+            taken_date, person_name, note, amount = _parse_cash_taken_form(today)
+        except ValueError as e:
+            flash(str(e), 'danger')
             return redirect(url_for('account.index', **_filter_args()))
 
-        if not person_name:
-            flash('Person name is required.', 'danger')
-            return redirect(url_for('account.index', **_filter_args()))
-
-        stats = compute_period_stats(taken_date, taken_date, _models_ns())
-        available = float(stats.get('remaining_balance') or 0)
+        available, _ = _available_to_take(taken_date)
         if amount > available + 0.01:
             flash(
                 f'Amount PKR {amount:,.2f} exceeds available cash PKR {available:,.2f}.',
@@ -103,9 +168,7 @@ def index():
             recorded_by=current_user.id,
         )))
         db.session.flush()
-
-        stats = compute_period_stats(taken_date, taken_date, _models_ns())
-        upsert_till_balance(taken_date, stats['cash_in_hand'], current_user.id)
+        _refresh_till(taken_date)
         db.session.commit()
         flash(f'Cash taken recorded for {person_name}: PKR {amount:,.2f}.', 'success')
         return redirect(url_for('account.index', **_filter_args()))

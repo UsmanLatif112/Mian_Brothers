@@ -105,6 +105,7 @@
                     <th class="text-end">Previous Balance</th>
                     <th class="text-end">Cash In Hand</th>
                     <th class="text-end">Amount Taken</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -117,11 +118,28 @@
                         <td class="text-end">{{ stats.previous_balance | money }}</td>
                         <td class="text-end">{{ stats.cash_in_hand | money }}</td>
                         <td class="text-end text-danger">{{ row.amount | money }}</td>
+                        <td class="text-end">
+                            <div class="table-actions justify-content-end">
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary border-0 edit-cash-taken-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editCashTakenModal"
+                                    data-taken-id="{{ row.id }}"
+                                    data-taken-date="{{ row.taken_date }}"
+                                    data-person-name="{{ row.person_name }}"
+                                    data-amount="{{ '%.2f'|format(row.amount|float) }}"
+                                    data-note="{{ row.note or '' }}"
+                                    title="Edit">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </div>
+                        </td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted-custom py-4">
+                        <td colspan="7" class="text-center text-muted-custom py-4">
                             No cash taken recorded for this date.
                             <div class="mt-2 small">
                                 Previous {{ stats.previous_balance | money }} · Cash in hand {{ stats.cash_in_hand | money }} · Available {{ stats.remaining_balance | money }}
@@ -137,6 +155,7 @@
                     <td class="text-end">{{ stats.previous_balance | money }}</td>
                     <td class="text-end">{{ stats.cash_in_hand | money }}</td>
                     <td class="text-end text-danger">{{ stats.cash_taken_total | money }}</td>
+                    <td></td>
                 </tr>
             </tfoot>
             {% endif %}
@@ -201,7 +220,11 @@
 <div class="modal fade" id="cashTakenModal" tabindex="-1" aria-labelledby="cashTakenModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('account.index') }}" id="cash-taken-form">
+            <form method="POST" action="{{ url_for('account.index', period=period, start_date=start_date, end_date=end_date) }}" id="cash-taken-form">
+                <input type="hidden" name="action" value="cash_taken">
+                <input type="hidden" name="period" value="{{ period }}">
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
                 <div class="modal-header border-0 pb-0">
                     <h5 class="modal-title fw-bold" id="cashTakenModalLabel">Record Cash Taken</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -265,26 +288,150 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="editCashTakenModal" tabindex="-1" aria-labelledby="editCashTakenModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('account.index', period=period, start_date=start_date, end_date=end_date) }}" id="edit-cash-taken-form">
+                <input type="hidden" name="action" value="edit_cash_taken">
+                <input type="hidden" name="taken_id" id="edit_taken_id" value="">
+                <input type="hidden" name="period" value="{{ period }}">
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="editCashTakenModalLabel">Edit Cash Taken</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <div class="p-3 rounded mb-3" style="background: rgba(94,94,94,0.06);">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Cash In Hand</span>
+                            <strong>{{ stats.cash_in_hand | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted-custom">Already Taken</span>
+                            <strong class="text-danger">{{ stats.cash_taken_total | money }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between border-top pt-2 mt-1">
+                            <span class="text-muted-custom">Available after edit</span>
+                            <strong class="text-success" id="edit_available_label">—</strong>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="edit_taken_date">Date</label>
+                        <input type="date" class="form-control form-control-custom" id="edit_taken_date" name="taken_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="edit_person_name">Taken By</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_person_name" name="person_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="edit_amount">Amount (PKR)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            class="form-control form-control-custom"
+                            id="edit_amount"
+                            name="amount"
+                            required>
+                        <small class="text-muted-custom">
+                            Max for this entry’s date (adds back current amount if same day).
+                        </small>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label form-label-custom" for="edit_note">Note</label>
+                        <input type="text" class="form-control form-control-custom" id="edit_note" name="note" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="bi bi-save me-1"></i> Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
-    const form = document.getElementById('cash-taken-form');
-    const amountInput = document.getElementById('amount');
-    const maxAvailable = {{ '%.2f'|format(stats.remaining_balance) }};
+    const remaining = {{ '%.2f'|format(stats.remaining_balance) }};
+    const money = (n) => 'PKR ' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    if (form && amountInput) {
-        form.addEventListener('submit', (e) => {
-            const amount = Number(amountInput.value || 0);
+    const createForm = document.getElementById('cash-taken-form');
+    const createAmount = document.getElementById('amount');
+    if (createForm && createAmount) {
+        createForm.addEventListener('submit', (e) => {
+            const amount = Number(createAmount.value || 0);
             if (!(amount > 0)) {
                 e.preventDefault();
                 window.ofAlert({ message: 'Enter an amount greater than zero.' });
                 return;
             }
-            if (amount > maxAvailable + 0.01) {
+            if (amount > remaining + 0.01) {
                 e.preventDefault();
-                window.ofAlert({ message: `Amount cannot exceed available cash (${maxAvailable.toFixed(2)}).` });
+                window.ofAlert({ message: `Amount cannot exceed available cash (${remaining.toFixed(2)}).` });
+            }
+        });
+    }
+
+    const editModal = document.getElementById('editCashTakenModal');
+    const editForm = document.getElementById('edit-cash-taken-form');
+    const editAmount = document.getElementById('edit_amount');
+    const editAvailableLabel = document.getElementById('edit_available_label');
+    let editMax = remaining;
+
+    const refreshEditMax = (rowAmount, rowDate) => {
+        const dateInput = document.getElementById('edit_taken_date');
+        const chosen = (dateInput && dateInput.value) || rowDate || '';
+        // Same-day edit: remaining already excluded this entry, so add it back.
+        editMax = remaining + (chosen === rowDate ? Number(rowAmount || 0) : 0);
+        if (editAmount) editAmount.max = editMax.toFixed(2);
+        if (editAvailableLabel) editAvailableLabel.textContent = money(editMax);
+    };
+
+    if (editModal) {
+        editModal.addEventListener('show.bs.modal', (ev) => {
+            const btn = ev.relatedTarget;
+            if (!btn || !btn.classList.contains('edit-cash-taken-btn')) return;
+            const id = btn.getAttribute('data-taken-id') || '';
+            const date = btn.getAttribute('data-taken-date') || '';
+            const person = btn.getAttribute('data-person-name') || '';
+            const amount = btn.getAttribute('data-amount') || '';
+            const note = btn.getAttribute('data-note') || '';
+            document.getElementById('edit_taken_id').value = id;
+            document.getElementById('edit_taken_date').value = date;
+            document.getElementById('edit_person_name').value = person;
+            document.getElementById('edit_amount').value = amount;
+            document.getElementById('edit_note').value = note;
+            editModal.dataset.rowDate = date;
+            editModal.dataset.rowAmount = amount;
+            refreshEditMax(amount, date);
+        });
+        const dateInput = document.getElementById('edit_taken_date');
+        if (dateInput) {
+            dateInput.addEventListener('change', () => {
+                refreshEditMax(editModal.dataset.rowAmount, editModal.dataset.rowDate);
+            });
+        }
+    }
+
+    if (editForm && editAmount) {
+        editForm.addEventListener('submit', (e) => {
+            const amount = Number(editAmount.value || 0);
+            if (!(amount > 0)) {
+                e.preventDefault();
+                window.ofAlert({ message: 'Enter an amount greater than zero.' });
+                return;
+            }
+            if (amount > editMax + 0.01) {
+                e.preventDefault();
+                window.ofAlert({ message: `Amount cannot exceed available cash (${editMax.toFixed(2)}).` });
             }
         });
     }
