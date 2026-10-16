@@ -71,6 +71,8 @@ def index():
     logs_q = apply_agency_filter(ItemPurchaseLog.query, ItemPurchaseLog).filter(
         ItemPurchaseLog.entry_date >= datetime.combine(start, datetime.min.time()),
         ItemPurchaseLog.entry_date <= datetime.combine(end, datetime.max.time().replace(microsecond=0)),
+        # Expense→vendor settles live on vendor ledger, not Purchasing stock buys
+        ItemPurchaseLog.category != 'expense_settle',
     )
 
     if category and category != 'all':

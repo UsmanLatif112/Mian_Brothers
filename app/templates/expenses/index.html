@@ -91,8 +91,8 @@
                                 <td class="exp-col-status">
                                     {% if e.is_settled or e.settled_date %}
                                         {% set method = (e.settle_method or 'cash')|lower %}
-                                        <span class="badge badge-custom badge-success-custom" title="Settled {{ e.settled_date or '' }}{% if method == 'credit' and e.settle_customer %} → {{ e.settle_customer.name }}{% endif %}">
-                                            {% if method == 'credit' %}Credit{% else %}Settled{% endif %}
+                                        <span class="badge badge-custom badge-success-custom" title="Settled {{ e.settled_date or '' }}{% if method == 'credit' and e.settle_customer %} → {{ e.settle_customer.name }}{% elif method == 'vendor' and e.settle_vendor %} → {{ e.settle_vendor.name }}{% endif %}">
+                                            {% if method == 'credit' %}Credit{% elif method == 'vendor' %}Vendor{% else %}Settled{% endif %}
                                         </span>
                                     {% else %}
                                         <span class="badge badge-custom badge-danger-custom">Open</span>
@@ -116,6 +116,7 @@
                                             data-settle-note="{{ e.settle_note or '' }}"
                                             data-settle-method="{{ (e.settle_method or 'cash')|lower }}"
                                             data-settle-customer-id="{{ e.settle_customer_id or '' }}"
+                                            data-settle-vendor-id="{{ e.settle_vendor_id or '' }}"
                                             title="Edit">
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
@@ -134,7 +135,7 @@
                                         </button>
                                         {% else %}
                                         <form method="POST" class="d-inline"
-                                              data-confirm="Unsettle this expense? Cash settle returns open again; credit settle removes the customer receivable."
+                                              data-confirm="Unsettle this expense? Cash settle returns open again; credit/vendor settle removes the linked unpaid."
                                               data-confirm-title="Unsettle expense"
                                               data-confirm-btn="Unsettle"
                                               data-confirm-danger="0">
@@ -248,6 +249,10 @@
                                 <input class="form-check-input" type="radio" name="settle_method" id="settle_method_credit" value="credit">
                                 Customer credit
                             </label>
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="settle_method" id="settle_method_vendor" value="vendor">
+                                Vendor unpaid
+                            </label>
                         </div>
                     </div>
                     <div class="mb-3 d-none" id="settle_customer_wrap">
@@ -272,6 +277,29 @@
                             </button>
                         </div>
                         <small class="text-muted-custom">No cash change now — amount added to their balance due.</small>
+                    </div>
+                    <div class="mb-3 d-none" id="settle_vendor_wrap">
+                        <label class="form-label form-label-custom" for="settle_vendor_id">Vendor</label>
+                        <div class="of-select-with-add">
+                            <select id="settle_vendor_id" name="settle_vendor_id"
+                                    class="form-select form-control-custom js-search-vendor js-create-vendor"
+                                    data-placeholder="Search or add vendor..."
+                                    data-create-url="{{ url_for('vendors.quick_vendor') }}">
+                                <option value="">Search or add vendor...</option>
+                                {% for v in vendors %}
+                                <option value="{{ v.id }}" data-phone="{{ v.phone or '' }}">
+                                    {{ v.name }}{% if v.phone %} · {{ v.phone }}{% endif %} (Payable: {{ v.current_balance_payable | money }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                    data-of-create-modal="#createVendorModal"
+                                    data-of-select-target="#settle_vendor_id"
+                                    title="Register vendor" aria-label="Register vendor">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted-custom">No cash change now — unpaid amount added to vendor payable.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label form-label-custom" for="settled_date">Settle date</label>
@@ -333,6 +361,10 @@
                                     <input class="form-check-input" type="radio" name="settle_method" id="edit_settle_method_credit" value="credit">
                                     Customer credit
                                 </label>
+                                <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                    <input class="form-check-input" type="radio" name="settle_method" id="edit_settle_method_vendor" value="vendor">
+                                    Vendor unpaid
+                                </label>
                             </div>
                         </div>
                         <div class="mb-3 d-none" id="edit_settle_customer_wrap">
@@ -353,6 +385,28 @@
                                         data-of-create-modal="#createCustomerModal"
                                         data-of-select-target="#edit_settle_customer_id"
                                         title="Register customer" aria-label="Register customer">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3 d-none" id="edit_settle_vendor_wrap">
+                            <label class="form-label form-label-custom" for="edit_settle_vendor_id">Vendor</label>
+                            <div class="of-select-with-add">
+                                <select id="edit_settle_vendor_id" name="settle_vendor_id"
+                                        class="form-select form-control-custom js-search-vendor js-create-vendor"
+                                        data-placeholder="Search or add vendor..."
+                                        data-create-url="{{ url_for('vendors.quick_vendor') }}">
+                                    <option value="">Search or add vendor...</option>
+                                    {% for v in vendors %}
+                                    <option value="{{ v.id }}" data-phone="{{ v.phone or '' }}">
+                                        {{ v.name }}{% if v.phone %} · {{ v.phone }}{% endif %} (Payable: {{ v.current_balance_payable | money }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                        data-of-create-modal="#createVendorModal"
+                                        data-of-select-target="#edit_settle_vendor_id"
+                                        title="Register vendor" aria-label="Register vendor">
                                     <i class="bi bi-plus-lg"></i>
                                 </button>
                             </div>
@@ -379,37 +433,57 @@
 </div>
 
 {% include 'partials/create_customer_modal.html' %}
+{% include 'partials/create_vendor_modal.html' %}
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function () {
+    const selectValue = (el) => {
+        if (!el) return '';
+        if (el.tomselect) return el.tomselect.getValue() || '';
+        return el.value || '';
+    };
+    const clearSelect = (el) => {
+        if (!el) return;
+        if (el.tomselect) el.tomselect.clear(true);
+        else el.value = '';
+    };
+    const setSelect = (el, id) => {
+        if (!el) return;
+        const val = id ? String(id) : '';
+        if (el.tomselect) {
+            if (val) el.tomselect.setValue(val, true);
+            else el.tomselect.clear(true);
+        } else {
+            el.value = val;
+        }
+    };
+
     const settleModal = document.getElementById('settleExpenseModal');
     if (settleModal) {
         const cashRadio = document.getElementById('settle_method_cash');
         const creditRadio = document.getElementById('settle_method_credit');
+        const vendorRadio = document.getElementById('settle_method_vendor');
         const customerWrap = document.getElementById('settle_customer_wrap');
+        const vendorWrap = document.getElementById('settle_vendor_wrap');
         const customerSelect = document.getElementById('settle_customer_id');
+        const vendorSelect = document.getElementById('settle_vendor_id');
         const submitLabel = document.getElementById('settle_submit_label');
-        const customerValue = () => {
-            if (!customerSelect) return '';
-            if (customerSelect.tomselect) return customerSelect.tomselect.getValue() || '';
-            return customerSelect.value || '';
-        };
-        const clearCustomer = () => {
-            if (!customerSelect) return;
-            if (customerSelect.tomselect) customerSelect.tomselect.clear(true);
-            else customerSelect.value = '';
-        };
         const syncSettleMethod = () => {
             const isCredit = creditRadio && creditRadio.checked;
+            const isVendor = vendorRadio && vendorRadio.checked;
             if (customerWrap) customerWrap.classList.toggle('d-none', !isCredit);
+            if (vendorWrap) vendorWrap.classList.toggle('d-none', !isVendor);
             if (submitLabel) {
-                submitLabel.textContent = isCredit ? 'Settle to Customer Credit' : 'Settle & Clear Cash';
+                if (isCredit) submitLabel.textContent = 'Settle to Customer Credit';
+                else if (isVendor) submitLabel.textContent = 'Settle to Vendor Unpaid';
+                else submitLabel.textContent = 'Settle & Clear Cash';
             }
         };
         if (cashRadio) cashRadio.addEventListener('change', syncSettleMethod);
         if (creditRadio) creditRadio.addEventListener('change', syncSettleMethod);
+        if (vendorRadio) vendorRadio.addEventListener('change', syncSettleMethod);
         settleModal.addEventListener('show.bs.modal', function (event) {
             const btn = event.relatedTarget;
             if (!btn) return;
@@ -422,16 +496,21 @@
             document.getElementById('settle_expense_amount').textContent = 'PKR ' + Number(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             document.getElementById('settle_expense_date').textContent = date;
             if (cashRadio) cashRadio.checked = true;
-            clearCustomer();
+            clearSelect(customerSelect);
+            clearSelect(vendorSelect);
             syncSettleMethod();
         });
         const form = document.getElementById('settle-expense-form');
         if (form) {
             form.addEventListener('submit', (e) => {
-                if (creditRadio && creditRadio.checked && !customerValue()) {
+                if (creditRadio && creditRadio.checked && !selectValue(customerSelect)) {
                     e.preventDefault();
                     if (window.ofAlert) window.ofAlert({ message: 'Select a customer for credit settle.' });
                     else alert('Select a customer for credit settle.');
+                } else if (vendorRadio && vendorRadio.checked && !selectValue(vendorSelect)) {
+                    e.preventDefault();
+                    if (window.ofAlert) window.ofAlert({ message: 'Select a vendor for vendor settle.' });
+                    else alert('Select a vendor for vendor settle.');
                 }
             });
         }
@@ -441,24 +520,20 @@
     if (editModal) {
         const editCashRadio = document.getElementById('edit_settle_method_cash');
         const editCreditRadio = document.getElementById('edit_settle_method_credit');
+        const editVendorRadio = document.getElementById('edit_settle_method_vendor');
         const editCustomerWrap = document.getElementById('edit_settle_customer_wrap');
+        const editVendorWrap = document.getElementById('edit_settle_vendor_wrap');
         const editCustomerSelect = document.getElementById('edit_settle_customer_id');
-        const setEditCustomer = (id) => {
-            if (!editCustomerSelect) return;
-            const val = id ? String(id) : '';
-            if (editCustomerSelect.tomselect) {
-                if (val) editCustomerSelect.tomselect.setValue(val, true);
-                else editCustomerSelect.tomselect.clear(true);
-            } else {
-                editCustomerSelect.value = val;
-            }
-        };
+        const editVendorSelect = document.getElementById('edit_settle_vendor_id');
         const syncEditSettleMethod = () => {
             const isCredit = editCreditRadio && editCreditRadio.checked;
+            const isVendor = editVendorRadio && editVendorRadio.checked;
             if (editCustomerWrap) editCustomerWrap.classList.toggle('d-none', !isCredit);
+            if (editVendorWrap) editVendorWrap.classList.toggle('d-none', !isVendor);
         };
         if (editCashRadio) editCashRadio.addEventListener('change', syncEditSettleMethod);
         if (editCreditRadio) editCreditRadio.addEventListener('change', syncEditSettleMethod);
+        if (editVendorRadio) editVendorRadio.addEventListener('change', syncEditSettleMethod);
 
         editModal.addEventListener('show.bs.modal', function (event) {
             const btn = event.relatedTarget;
@@ -476,9 +551,11 @@
             document.getElementById('edit_settled_date').disabled = !settled;
             document.getElementById('edit_settle_note').disabled = !settled;
             const method = (btn.getAttribute('data-settle-method') || 'cash').toLowerCase();
-            if (editCashRadio) editCashRadio.checked = method !== 'credit';
+            if (editCashRadio) editCashRadio.checked = method === 'cash' || (!['credit', 'vendor'].includes(method));
             if (editCreditRadio) editCreditRadio.checked = method === 'credit';
-            setEditCustomer(btn.getAttribute('data-settle-customer-id') || '');
+            if (editVendorRadio) editVendorRadio.checked = method === 'vendor';
+            setSelect(editCustomerSelect, btn.getAttribute('data-settle-customer-id') || '');
+            setSelect(editVendorSelect, btn.getAttribute('data-settle-vendor-id') || '');
             syncEditSettleMethod();
         });
 
@@ -486,16 +563,15 @@
         if (editForm) {
             editForm.addEventListener('submit', (e) => {
                 const settleFields = document.getElementById('edit_settle_fields');
-                if (settleFields && !settleFields.classList.contains('d-none')
-                    && editCreditRadio && editCreditRadio.checked) {
-                    const val = editCustomerSelect && editCustomerSelect.tomselect
-                        ? (editCustomerSelect.tomselect.getValue() || '')
-                        : (editCustomerSelect ? editCustomerSelect.value : '');
-                    if (!val) {
-                        e.preventDefault();
-                        if (window.ofAlert) window.ofAlert({ message: 'Select a customer for credit settle.' });
-                        else alert('Select a customer for credit settle.');
-                    }
+                if (!settleFields || settleFields.classList.contains('d-none')) return;
+                if (editCreditRadio && editCreditRadio.checked && !selectValue(editCustomerSelect)) {
+                    e.preventDefault();
+                    if (window.ofAlert) window.ofAlert({ message: 'Select a customer for credit settle.' });
+                    else alert('Select a customer for credit settle.');
+                } else if (editVendorRadio && editVendorRadio.checked && !selectValue(editVendorSelect)) {
+                    e.preventDefault();
+                    if (window.ofAlert) window.ofAlert({ message: 'Select a vendor for vendor settle.' });
+                    else alert('Select a vendor for vendor settle.');
                 }
             });
         }

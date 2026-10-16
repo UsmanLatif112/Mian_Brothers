@@ -259,19 +259,23 @@ class Expense(db.Model):
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    # Settled = recovered (cash back to till, or moved to customer credit).
+    # Settled = recovered (cash to till, customer credit, or vendor unpaid).
     is_settled = db.Column(db.Boolean, nullable=False, default=False)
     settled_date = db.Column(db.Date, nullable=True)
     settled_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     settle_note = db.Column(db.String(255), nullable=True)
-    # cash = returned to till; credit = receivable on customer (no till change).
+    # cash = till; credit = customer receivable; vendor = unpaid vendor payable.
     settle_method = db.Column(db.String(20), nullable=False, default='cash')
     settle_customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)
     settle_credit_sale_id = db.Column(db.Integer, db.ForeignKey('credit_sales.id'), nullable=True)
+    settle_vendor_id = db.Column(db.Integer, db.ForeignKey('vendors.id'), nullable=True)
+    settle_purchase_log_id = db.Column(db.Integer, db.ForeignKey('item_purchase_logs.id'), nullable=True)
 
     recorder = db.relationship('User', foreign_keys=[recorded_by])
     settler = db.relationship('User', foreign_keys=[settled_by])
     settle_customer = db.relationship('Customer', foreign_keys=[settle_customer_id])
+    settle_vendor = db.relationship('Vendor', foreign_keys=[settle_vendor_id])
+    settle_purchase_log = db.relationship('ItemPurchaseLog', foreign_keys=[settle_purchase_log_id])
 
     def __repr__(self):
         return f"<Expense {self.name}: {self.amount}>"

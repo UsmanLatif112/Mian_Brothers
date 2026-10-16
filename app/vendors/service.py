@@ -7,6 +7,90 @@ from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 
 
 AUTO_PAY_NOTE_PREFIX = 'Paid with inventory purchase:'
+EXPENSE_SETTLE_CATEGORY = 'expense_settle'
+
+
+def is_expense_settle_purchase(log):
+    """True when ItemPurchaseLog is an expense→vendor unpaid settle (not stock)."""
+    return (getattr(log, 'category', None) or '').strip().lower() == EXPENSE_SETTLE_CATEGORY
+
+
+def upsert_expense_vendor_payable(expense, vendor, settled_date, settle_note=None, user_id=None):
+    """
+    Create/update unpaid ItemPurchaseLog for expense settled to a vendor.
+    No stock movement — payable only. Returns (log, vendor_ids_to_recalc).
+    """
+    from datetime import datetime, time
+    from app.utils import expense_settle_remark
+
+    amount = float(expense.amount or 0)
+    item_name = (expense_settle_remark(expense.name, settle_note) or 'Settle')[:100]
+    entry_dt = datetime.combine(settled_date, time.min) if settled_date else datetime.utcnow()
+    touched = set()
+    old_vendor_id = getattr(expense, 'settle_vendor_id', None)
+    log = None
+    log_id = getattr(expense, 'settle_purchase_log_id', None)
+    if log_id:
+        log = ItemPurchaseLog.query.get(log_id)
+
+    if log is None:
+        log = stamp_agency(ItemPurchaseLog(
+            category=EXPENSE_SETTLE_CATEGORY,
+            item_name=item_name,
+            cost_price=amount,
+            sale_price=0,
+            quantity=1,
+            liters=None,
+            payment_status='unpaid',
+            entry_date=entry_dt,
+            added_by=user_id or expense.recorded_by,
+        ))
+        db.session.add(log)
+        db.session.flush()
+        expense.settle_purchase_log_id = log.id
+    else:
+        if log.vendor_id and log.vendor_id != vendor.id:
+            touched.add(log.vendor_id)
+        log.category = EXPENSE_SETTLE_CATEGORY
+        log.item_name = item_name
+        log.cost_price = amount
+        log.sale_price = 0
+        log.quantity = 1
+        log.liters = None
+        log.payment_status = 'unpaid'
+        log.entry_date = entry_dt
+        # Drop any auto-payments if status was flipped somehow
+        for pay in find_auto_payments_for_log(log):
+            db.session.delete(pay)
+
+    link_purchase_to_vendor(vendor.name, log, vendor=vendor, increment_balance=False)
+    apply_purchase_vendor_payment(vendor, log, payment_status='unpaid', payment_date=entry_dt)
+    expense.settle_vendor_id = vendor.id
+    touched.add(vendor.id)
+    if old_vendor_id:
+        touched.add(old_vendor_id)
+    return log, touched
+
+
+def clear_expense_vendor_payable(expense):
+    """Delete linked expense-settle purchase log; returns vendor ids to recalc."""
+    touched = set()
+    if getattr(expense, 'settle_vendor_id', None):
+        touched.add(expense.settle_vendor_id)
+    log_id = getattr(expense, 'settle_purchase_log_id', None)
+    if log_id:
+        log = ItemPurchaseLog.query.get(log_id)
+        if log:
+            if log.vendor_id:
+                touched.add(log.vendor_id)
+            for pay in find_auto_payments_for_log(log):
+                db.session.delete(pay)
+            # No stock reverse — expense settles never added stock
+            db.session.delete(log)
+            db.session.flush()
+    expense.settle_purchase_log_id = None
+    expense.settle_vendor_id = None
+    return touched
 
 
 def normalize_vendor_name(name):

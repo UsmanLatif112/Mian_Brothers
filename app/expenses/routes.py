@@ -1,7 +1,7 @@
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app.expenses import expenses_bp
-from app.models import db, Expense, Customer, CreditSale
+from app.models import db, Expense, Customer, CreditSale, Vendor
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import (
     parse_period, PERIOD_CHOICES, paginate, parse_form_date, business_today,
@@ -9,7 +9,11 @@ from app.utils import (
 )
 from app.services.entries import EntryError, edit_expense, delete_expense
 from app.customers.service import recalculate_customer_balance
+from app.vendors.service import (
+    upsert_expense_vendor_payable, clear_expense_vendor_payable, recalculate_vendor_balance,
+)
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 PER_PAGE = 15
 
@@ -66,12 +70,13 @@ def index():
 
             settle_note = (request.form.get('settle_note') or '').strip() or None
             settle_method = (request.form.get('settle_method') or 'cash').strip().lower()
-            if settle_method not in ('cash', 'credit'):
+            if settle_method not in ('cash', 'credit', 'vendor'):
                 settle_method = 'cash'
             settled_date = parse_form_date(request.form.get('settled_date'), today)
 
             customer = None
             credit_sale = None
+            vendor = None
             if settle_method == 'credit':
                 try:
                     customer_id = int(request.form.get('settle_customer_id') or 0)
@@ -98,6 +103,16 @@ def index():
                 ))
                 db.session.add(credit_sale)
                 db.session.flush()
+            elif settle_method == 'vendor':
+                try:
+                    vendor_id = int(request.form.get('settle_vendor_id') or 0)
+                except (TypeError, ValueError):
+                    vendor_id = 0
+                vendor = Vendor.query.get(vendor_id) if vendor_id else None
+                if not vendor:
+                    flash('Select a vendor to settle this expense as unpaid.', 'danger')
+                    return redirect(url_for('expenses.index', **_filter_args()))
+                require_agency_access(vendor)
 
             expense.is_settled = True
             expense.settled_date = settled_date
@@ -106,14 +121,27 @@ def index():
             expense.settle_method = settle_method
             expense.settle_customer_id = customer.id if customer else None
             expense.settle_credit_sale_id = credit_sale.id if credit_sale else None
+            expense.settle_vendor_id = None
+            expense.settle_purchase_log_id = None
             if customer:
                 recalculate_customer_balance(customer)
+            if vendor:
+                upsert_expense_vendor_payable(
+                    expense, vendor, settled_date, settle_note, current_user.id
+                )
             db.session.commit()
             if settle_method == 'credit':
                 flash(
                     f'Settled "{expense.name}" → credit on {customer.name}: '
                     f'PKR {float(expense.amount):,.2f} (no cash change). '
                     f'Balance due PKR {float(customer.current_balance_due):,.2f}.',
+                    'success',
+                )
+            elif settle_method == 'vendor':
+                flash(
+                    f'Settled "{expense.name}" → unpaid on {vendor.name}: '
+                    f'PKR {float(expense.amount):,.2f} (no cash change). '
+                    f'Payable PKR {float(vendor.current_balance_payable):,.2f}.',
                     'success',
                 )
             else:
@@ -144,6 +172,8 @@ def index():
             elif expense.settle_customer_id:
                 customer = Customer.query.get(expense.settle_customer_id)
 
+            vendor_ids = clear_expense_vendor_payable(expense)
+
             expense.is_settled = False
             expense.settled_date = None
             expense.settled_by = None
@@ -153,10 +183,19 @@ def index():
             expense.settle_credit_sale_id = None
             if customer:
                 recalculate_customer_balance(customer)
+            for vid in vendor_ids:
+                v = Vendor.query.get(vid)
+                if v:
+                    recalculate_vendor_balance(v)
             db.session.commit()
+            extra = []
+            if customer:
+                extra.append('customer credit removed')
+            if vendor_ids:
+                extra.append('vendor unpaid removed')
             flash(
                 f'Unsettled "{expense.name}" — open again'
-                f'{" (customer credit removed)" if customer else ""}.',
+                f'{" (" + ", ".join(extra) + ")" if extra else ""}.',
                 'success',
             )
             return redirect(url_for('expenses.index', **_filter_args()))
@@ -215,7 +254,10 @@ def index():
     search_q = (request.args.get('search') or '').strip()
     expenses_q = (
         apply_agency_filter(
-            Expense.query.filter(Expense.expense_date >= start, Expense.expense_date <= end),
+            Expense.query.options(
+                joinedload(Expense.settle_customer),
+                joinedload(Expense.settle_vendor),
+            ).filter(Expense.expense_date >= start, Expense.expense_date <= end),
             Expense,
         )
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
@@ -231,6 +273,7 @@ def index():
         )
     expenses, expenses_pagination = paginate(expenses_q, request.args.get('page', 1), PER_PAGE)
     customers = apply_agency_filter(Customer.query, Customer).order_by(Customer.name.asc()).all()
+    vendors = apply_agency_filter(Vendor.query, Vendor).order_by(Vendor.name.asc()).all()
 
     from app.charts_data import expenses_listing_series
 
@@ -239,6 +282,7 @@ def index():
         expenses=expenses,
         expenses_pagination=expenses_pagination,
         customers=customers,
+        vendors=vendors,
         total=total,
         unsettled_total=unsettled_total,
         settled_total=settled_total,

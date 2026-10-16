@@ -369,8 +369,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     Aggregate petrol/diesel/other/credit/expense/cash for [start, end].
     models: namespace with MeterReading, FuelType, FuelPrice, CreditSale, Expense, Payment, DailyCashCount
 
-    include_opening_credit: when True (e.g. period=All), unpaid opening/previous-book
-    credit is included in period_credit for display. Cash-in-hand still excludes opening.
+    include_opening_credit: when True, unpaid opening/previous-book credit is included
+    in period_credit (customer-ledger Credit KPI). Cash-in-hand still excludes opening.
     """
     MeterReading = models.MeterReading
     FuelType = models.FuelType
@@ -460,6 +460,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     petrol_credit_gross = diesel_credit_gross = 0.0
     advances = 0.0
     loans = 0.0
+    expense_settle_credit = 0.0
     sale_cash_paid = 0.0
     period_credit_sales = 0.0
     opening_credit = 0.0
@@ -482,14 +483,14 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
             advances += amt
             continue
         if et == 'loan':
-            # Expense→customer credit settle: receivable only (cash already left as expense).
+            # Expense→customer credit settle: receivable on ledger (not a cash loan).
             if is_expense_settle_remark(getattr(e, 'remarks', None)):
+                expense_settle_credit += credit if credit > 0 else amt
                 continue
             loans += amt
             continue
         if et == 'opening':
             # Opening / previous book credit — excluded from cash-in-hand.
-            # Included in Credit KPI only when include_opening_credit=True (All).
             opening_credit += credit
             continue
 
@@ -572,19 +573,41 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     expense_settlements = [x for x in expense_settlements if _expense_is_settled(x)]
 
     def _settle_method(row):
-        return (getattr(row, 'settle_method', None) or 'cash').strip().lower()
+        method = (getattr(row, 'settle_method', None) or 'cash').strip().lower()
+        # Linked FKs win over a stale settle_method flag.
+        if (
+            method == 'vendor'
+            or getattr(row, 'settle_vendor_id', None)
+            or getattr(row, 'settle_purchase_log_id', None)
+        ):
+            return 'vendor'
+        if (
+            method == 'credit'
+            or getattr(row, 'settle_customer_id', None)
+            or getattr(row, 'settle_credit_sale_id', None)
+        ):
+            return 'credit'
+        return 'cash'
 
     # Cash returns only — these reverse till drain.
     expense_return_total = sum(
-        float(x.amount or 0) for x in expense_settlements if _settle_method(x) != 'credit'
+        float(x.amount or 0) for x in expense_settlements if _settle_method(x) == 'cash'
     )
-    # Credit settles — recover expense for P&L, no till movement.
+    # Credit / vendor settles — recover expense for P&L, no till movement.
     expense_credit_settle_total = sum(
         float(x.amount or 0) for x in expense_settlements if _settle_method(x) == 'credit'
     )
+    expense_vendor_settle_total = sum(
+        float(x.amount or 0) for x in expense_settlements if _settle_method(x) == 'vendor'
+    )
     # P&L / “net expense cost” after all recoveries.
-    expense_net = expense_total - expense_return_total - expense_credit_settle_total
-    # Till still holds cash-settled returns only (credit settle does not refill till).
+    expense_net = (
+        expense_total
+        - expense_return_total
+        - expense_credit_settle_total
+        - expense_vendor_settle_total
+    )
+    # Till still holds cash-settled returns only (credit/vendor settle do not refill till).
     expense_cash_net = expense_total - expense_return_total
 
     payments = apply_agency_filter(
@@ -596,9 +619,9 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     ).all()
     payments_total = sum(float(p.amount_paid or 0) for p in payments)
 
-    # Purchases in period (cost × liters/qty)
+    # Purchases in period (cost × liters/qty); exclude expense→vendor settle rows.
     from app.models import ItemPurchaseLog, StockEntry, VendorPayment
-    from app.vendors.service import purchase_log_total
+    from app.vendors.service import purchase_log_total, is_expense_settle_purchase
     purchase_total = 0.0
     purchase_start = datetime.combine(start, time.min)
     purchase_end = datetime.combine(end, time.max)
@@ -610,6 +633,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         ItemPurchaseLog,
     ).order_by(ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc()).all()
     for log in purchase_logs:
+        if is_expense_settle_purchase(log):
+            continue
         purchase_total += purchase_log_total(log)
 
     # Only fall back to StockEntry if there are no fuel purchase logs at all (legacy)
@@ -640,11 +665,16 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     # Total sale = fuel (meter) + other items + FT Mobile Oil
     total_sale = meter_total + other_sale + ft_sale
 
-    # Activity credit only (excludes opening) — used for cash-in-hand
+    # Activity credit (sales unpaid + cash loans) — cash-in-hand uses loans separately.
     activity_credit = fuel_credit + other_credit + ft_credit + loans
 
-    # Credit KPI: optionally include opening (All filter)
-    period_credit = activity_credit + (opening_credit if include_opening_credit else 0.0)
+    # Credit KPI = full customer-ledger receivables in period:
+    # unpaid sales + loans + expense settles + (optional) opening balances.
+    period_credit = (
+        activity_credit
+        + expense_settle_credit
+        + (opening_credit if include_opening_credit else 0.0)
+    )
 
     # Deposits = customer advances + payments collected
     deposits = advances + payments_total
@@ -742,6 +772,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'fuel_credit': fuel_credit,
         'fuel_cash_paid': fuel_cash_paid,
         'opening_credit': opening_credit,
+        'expense_settle_credit': expense_settle_credit,
         'activity_credit': activity_credit,
         'period_credit': period_credit,
         'period_credit_sales': period_credit_sales,
@@ -759,6 +790,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'settled_expense_total': settled_expense_total,
         'expense_return_total': expense_return_total,
         'expense_credit_settle_total': expense_credit_settle_total,
+        'expense_vendor_settle_total': expense_vendor_settle_total,
         'expense_cash_net': expense_cash_net,
         'expense_net': expense_net,
         'expenses': expenses,
@@ -1386,8 +1418,8 @@ def build_period_cash_entries(stats):
         amt = float(exp.amount or 0)
         note = (getattr(exp, 'settle_note', None) or '').strip()
         method = (getattr(exp, 'settle_method', None) or 'cash').strip().lower()
-        if method == 'credit':
-            # No till movement — receivable lives on the customer credit sale.
+        if method in ('credit', 'vendor') or getattr(exp, 'settle_customer_id', None) or getattr(exp, 'settle_vendor_id', None):
+            # No till movement — lives on customer receivable / vendor payable.
             continue
         item_name = f'Settle return · {exp.name}'
         if note:

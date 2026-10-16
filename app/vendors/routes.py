@@ -351,6 +351,8 @@ def ledger(vendor_id):
         return f"{int(log.quantity or 0)} pcs"
 
     def _purchase_desc(log):
+        if (log.category or '').strip().lower() == 'expense_settle':
+            return log.item_name or 'Expense settle'
         desc = f"{log.item_name} — {_qty_desc(log)} @ PKR {float(log.cost_price or 0):,.2f}"
         if log.company:
             desc = f"{log.company} {desc}"
@@ -417,14 +419,15 @@ def ledger(vendor_id):
                 entry.update(_pay_meta(auto_pay))
             ledger_entries.append(entry)
         else:
+            is_settle = (log.category or '').strip().lower() == 'expense_settle'
             ledger_entries.append({
                 'date': log.entry_date or datetime.min,
                 'type': 'purchase',
                 'desc': desc,
                 'debit': amount,
                 'credit': 0.0,
-                'ref_id': f"Purchase #{log.id}",
-                'pay_type': log.category,
+                'ref_id': f"{'Settle' if is_settle else 'Purchase'} #{log.id}",
+                'pay_type': 'settle' if is_settle else (log.category or 'purchase'),
                 'payment_status': 'unpaid',
                 'purchase_log_id': log.id,
             })

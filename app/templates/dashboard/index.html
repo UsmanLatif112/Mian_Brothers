@@ -99,7 +99,7 @@
             <span class="kpi-label">Credit</span>
         </div>
         <div class="kpi-value text-warning">{{ stats.period_credit | money }}</div>
-        <div class="kpi-meta">Outstanding {{ stats.outstanding_credit | money }}</div>
+        <div class="kpi-meta">Sales + loans + settles + opening · Outstanding {{ stats.outstanding_credit | money }}</div>
     </div>
 
     <div class="kpi-card kpi-purchase">
@@ -125,8 +125,8 @@
             <span class="kpi-icon"><i class="bi bi-receipt"></i></span>
             <span class="kpi-label">Expense</span>
         </div>
-        <div class="kpi-value text-danger">{{ stats.expense_total | money }}</div>
-        <div class="kpi-meta">Period expenses</div>
+        <div class="kpi-value text-danger">{{ stats.expense_net | money }}</div>
+        <div class="kpi-meta">Out {{ stats.expense_total | money }} − settles {{ (stats.expense_return_total + stats.expense_credit_settle_total + stats.expense_vendor_settle_total) | money }}</div>
     </div>
 
     <div class="kpi-card kpi-profit">
@@ -135,7 +135,7 @@
             <span class="kpi-label">Net Profit</span>
         </div>
         <div class="kpi-value {% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_profit | money }}</div>
-        <div class="kpi-meta">Gross − Expense</div>
+        <div class="kpi-meta">Gross − net expense</div>
     </div>
 </section>
 

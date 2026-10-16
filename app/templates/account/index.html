@@ -39,14 +39,6 @@
 
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5 dashboard-stats">
     <div class="col">
-        <div class="card card-premium metric-card h-100">
-            <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Previous Balance</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.previous_balance | money }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col">
         <div class="card card-premium metric-card profit h-100">
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">Cash In Hand</span>
@@ -73,8 +65,16 @@
     <div class="col">
         <div class="card card-premium metric-card h-100">
             <div class="card-body card-body-premium">
-                <span class="metric-label text-muted-custom text-uppercase">Receiving</span>
-                <div class="metric-value fw-bold mb-0">{{ stats.total_receiving | money }}</div>
+                <span class="metric-label text-muted-custom text-uppercase">All Purchasing</span>
+                <div class="metric-value fw-bold mb-0">{{ stats.purchase_total | money }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">All Paid</span>
+                <div class="metric-value fw-bold mb-0 text-success">{{ stats.vendor_payments_total | money }}</div>
             </div>
         </div>
     </div>

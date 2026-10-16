@@ -133,7 +133,7 @@ def delete_payment(payment):
 
 
 def delete_expense(expense):
-    """Delete an Expense; remove linked settle-to-credit sale if any."""
+    """Delete an Expense; remove linked customer credit and/or vendor payable."""
     require_agency_access(expense)
     customer = None
     sale_id = getattr(expense, 'settle_credit_sale_id', None)
@@ -144,10 +144,17 @@ def delete_expense(expense):
             customer = Customer.query.get(cs.customer_id) if cs.customer_id else None
             db.session.delete(cs)
             db.session.flush()
+    from app.vendors.service import clear_expense_vendor_payable, recalculate_vendor_balance
+    from app.models import Vendor
+    vendor_ids = clear_expense_vendor_payable(expense)
     db.session.delete(expense)
     db.session.flush()
     if customer:
         _recalc_balance(customer)
+    for vid in vendor_ids:
+        v = Vendor.query.get(vid)
+        if v:
+            recalculate_vendor_balance(v)
 
 
 def edit_credit_sale(cs, form):
@@ -380,8 +387,13 @@ def _clear_expense_credit_sale(expense):
 
 
 def edit_expense(expense, form, current_user_id=None):
-    """Update an Expense and cascade settle → customer credit sale when needed."""
+    """Update an Expense and cascade settle → customer credit / vendor payable."""
     require_agency_access(expense)
+    from app.models import Vendor
+    from app.vendors.service import (
+        upsert_expense_vendor_payable, clear_expense_vendor_payable, recalculate_vendor_balance,
+    )
+
     name = (form.get('name') or '').strip()
     if not name:
         raise EntryError('Expense name is required.')
@@ -403,6 +415,7 @@ def edit_expense(expense, form, current_user_id=None):
 
     is_settled = bool(expense.is_settled or expense.settled_date)
     customers_to_recalc = set()
+    vendors_to_recalc = set()
 
     if is_settled:
         settle_raw = (form.get('settled_date') or '').strip()
@@ -418,7 +431,7 @@ def edit_expense(expense, form, current_user_id=None):
             settle_note = expense.settle_note
 
         method = (form.get('settle_method') or expense.settle_method or 'cash').strip().lower()
-        if method not in ('cash', 'credit'):
+        if method not in ('cash', 'credit', 'vendor'):
             method = 'cash'
         old_method = (expense.settle_method or 'cash').strip().lower()
         expense.settle_method = method
@@ -427,6 +440,8 @@ def edit_expense(expense, form, current_user_id=None):
             expense.settled_by = current_user_id
 
         if method == 'credit':
+            if old_method == 'vendor' or expense.settle_purchase_log_id:
+                vendors_to_recalc |= clear_expense_vendor_payable(expense)
             try:
                 customer_id = int(form.get('settle_customer_id') or expense.settle_customer_id or 0)
             except (TypeError, ValueError):
@@ -439,17 +454,41 @@ def edit_expense(expense, form, current_user_id=None):
                 expense, customer, settled_date, settle_note, current_user_id
             )
             customers_to_recalc |= touched
+        elif method == 'vendor':
+            if old_method == 'credit' or expense.settle_credit_sale_id:
+                customers_to_recalc |= _clear_expense_credit_sale(expense)
+            try:
+                vendor_id = int(form.get('settle_vendor_id') or expense.settle_vendor_id or 0)
+            except (TypeError, ValueError):
+                vendor_id = int(expense.settle_vendor_id or 0)
+            vendor = Vendor.query.get(vendor_id) if vendor_id else None
+            if not vendor:
+                raise EntryError('Select a vendor for vendor settle.')
+            require_agency_access(vendor)
+            _, touched = upsert_expense_vendor_payable(
+                expense, vendor, settled_date, settle_note, current_user_id
+            )
+            vendors_to_recalc |= touched
         else:
-            # Switched to cash (or stayed cash): drop any linked receivable
+            # Cash: drop linked customer receivable and vendor payable
             if old_method == 'credit' or expense.settle_credit_sale_id:
                 customers_to_recalc |= _clear_expense_credit_sale(expense)
             else:
                 expense.settle_customer_id = None
                 expense.settle_credit_sale_id = None
+            if old_method == 'vendor' or expense.settle_purchase_log_id:
+                vendors_to_recalc |= clear_expense_vendor_payable(expense)
+            else:
+                expense.settle_vendor_id = None
+                expense.settle_purchase_log_id = None
 
     db.session.flush()
     for cid in customers_to_recalc:
         c = Customer.query.get(cid)
         if c:
             _recalc_balance(c)
+    for vid in vendors_to_recalc:
+        v = Vendor.query.get(vid)
+        if v:
+            recalculate_vendor_balance(v)
     return expense

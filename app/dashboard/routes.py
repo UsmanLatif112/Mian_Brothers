@@ -151,10 +151,11 @@ def _build_meter_trend(start, end):
     Profit for the selected period:
 
       Gross = Sale value − COGS
-      Net   = Gross − Expenses   ← Profit KPI / chart
+      Net   = Gross − Expense net   ← Profit KPI / chart
+              (expenses − cash settles − credit settles)
 
     Include in sales: meter fuel, other/shop, FT, credit sales.
-    Exclude: advance, loan, opening due.
+    Exclude: advance, loan, opening due, expense settles.
     """
     from collections import defaultdict
 
@@ -172,6 +173,12 @@ def _build_meter_trend(start, end):
     day_cogs = defaultdict(float)
     day_gross = defaultdict(float)
     day_expenses = defaultdict(float)
+
+    def _expense_is_settled(row):
+        if getattr(row, 'settled_date', None):
+            return True
+        flag = getattr(row, 'is_settled', False)
+        return bool(flag) and str(flag).lower() not in ('0', 'false', 'none')
 
     # 1) Meter / pump fuel
     readings = apply_agency_filter(
@@ -240,6 +247,21 @@ def _build_meter_trend(start, end):
         d = as_date(exp.expense_date)
         if d is not None:
             day_expenses[d] += float(exp.amount or 0)
+
+    # 4) Settles (cash or credit→customer) recover expense on settled_date
+    for exp in apply_agency_filter(
+        Expense.query.filter(
+            Expense.settled_date.isnot(None),
+            Expense.settled_date >= start,
+            Expense.settled_date <= end,
+        ),
+        Expense,
+    ).all():
+        if not _expense_is_settled(exp):
+            continue
+        d = as_date(exp.settled_date)
+        if d is not None:
+            day_expenses[d] -= float(exp.amount or 0)
 
     day_net = defaultdict(float)
     for d in set(day_gross) | set(day_expenses):
@@ -417,7 +439,7 @@ def index():
     period, start, end = parse_period(request.args, default_period='all')
     stats = compute_period_stats(
         start, end, _models_ns(),
-        include_opening_credit=(period == 'all'),
+        include_opening_credit=True,
     )
 
     # Same calculation as the Revenue & Margin chart (period total)
