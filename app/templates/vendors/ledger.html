@@ -192,6 +192,7 @@
                                         data-amount="{{ '%.2f'|format(entry.amount) }}"
                                         data-method="{{ entry.method }}"
                                         data-note="{{ entry.note }}"
+                                        data-funding-source="{{ entry.funding_source or 'till' }}"
                                         data-entry-date="{{ entry.entry_date }}">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
@@ -286,6 +287,21 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label form-label-custom">Paid from</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="funding_source" id="funding_till" value="till" checked>
+                                Cash in hand (today’s till)
+                            </label>
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="funding_source" id="funding_account" value="account">
+                                Account (from amount taken)
+                            </label>
+                        </div>
+                        <small class="text-muted-custom">Till reduces cash in hand. Account leaves till as-is (paid from cash taken).</small>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="method" class="form-label form-label-custom">Payment Method</label>
                         <select class="form-select form-control-custom" id="method" name="method" required>
                             <option value="Cash" selected>Cash</option>
@@ -336,6 +352,19 @@
                         <input type="date" class="form-control form-control-custom" id="edit_vendor_date" name="entry_date" required>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label form-label-custom">Paid from</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="funding_source" id="edit_funding_till" value="till">
+                                Cash in hand (today’s till)
+                            </label>
+                            <label class="form-check-label d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="radio" name="funding_source" id="edit_funding_account" value="account">
+                                Account (from amount taken)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label form-label-custom" for="edit_vendor_method">Payment Method</label>
                         <select class="form-select form-control-custom" id="edit_vendor_method" name="method" required>
                             <option value="Cash">Cash</option>
@@ -372,6 +401,11 @@
         document.getElementById('edit_vendor_date').value = btn.getAttribute('data-entry-date') || '';
         document.getElementById('edit_vendor_method').value = btn.getAttribute('data-method') || 'Cash';
         document.getElementById('edit_vendor_note').value = btn.getAttribute('data-note') || '';
+        const funding = (btn.getAttribute('data-funding-source') || 'till').toLowerCase();
+        const tillRadio = document.getElementById('edit_funding_till');
+        const accountRadio = document.getElementById('edit_funding_account');
+        if (tillRadio) tillRadio.checked = funding !== 'account';
+        if (accountRadio) accountRadio.checked = funding === 'account';
     });
 })();
 </script>

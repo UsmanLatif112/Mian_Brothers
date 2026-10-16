@@ -457,6 +457,8 @@ class VendorPayment(db.Model):
     payment_date = db.Column(db.DateTime, default=datetime.utcnow)
     method = db.Column(db.String(50), nullable=False, default='Cash')
     note = db.Column(db.String(200), nullable=True)
+    # till = reduce cash in hand; account = from cash-taken pool (till unchanged)
+    funding_source = db.Column(db.String(20), nullable=False, default='till')
     # Links auto "paid with purchase" rows to the inventory batch (nullable for manual pays)
     purchase_log_id = db.Column(db.Integer, db.ForeignKey('item_purchase_logs.id'), nullable=True)
 

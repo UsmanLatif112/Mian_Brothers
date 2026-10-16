@@ -619,10 +619,13 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     ).all()
     payments_total = sum(float(p.amount_paid or 0) for p in payments)
 
-    # Purchases in period (cost × liters/qty); exclude expense→vendor settle rows.
+    # Purchases in period (cost × liters/qty); skip opening stock + expense settles.
     from app.models import ItemPurchaseLog, StockEntry, VendorPayment
-    from app.vendors.service import purchase_log_total, is_expense_settle_purchase
+    from app.vendors.service import (
+        purchase_log_total, counts_toward_purchase_kpis, purchase_log_payment_status,
+    )
     purchase_total = 0.0
+    purchase_paid_total = 0.0
     purchase_start = datetime.combine(start, time.min)
     purchase_end = datetime.combine(end, time.max)
     purchase_logs = apply_agency_filter(
@@ -633,9 +636,12 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         ItemPurchaseLog,
     ).order_by(ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc()).all()
     for log in purchase_logs:
-        if is_expense_settle_purchase(log):
+        if not counts_toward_purchase_kpis(log):
             continue
-        purchase_total += purchase_log_total(log)
+        amt = purchase_log_total(log)
+        purchase_total += amt
+        if purchase_log_payment_status(log) == 'paid':
+            purchase_paid_total += amt
 
     # Only fall back to StockEntry if there are no fuel purchase logs at all (legacy)
     legacy_stock_entries = []
@@ -653,6 +659,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         for entry in legacy_stock_entries:
             purchase_total += float(entry.cost_per_liter or 0) * float(entry.liters_added or 0)
 
+    from app.vendors.service import payment_funding_source
+
     vendor_payments = apply_agency_filter(
         VendorPayment.query.filter(
             func.date(VendorPayment.payment_date) >= start,
@@ -661,6 +669,14 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         VendorPayment,
     ).order_by(VendorPayment.payment_date.desc(), VendorPayment.id.desc()).all()
     vendor_payments_total = sum(float(p.amount_paid or 0) for p in vendor_payments)
+    vendor_payments_till_total = sum(
+        float(p.amount_paid or 0) for p in vendor_payments
+        if payment_funding_source(p) == 'till'
+    )
+    vendor_payments_account_total = sum(
+        float(p.amount_paid or 0) for p in vendor_payments
+        if payment_funding_source(p) == 'account'
+    )
 
     # Total sale = fuel (meter) + other items + FT Mobile Oil
     total_sale = meter_total + other_sale + ft_sale
@@ -684,26 +700,28 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     total_receiving = deposits
 
     # Cash in hand = cash sales + previous balance + customer receiving
-    #                − customer cash loans − expense cash net (out − cash settles).
-    # Credit-settle expenses stay in cash net (no till refill); receivable is
-    # tracked on the customer, not as a second cash loan.
-    # Same-day expense + cash get-back → expense_cash_net 0 (wash).
+    #                − customer cash loans − expense cash net (out − cash settles)
+    #                − vendor payments funded from till.
+    # Account-funded vendor pays use the cash-taken pool — till unchanged.
     cash_in_hand = (
         petrol_cash + diesel_cash + other_cash + ft_cash
         + previous_balance + total_receiving
         - loans - expense_cash_net
+        - vendor_payments_till_total
     )
     # Same as cash in hand, but expenses (and expense settles) excluded.
     cash_in_hand_wo_expense = (
         petrol_cash + diesel_cash + other_cash + ft_cash
         + previous_balance + total_receiving
         - loans
+        - vendor_payments_till_total
     )
     # Period cash only: no expenses, no previous balance (keeps sales, receiving, loans).
     cash_in_hand_wo_expense_prev = (
         petrol_cash + diesel_cash + other_cash + ft_cash
         + total_receiving
         - loans
+        - vendor_payments_till_total
     )
     cash_taken_amount = cash_taken_total(start, end)
     remaining_balance = cash_in_hand - cash_taken_amount
@@ -797,10 +815,13 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         'expense_settlements': expense_settlements,
         'payments_total': payments_total,
         'purchase_total': purchase_total,
+        'purchase_paid_total': purchase_paid_total,
         'purchase_logs': purchase_logs,
         'legacy_stock_entries': legacy_stock_entries,
         'vendor_payments': vendor_payments,
         'vendor_payments_total': vendor_payments_total,
+        'vendor_payments_till_total': vendor_payments_till_total,
+        'vendor_payments_account_total': vendor_payments_account_total,
         'expected_cash': cash_in_hand,
         'cash_in_hand': cash_in_hand,
         'cash_in_hand_wo_expense': cash_in_hand_wo_expense,
@@ -1347,6 +1368,8 @@ def build_period_cash_entries(stats):
             purchase_category=log.category,
         ))
 
+    from app.vendors.service import payment_funding_source as _vp_funding
+
     for vp in vendor_payments:
         if vp.id in absorbed_vendor_pay_ids:
             continue
@@ -1354,13 +1377,15 @@ def build_period_cash_entries(stats):
         sale_date = pay_dt.date() if hasattr(pay_dt, 'date') else pay_dt
         method = (vp.method or 'Cash').strip()
         note = (vp.note or '').strip()
+        funding = _vp_funding(vp)
         blob = f'{method} {note}'.lower()
         is_advance = 'advance' in blob
         entry_type = 'vendor_advance' if is_advance else 'vendor_pay'
+        fund_label = 'Till' if funding == 'till' else 'Account'
         if is_advance:
-            item_name = f'Advance · {method}'
+            item_name = f'Advance · {method} · {fund_label}'
         else:
-            item_name = f'Payment · {method}'
+            item_name = f'Payment · {method} · {fund_label}'
         if note:
             item_name = f'{item_name} — {note}'
         amt = float(vp.amount_paid or 0)
@@ -1382,7 +1407,8 @@ def build_period_cash_entries(stats):
             other_amount=0,
             other_kind='none',
             payment_status='paid',
-            cash_direction='out',
+            # Only till-funded pays move cash journal / till.
+            cash_direction='out' if funding == 'till' else 'none',
             is_fuel=False,
             other_item=None,
         ))
@@ -1482,6 +1508,7 @@ def build_cash_journal_summary(stats):
         'expense_return_total': float(stats.get('expense_return_total') or 0),
         'expense_net': float(stats.get('expense_net') or 0),
         'purchase_total': float(stats.get('purchase_total') or 0),
+        'purchase_paid_total': float(stats.get('purchase_paid_total') or 0),
         'vendor_payments_total': float(stats.get('vendor_payments_total') or 0),
         'paid_sale_cash': paid_sale_cash,
         'unpaid_due': unpaid_due,

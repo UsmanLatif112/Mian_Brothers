@@ -43,6 +43,7 @@
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">Cash In Hand</span>
                 <div class="metric-value fw-bold mb-0">{{ stats.cash_in_hand | money }}</div>
+                <small class="text-muted-custom">After till vendor pays {{ stats.vendor_payments_till_total | money }}</small>
             </div>
         </div>
     </div>
@@ -51,6 +52,7 @@
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">Amount Taken</span>
                 <div class="metric-value fw-bold mb-0 text-danger">{{ stats.cash_taken_total | money }}</div>
+                <small class="text-muted-custom">Account vendor pays {{ stats.vendor_payments_account_total | money }}</small>
             </div>
         </div>
     </div>
@@ -67,6 +69,7 @@
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">All Purchasing</span>
                 <div class="metric-value fw-bold mb-0">{{ stats.purchase_total | money }}</div>
+                <small class="text-muted-custom">Vendor buys · excludes opening</small>
             </div>
         </div>
     </div>
@@ -74,7 +77,8 @@
         <div class="card card-premium metric-card profit h-100">
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">All Paid</span>
-                <div class="metric-value fw-bold mb-0 text-success">{{ stats.vendor_payments_total | money }}</div>
+                <div class="metric-value fw-bold mb-0 text-success">{{ stats.purchase_paid_total | money }}</div>
+                <small class="text-muted-custom">Paid purchase batches</small>
             </div>
         </div>
     </div>

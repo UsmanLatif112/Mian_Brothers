@@ -3,11 +3,16 @@ from datetime import datetime
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
-from app.models import db, Vendor, VendorPayment, ItemPurchaseLog
+from app.models import (
+    db, Vendor, VendorPayment, ItemPurchaseLog,
+    MeterReading, FuelType, FuelPrice, CreditSale, Expense, Payment, DailyCashCount, Customer,
+)
 from app.tenancy import (
     apply_agency_filter, require_agency_access, stamp_agency, is_agency_manager,
 )
-from app.utils import paginate, parse_form_date, datetime_from_date, business_today
+from app.utils import (
+    paginate, parse_form_date, datetime_from_date, business_today, compute_period_stats,
+)
 from app.vendors import vendors_bp
 from app.vendors.service import (
     normalize_vendor_name,
@@ -18,7 +23,38 @@ from app.vendors.service import (
     delete_vendor_payment,
     vendor_has_linked_activity,
     purchase_log_payment_status,
+    normalize_funding_source,
+    payment_funding_source,
 )
+from app.account.service import upsert_till_balance
+
+
+def _models_ns():
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        MeterReading=MeterReading,
+        FuelType=FuelType,
+        FuelPrice=FuelPrice,
+        CreditSale=CreditSale,
+        Expense=Expense,
+        Payment=Payment,
+        DailyCashCount=DailyCashCount,
+        Customer=Customer,
+    )
+
+
+def _payment_day(payment):
+    dt = getattr(payment, 'payment_date', None)
+    if dt is None:
+        return business_today()
+    return dt.date() if hasattr(dt, 'date') else dt
+
+
+def _refresh_till_for_day(day):
+    if day is None:
+        return
+    stats = compute_period_stats(day, day, _models_ns())
+    upsert_till_balance(day, stats['cash_in_hand'], current_user.id)
 
 PER_PAGE = 15
 
@@ -256,8 +292,14 @@ def ledger(vendor_id):
             if not payment:
                 flash('Payment not found.', 'danger')
                 return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+            old_day = _payment_day(payment)
             try:
                 edit_vendor_payment(payment, request.form)
+                db.session.flush()
+                new_day = _payment_day(payment)
+                _refresh_till_for_day(old_day)
+                if new_day != old_day:
+                    _refresh_till_for_day(new_day)
                 db.session.commit()
                 flash('Payment updated. Payable recalculated.', 'success')
             except ValueError as e:
@@ -272,7 +314,9 @@ def ledger(vendor_id):
             if not payment:
                 flash('Payment not found.', 'danger')
                 return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+            pay_day = _payment_day(payment)
             delete_vendor_payment(payment)
+            _refresh_till_for_day(pay_day)
             db.session.commit()
             flash('Payment deleted. Payable recalculated.', 'success')
             return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
@@ -281,6 +325,7 @@ def ledger(vendor_id):
         method = request.form.get('method', 'Cash')
         note = (request.form.get('note') or '').strip() or None
         entry_date = parse_form_date(request.form.get('entry_date'))
+        funding = normalize_funding_source(request.form.get('funding_source'), default='till')
 
         if not amount:
             flash('Payment amount is required.', 'danger')
@@ -300,15 +345,22 @@ def ledger(vendor_id):
             payment_date=datetime_from_date(entry_date),
             method=method,
             note=note,
+            funding_source=funding,
         )
         stamp_agency(payment)
         db.session.add(payment)
         db.session.flush()
         recalculate_vendor_balance(vendor)
+        _refresh_till_for_day(entry_date)
         db.session.commit()
 
+        fund_note = (
+            'from cash in hand'
+            if funding == 'till'
+            else 'from account (cash taken pool — till unchanged)'
+        )
         flash(
-            f"Recorded payment of PKR {amt_val:,.2f} to {vendor.name}. "
+            f"Recorded payment of PKR {amt_val:,.2f} to {vendor.name} ({fund_note}). "
             f"Balance payable: PKR {float(vendor.current_balance_payable):,.2f}.",
             'success',
         )
@@ -384,11 +436,13 @@ def ledger(vendor_id):
         return candidates[0]
 
     def _pay_meta(pay):
+        funding = payment_funding_source(pay)
         return {
             'payment_id': pay.id,
             'amount': float(pay.amount_paid or 0),
             'method': pay.method or 'Cash',
             'note': pay.note or '',
+            'funding_source': funding,
             'entry_date': (pay.payment_date.date().isoformat()
                            if pay.payment_date and hasattr(pay.payment_date, 'date')
                            else (pay.payment_date.isoformat() if pay.payment_date else '')),
@@ -441,10 +495,15 @@ def ledger(vendor_id):
         note = (pay.note or '').strip()
         if note.startswith(AUTO_PAY_NOTE):
             continue
+        funding = payment_funding_source(pay)
+        fund_label = 'Cash in hand' if funding == 'till' else 'Account'
         entry = {
             'date': pay.payment_date or datetime.min,
             'type': 'payment',
-            'desc': f"Paid via {pay.method}{f' ({pay.note})' if pay.note else ''}",
+            'desc': (
+                f"Paid via {pay.method} · {fund_label}"
+                f"{f' ({pay.note})' if pay.note else ''}"
+            ),
             'debit': 0.0,
             'credit': float(pay.amount_paid or 0),
             'ref_id': f"Payment #{pay.id}",
@@ -463,9 +522,8 @@ def ledger(vendor_id):
 
     ledger_entries.reverse()
 
+    # Real purchase batches only — opening/previous payable is already on the ledger line
     total_purchased = sum(purchase_log_total(log) for log in purchases)
-    if vendor.previous_payable:
-        total_purchased += float(vendor.previous_payable)
     total_paid = sum(float(p.amount_paid or 0) for p in payments)
 
     entry_filter = (request.args.get('filter') or 'all').strip().lower()

@@ -10,9 +10,41 @@ AUTO_PAY_NOTE_PREFIX = 'Paid with inventory purchase:'
 EXPENSE_SETTLE_CATEGORY = 'expense_settle'
 
 
+def normalize_funding_source(raw, default='till'):
+    """till = cash in hand; account = cash-taken / Account pool."""
+    value = (raw or default or 'till').strip().lower()
+    if value in ('account', 'taken', 'cash_taken', 'from_account'):
+        return 'account'
+    return 'till'
+
+
+def payment_funding_source(payment, default='account'):
+    """Read funding; missing/legacy rows default to account (did not drain till)."""
+    return normalize_funding_source(getattr(payment, 'funding_source', None), default=default)
+
+
 def is_expense_settle_purchase(log):
     """True when ItemPurchaseLog is an expense→vendor unpaid settle (not stock)."""
     return (getattr(log, 'category', None) or '').strip().lower() == EXPENSE_SETTLE_CATEGORY
+
+
+def is_opening_stock_purchase(log):
+    """
+    Opening / previous stock seed rows (no vendor).
+    Already on hand — must not inflate Purchasing or Account purchase KPIs.
+    """
+    if getattr(log, 'vendor_id', None):
+        return False
+    return not (getattr(log, 'vendor', None) or '').strip()
+
+
+def counts_toward_purchase_kpis(log):
+    """Real vendor purchase batches only (exclude opening stock + expense settles)."""
+    if is_expense_settle_purchase(log):
+        return False
+    if is_opening_stock_purchase(log):
+        return False
+    return True
 
 
 def upsert_expense_vendor_payable(expense, vendor, settled_date, settle_note=None, user_id=None):
@@ -172,7 +204,9 @@ def purchase_log_payment_status(log):
     return 'unpaid'
 
 
-def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid', payment_date=None):
+def apply_purchase_vendor_payment(
+    vendor, purchase_log, payment_status='unpaid', payment_date=None, funding_source='till',
+):
     """
     After purchase is linked:
 
@@ -183,6 +217,7 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
     status = normalize_purchase_payment_status(payment_status)
     purchase_log.payment_status = status
     payment = None
+    funding = normalize_funding_source(funding_source, default='till')
 
     # Drop any prior auto-payments for this log so we never get unpaid + paid duplicates
     if getattr(purchase_log, 'id', None):
@@ -199,6 +234,7 @@ def apply_purchase_vendor_payment(vendor, purchase_log, payment_status='unpaid',
                 amount_paid=total,
                 payment_date=payment_date or purchase_log.entry_date,
                 method='Cash',
+                funding_source=funding,
                 note=f'{AUTO_PAY_NOTE_PREFIX} {purchase_log.item_name} (batch PKR {total:,.2f})',
                 purchase_log_id=purchase_log.id,
             )
@@ -324,7 +360,7 @@ def delete_purchase_log_cascade(log):
     return vendor_id
 
 
-def sync_auto_payment_for_log(log, payment_status=None, payment_date=None):
+def sync_auto_payment_for_log(log, payment_status=None, payment_date=None, funding_source=None):
     """Keep linked auto-payment + payment_status in sync after log edit."""
     status = normalize_purchase_payment_status(
         payment_status if payment_status is not None else getattr(log, 'payment_status', None)
@@ -332,6 +368,12 @@ def sync_auto_payment_for_log(log, payment_status=None, payment_date=None):
     log.payment_status = status
     total = purchase_log_total(log)
     pays = find_auto_payments_for_log(log)
+    funding = normalize_funding_source(
+        funding_source if funding_source is not None else (
+            getattr(pays[0], 'funding_source', None) if pays else 'till'
+        ),
+        default='till',
+    )
 
     if status == 'unpaid':
         for pay in pays:
@@ -351,6 +393,7 @@ def sync_auto_payment_for_log(log, payment_status=None, payment_date=None):
         pay.amount_paid = total
         pay.note = f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})'
         pay.purchase_log_id = log.id
+        pay.funding_source = funding
         if log.vendor_id:
             pay.vendor_id = log.vendor_id
         if payment_date is not None:
@@ -365,6 +408,7 @@ def sync_auto_payment_for_log(log, payment_status=None, payment_date=None):
         amount_paid=total,
         payment_date=payment_date or log.entry_date,
         method='Cash',
+        funding_source=funding,
         note=f'{AUTO_PAY_NOTE_PREFIX} {log.item_name} (batch PKR {total:,.2f})',
         purchase_log_id=log.id,
     )))
@@ -396,11 +440,16 @@ def edit_vendor_payment(payment, form):
     entry_date = parse_form_date(form.get('entry_date') or form.get('payment_date'))
     method = (form.get('method') or payment.method or 'Cash').strip() or 'Cash'
     note = (form.get('note') or '').strip() or None
+    funding = normalize_funding_source(
+        form.get('funding_source') or getattr(payment, 'funding_source', None),
+        default='till',
+    )
 
     payment.amount_paid = amt
     payment.payment_date = datetime_from_date(entry_date)
     payment.method = method
     payment.note = note
+    payment.funding_source = funding
 
     vendor = Vendor.query.get(payment.vendor_id)
     db.session.flush()

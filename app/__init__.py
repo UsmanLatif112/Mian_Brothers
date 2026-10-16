@@ -1030,6 +1030,11 @@ def ensure_vendors_schema():
         existing = {col['name'] for col in inspector.get_columns('vendor_payments')}
         if 'purchase_log_id' not in existing:
             alters.append('ALTER TABLE vendor_payments ADD COLUMN purchase_log_id INTEGER')
+        if 'funding_source' not in existing:
+            # Existing rows behave as account (till never subtracted them before).
+            alters.append(
+                "ALTER TABLE vendor_payments ADD COLUMN funding_source VARCHAR(20) NOT NULL DEFAULT 'account'"
+            )
 
     if not alters:
         return

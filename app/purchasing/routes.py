@@ -21,6 +21,7 @@ from app.vendors.service import (
     recalculate_vendor_balance,
     purchase_log_payment_status,
     normalize_purchase_payment_status,
+    counts_toward_purchase_kpis,
 )
 from app.inventory.categories import list_active_categories, ensure_shop_categories
 
@@ -73,6 +74,8 @@ def index():
         ItemPurchaseLog.entry_date <= datetime.combine(end, datetime.max.time().replace(microsecond=0)),
         # Expense→vendor settles live on vendor ledger, not Purchasing stock buys
         ItemPurchaseLog.category != 'expense_settle',
+        # Opening / previous stock (no vendor) stays out of purchasing activity
+        ItemPurchaseLog.vendor_id.isnot(None),
     )
 
     if category and category != 'all':
@@ -100,9 +103,10 @@ def index():
     else:
         filtered = all_for_stats
 
-    purchase_total = sum(purchase_log_total(log) for log in filtered)
+    kpi_logs = [log for log in filtered if counts_toward_purchase_kpis(log)]
+    purchase_total = sum(purchase_log_total(log) for log in kpi_logs)
     paid_total = sum(
-        purchase_log_total(log) for log in filtered if status_map.get(log.id) == 'paid'
+        purchase_log_total(log) for log in kpi_logs if status_map.get(log.id) == 'paid'
     )
     unpaid_total = purchase_total - paid_total
 
