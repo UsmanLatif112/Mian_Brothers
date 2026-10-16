@@ -211,7 +211,8 @@
                             <tr>
                                 <td class="fw-semibold">#{{ cs.id }}</td>
                                 <td>{{ cs.sale_date }}</td>
-                                <td><span class="badge bg-secondary text-uppercase">{% if over_val > 0 %}overpay{% else %}{{ cs.entry_type }}{% endif %}</span></td>
+                                {% set rem_l = (cs.remarks or '')|lower %}
+                                <td><span class="badge bg-secondary text-uppercase">{% if over_val > 0 %}overpay{% elif cs.entry_type == 'loan' and (rem_l.startswith('expense settle') or rem_l.startswith('settle')) %}settle{% else %}{{ cs.entry_type }}{% endif %}</span></td>
                                 <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ cs.item_name }}">{{ cs.item_name }}</span></td>
                                 <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.category == 'ft_mobile') %} L{% endif %}{% else %}—{% endif %}</td>

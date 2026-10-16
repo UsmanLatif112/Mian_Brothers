@@ -5,6 +5,7 @@ from app.models import db, Expense, Customer, CreditSale
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import (
     parse_period, PERIOD_CHOICES, paginate, parse_form_date, business_today,
+    expense_settle_remark,
 )
 from app.services.entries import EntryError, edit_expense, delete_expense
 from app.customers.service import recalculate_customer_balance
@@ -82,9 +83,7 @@ def index():
                     return redirect(url_for('expenses.index', **_filter_args()))
                 require_agency_access(customer)
                 amount = float(expense.amount or 0)
-                remark = f'Expense settle — {expense.name}'
-                if settle_note:
-                    remark = f'{remark} — {settle_note}'
+                remark = expense_settle_remark(expense.name, settle_note)
                 credit_sale = stamp_agency(CreditSale(
                     customer_id=customer.id,
                     sale_date=settled_date,

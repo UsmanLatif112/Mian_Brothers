@@ -5,7 +5,9 @@ from app.models import db, Customer, Sale, Payment, CreditSale
 from app.tenancy import (
     apply_agency_filter, require_agency_access, stamp_agency, is_agency_manager,
 )
-from app.utils import paginate, parse_form_date, datetime_from_date, business_today
+from app.utils import (
+    paginate, parse_form_date, datetime_from_date, business_today, is_expense_settle_remark,
+)
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
 )
@@ -482,16 +484,30 @@ def ledger(customer_id):
                 'pay_type': 'advance',
             })
         elif et == 'loan':
-            ledger_entries.append({
-                **base,
-                'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
-                'type': 'purchase',
-                'desc': f"Loan / borrow {f'({p.remarks})' if p.remarks else ''}",
-                'debit': float(p.amount or 0),
-                'credit': 0.0,
-                'ref_id': f"Loan #{p.id}",
-                'pay_type': 'loan',
-            })
+            if is_expense_settle_remark(p.remarks):
+                remark = (p.remarks or '').strip()
+                ledger_entries.append({
+                    **base,
+                    'entry_kind': 'settle',
+                    'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
+                    'type': 'purchase',
+                    'desc': remark or 'Settle',
+                    'debit': float(p.amount or 0),
+                    'credit': 0.0,
+                    'ref_id': f"Settle #{p.id}",
+                    'pay_type': 'settle',
+                })
+            else:
+                ledger_entries.append({
+                    **base,
+                    'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
+                    'type': 'purchase',
+                    'desc': f"Loan / borrow {f'({p.remarks})' if p.remarks else ''}",
+                    'debit': float(p.amount or 0),
+                    'credit': 0.0,
+                    'ref_id': f"Loan #{p.id}",
+                    'pay_type': 'loan',
+                })
         elif et == 'opening':
             ledger_entries.append({
                 **base,
@@ -589,14 +605,14 @@ def ledger(customer_id):
     total_received = sum(float(e.get('credit') or 0) for e in ledger_entries)
 
     entry_filter = (request.args.get('filter') or 'all').strip().lower()
-    allowed = {'all', 'sale', 'payment', 'advance', 'loan', 'opening'}
+    allowed = {'all', 'sale', 'payment', 'advance', 'loan', 'settle', 'opening'}
     if entry_filter not in allowed:
         entry_filter = 'all'
     search_q = (request.args.get('search') or '').strip().lower()
 
     def _customer_entry_kind(e):
         kind = (e.get('entry_kind') or e.get('pay_type') or '').lower()
-        if kind in ('advance', 'loan', 'opening'):
+        if kind in ('advance', 'loan', 'settle', 'opening'):
             return kind
         if (e.get('type') or '').lower() == 'payment' or kind == 'payment':
             return 'payment'

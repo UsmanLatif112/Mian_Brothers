@@ -35,6 +35,28 @@ def business_today():
     return calendar_today()
 
 
+def expense_settle_remark(name, settle_note=None):
+    """Customer-ledger remark for expense settled to customer credit (not a cash loan)."""
+    remark = f'Settle — {(name or "").strip() or "expense"}'
+    note = (settle_note or '').strip()
+    if note:
+        remark = f'{remark} — {note}'
+    return remark
+
+
+def is_expense_settle_remark(remarks):
+    """True when CreditSale remarks mark an expense→customer credit settle."""
+    r = (remarks or '').strip().lower()
+    if not r:
+        return False
+    return (
+        r.startswith('expense settle')
+        or r.startswith('settle —')
+        or r.startswith('settle -')
+        or r.startswith('settle –')
+    )
+
+
 def set_working_date(day):
     from flask import session
     if day is None:
@@ -461,8 +483,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
             continue
         if et == 'loan':
             # Expense→customer credit settle: receivable only (cash already left as expense).
-            remarks = (getattr(e, 'remarks', None) or '').strip()
-            if remarks.lower().startswith('expense settle'):
+            if is_expense_settle_remark(getattr(e, 'remarks', None)):
                 continue
             loans += amt
             continue
@@ -1122,7 +1143,7 @@ def build_period_cash_entries(stats):
         elif et == 'loan':
             # Expense→credit settle is on the customer ledger; skip cash journal
             # (expense out already posted; till must not move again).
-            if remarks.lower().startswith('expense settle'):
+            if is_expense_settle_remark(remarks):
                 continue
             credit = amt
             paid = 0.0

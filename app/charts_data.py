@@ -243,6 +243,8 @@ def customer_ledger_pie(ledger_entries):
 
         if kind == 'advance' or (etype == 'payment' and kind == 'advance'):
             buckets['Advance'] += credit or amount or debit
+        elif kind == 'settle':
+            buckets['Settle'] += debit or amount
         elif kind == 'loan':
             buckets['Loan'] += debit or amount
         elif kind == 'opening':

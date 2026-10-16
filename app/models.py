@@ -218,6 +218,9 @@ class CreditSale(db.Model):
         if self.entry_type == 'advance':
             return 'Customer Advance'
         if self.entry_type == 'loan':
+            from app.utils import is_expense_settle_remark
+            if is_expense_settle_remark(self.remarks):
+                return (self.remarks or '').strip() or 'Settle'
             return 'Customer Loan / Borrow'
         if self.entry_type == 'opening':
             return 'Previous / Opening Credit'

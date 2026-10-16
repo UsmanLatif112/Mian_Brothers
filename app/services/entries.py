@@ -314,20 +314,13 @@ def edit_payment(payment, form):
     return payment
 
 
-def _expense_settle_remark(name, settle_note=None):
-    remark = f'Expense settle — {name}'
-    note = (settle_note or '').strip()
-    if note:
-        remark = f'{remark} — {note}'
-    return remark
-
-
 def _sync_expense_credit_sale(expense, customer, settled_date, settle_note, current_user_id=None):
     """Create/update linked CreditSale for credit settle; returns (sale, customers_to_recalc)."""
     from app.tenancy import stamp_agency
+    from app.utils import expense_settle_remark
 
     amount = float(expense.amount or 0)
-    remark = _expense_settle_remark(expense.name, settle_note)
+    remark = expense_settle_remark(expense.name, settle_note)
     touched = set()
     old_customer_id = expense.settle_customer_id
     cs = None
