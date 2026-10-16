@@ -54,7 +54,10 @@ def _category_choices():
 @purchasing_bp.route('/', methods=['GET'])
 @login_required
 def index():
-    period, start, end = parse_period(request.args)
+    if not request.args:
+        return redirect(url_for('purchasing.index', period='all'))
+
+    period, start, end = parse_period(request.args, default_period='all')
     category = (request.args.get('category') or 'all').strip().lower()
     status = (request.args.get('status') or 'all').strip().lower()
     if status not in dict(STATUS_CHOICES):

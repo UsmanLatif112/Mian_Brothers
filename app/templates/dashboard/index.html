@@ -52,36 +52,6 @@
         <div class="page-header-text">
             <p class="page-eyebrow">Home</p>
             <h1 class="page-title">Dashboard</h1>
-            <p class="page-subtitle mb-0">
-                {% if working_date_active %}
-                Working as <strong>{{ working_date }}</strong>
-                <span class="text-muted-custom">(calendar {{ calendar_today }})</span>
-                — “Today” everywhere uses this date.
-                {% else %}
-                Set a working date to treat that day as “Today” for sales, journal, and reports.
-                {% endif %}
-            </p>
-        </div>
-        <div class="page-header-actions">
-            <form method="GET" action="{{ url_for('dashboard.index') }}" class="working-date-form" id="working-date-form">
-                <input type="hidden" name="period" value="today">
-                <label class="working-date-label" for="dash-working-date">Working date</label>
-                <div class="working-date-controls">
-                    <input type="date" id="dash-working-date" name="working_date"
-                           class="form-control form-control-custom working-date-input"
-                           value="{{ working_date }}" required
-                           title="This day becomes Today for the whole app">
-                    <button type="submit" class="btn btn-primary-custom" title="Apply working date">
-                        <i class="bi bi-calendar-check me-1"></i><span class="btn-label"> Set as Today</span>
-                    </button>
-                    {% if working_date_active %}
-                    <a href="{{ url_for('dashboard.index', clear_working_date=1, period='today') }}"
-                       class="btn btn-outline-secondary" title="Use real calendar date">
-                        Reset
-                    </a>
-                    {% endif %}
-                </div>
-            </form>
         </div>
     </div>
 </header>

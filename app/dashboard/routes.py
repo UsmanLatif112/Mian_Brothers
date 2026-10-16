@@ -388,7 +388,7 @@ def index():
         args.pop('clear_working_date', None)
         args.pop('working_date', None)
         if 'period' not in args:
-            args['period'] = 'today'
+            args['period'] = 'all'
         return redirect(url_for('dashboard.index', **args))
 
     wd_raw = (request.args.get('working_date') or '').strip()
@@ -404,17 +404,17 @@ def index():
             set_working_date(day)
         args = request.args.to_dict(flat=True)
         args.pop('working_date', None)
-        # After setting a working day, default view to that day’s “Today”
+        # After setting a working day, jump to that day’s “Today” view
         if 'period' not in request.args:
             args['period'] = 'today'
         else:
-            args['period'] = request.args.get('period') or 'today'
+            args['period'] = request.args.get('period') or 'all'
         return redirect(url_for('dashboard.index', **args))
 
     if not request.args:
-        return redirect(url_for('dashboard.index', period='today'))
+        return redirect(url_for('dashboard.index', period='all'))
 
-    period, start, end = parse_period(request.args, default_period='today')
+    period, start, end = parse_period(request.args, default_period='all')
     stats = compute_period_stats(
         start, end, _models_ns(),
         include_opening_credit=(period == 'all'),

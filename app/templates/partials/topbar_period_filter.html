@@ -3,10 +3,23 @@
     {% if search is defined and search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
     {% if entry_type is defined and entry_type and entry_type != 'all' %}<input type="hidden" name="entry_type" value="{{ entry_type }}">{% endif %}
     {% if show_working_date %}
-    <div class="topbar-working-wrap {% if working_date_active %}is-active{% endif %}" title="Working date acts as Today app-wide">
-        <label class="topbar-working-date-label" for="topbar-working-date">Working</label>
-        <input type="date" id="topbar-working-date" name="working_date" class="form-control form-control-custom topbar-filter-date topbar-working-date"
-               value="{{ working_date }}" aria-label="Working date">
+    <div class="topbar-working {% if working_date_active %}is-active{% endif %}"
+         title="{% if working_date_active %}Working as {{ working_date }} (calendar {{ calendar_today }}){% else %}Pick a date to use as Today app-wide{% endif %}">
+        <span class="topbar-working-icon" aria-hidden="true"><i class="bi bi-calendar3"></i></span>
+        <div class="topbar-working-body">
+            <label class="topbar-working-label" for="topbar-working-date">
+                {% if working_date_active %}Working as Today{% else %}Working date{% endif %}
+            </label>
+            <input type="date" id="topbar-working-date" name="working_date"
+                   class="form-control form-control-custom topbar-working-input"
+                   value="{{ working_date }}" aria-label="Working date">
+        </div>
+        {% if working_date_active %}
+        <a href="{{ url_for('dashboard.index', clear_working_date=1, period=period or 'all') }}"
+           class="topbar-working-reset" title="Reset to calendar today" aria-label="Reset working date">
+            <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
     </div>
     {% endif %}
     <select name="period" id="period-select" class="form-select form-control-custom topbar-filter-select" aria-label="Period">
@@ -55,7 +68,16 @@
     });
     const wd = document.getElementById('topbar-working-date');
     if (wd) {
-        wd.addEventListener('change', () => form.submit());
+        wd.addEventListener('change', () => {
+            const params = new URLSearchParams(new FormData(form));
+            params.set('period', 'today');
+            params.delete('start_date');
+            params.delete('end_date');
+            const qs = params.toString();
+            const url = form.getAttribute('action') || window.location.pathname;
+            if (window.ofNavigate) window.ofNavigate(url + (qs ? '?' + qs : ''), 'Loading…');
+            else window.location.href = url + (qs ? '?' + qs : '');
+        });
     }
 })();
 </script>

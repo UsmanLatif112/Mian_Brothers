@@ -115,6 +115,9 @@ def _sales_redirect():
 @login_required
 def index():
     today = _today()
+    if request.method == 'GET' and not request.args:
+        return redirect(url_for('sales.index', period='today'))
+
     if request.method == 'GET':
         args = request.args.to_dict()
     else:
@@ -123,10 +126,9 @@ def index():
             'start_date': request.form.get('start_date') or request.args.get('start_date'),
             'end_date': request.form.get('end_date') or request.args.get('end_date'),
         }
-    # Keep Sales aligned with Account: default to today so Cash in Hand matches.
     if not (args.get('period') or '').strip():
         args['period'] = 'today'
-    period, start, end = parse_period(args)
+    period, start, end = parse_period(args, default_period='today')
 
     if request.method == 'POST':
         action = request.form.get('action', 'meter_sale')

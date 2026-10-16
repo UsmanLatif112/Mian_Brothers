@@ -377,41 +377,113 @@ body.sidebar-open .sidebar-backdrop {
     border-radius: 10px !important;
 }
 
-.topbar-working-wrap {
+.topbar-working {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.15rem 0.4rem 0.15rem 0.55rem;
-    border-radius: 10px;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.2rem 0.35rem 0.2rem 0.4rem;
+    border-radius: 12px;
     border: 1px solid var(--border-color);
-    background: var(--card-bg);
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--card-bg) 92%, #fff) 0%, var(--card-bg) 100%);
+    box-shadow: 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.topbar-working-wrap.is-active {
-    border-color: color-mix(in srgb, var(--accent-blue) 45%, var(--border-color));
-    background: color-mix(in srgb, var(--accent-blue) 10%, var(--card-bg));
+.topbar-working.is-active {
+    border-color: color-mix(in srgb, var(--accent-blue) 50%, var(--border-color));
+    background:
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--accent-blue) 14%, var(--card-bg)) 0%,
+            color-mix(in srgb, var(--accent-blue) 6%, var(--card-bg)) 100%);
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent-blue) 18%, transparent),
+        0 1px 0 color-mix(in srgb, #fff 40%, transparent) inset;
 }
 
-.topbar-working-date-label {
+.topbar-working-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--border-color) 55%, transparent);
+    font-size: 0.85rem;
+}
+
+.topbar-working.is-active .topbar-working-icon {
+    color: #fff;
+    background: var(--accent-blue);
+}
+
+.topbar-working-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    min-width: 0;
+    line-height: 1.05;
+}
+
+.topbar-working-label {
     margin: 0;
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    padding: 0 0.15rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-secondary);
     white-space: nowrap;
 }
 
-.topbar-working-wrap.is-active .topbar-working-date-label {
+.topbar-working.is-active .topbar-working-label {
     color: var(--accent-blue);
 }
 
-.topbar-working-date {
-    min-width: 8.5rem;
+.topbar-working-input {
+    width: 8.75rem;
+    min-width: 0;
+    height: 22px !important;
+    padding: 0 0.15rem !important;
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
-    height: 32px;
+    font-size: 0.8rem !important;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.topbar-working-input:focus {
+    outline: none;
+    box-shadow: none !important;
+}
+
+.topbar-working-reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin-right: 0.1rem;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    background: color-mix(in srgb, var(--card-bg) 70%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-blue) 20%, var(--border-color));
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.topbar-working-reset:hover {
+    color: #b91c1c;
+    border-color: color-mix(in srgb, #ef4444 35%, var(--border-color));
+    background: color-mix(in srgb, #ef4444 10%, var(--card-bg));
 }
 
 .working-date-chip {
@@ -432,52 +504,6 @@ body.sidebar-open .sidebar-backdrop {
 .working-date-chip:hover {
     color: var(--accent-blue);
     background: color-mix(in srgb, var(--accent-blue) 18%, var(--card-bg));
-}
-
-.working-date-form {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.35rem;
-}
-
-.working-date-label {
-    margin: 0;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-}
-
-.working-date-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.45rem;
-}
-
-.working-date-input {
-    width: 10.5rem;
-    height: 38px;
-}
-
-@media (max-width: 767.98px) {
-    .working-date-form {
-        align-items: stretch;
-        width: 100%;
-    }
-
-    .working-date-controls {
-        justify-content: stretch;
-    }
-
-    .working-date-input {
-        flex: 1 1 auto;
-        width: auto;
-        min-width: 0;
-    }
 }
 
 .topbar-date-sep {
@@ -538,11 +564,19 @@ body.sidebar-open .sidebar-backdrop {
         flex-wrap: wrap;
     }
 
-    .topbar-filters .topbar-filter-date,
-    .topbar-filters .topbar-working-date {
+    .topbar-filters .topbar-filter-date {
         flex: 1 1 auto;
         width: auto;
         min-width: 0;
+    }
+
+    .topbar-filters .topbar-working {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .topbar-filters .topbar-working-input {
+        width: 100%;
     }
 }
 
