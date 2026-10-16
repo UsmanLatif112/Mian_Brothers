@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.pricing import pricing_bp
 from app.models import db, FuelType, FuelPrice, OtherItem, ItemPriceLog
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
-from app.utils import parse_form_datetime, fuel_rate_for
+from app.utils import parse_form_datetime, fuel_rate_for, business_today
 from datetime import datetime
 
 
@@ -172,14 +172,15 @@ def index():
             or search_q in (i.company or '').lower()
         ]
 
-    now = datetime.utcnow().replace(second=0, microsecond=0)
+    clock = datetime.utcnow().replace(second=0, microsecond=0)
+    now_local = datetime.combine(business_today(), clock.time())
     return render_template(
         'pricing/index.html',
         fuel_types=fuel_types,
         shop_items=shop_items,
         current_fuel_prices=current_fuel_prices,
         price_history=price_history[:100],
-        today=now.date().isoformat(),
-        now_local=now.strftime('%Y-%m-%dT%H:%M'),
+        today=business_today().isoformat(),
+        now_local=now_local.strftime('%Y-%m-%dT%H:%M'),
         search=search_q,
     )

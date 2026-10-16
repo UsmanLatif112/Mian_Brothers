@@ -7,7 +7,7 @@ from app.models import (
     ShopCategory, ShopCategoryOption,
 )
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
-from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for
+from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for, business_today
 from app.vendors.service import (
     link_purchase_to_vendor,
     resolve_vendor,
@@ -83,7 +83,7 @@ def _apply_product_sale_price(category, sale_val, company=None, item_type=None, 
             other_item_id=item.id,
             sale_price=sale_val,
             cost_price=cost_val if cost_val is not None else item.cost_price,
-            effective_date=effective_date or datetime.utcnow().date(),
+            effective_date=effective_date or business_today(),
             updated_by=current_user.id,
         )))
         updated += 1
@@ -557,7 +557,7 @@ def index():
         shop_items=shop_items,
         shop_pagination=shop_pagination,
         vendors=vendors,
-        today=datetime.utcnow().date().isoformat(),
+        today=business_today().isoformat(),
         chart_series=inventory_listing_series(),
         search=search_q,
         needs_default_fuels=needs_default_fuels,
@@ -637,7 +637,7 @@ def edit_item(item_id):
             other_item_id=item.id,
             sale_price=sale_val,
             cost_price=cost_val,
-            effective_date=datetime.utcnow().date(),
+            effective_date=business_today(),
             updated_by=current_user.id,
         )))
 

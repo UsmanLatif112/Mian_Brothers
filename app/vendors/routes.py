@@ -7,7 +7,7 @@ from app.models import db, Vendor, VendorPayment, ItemPurchaseLog
 from app.tenancy import (
     apply_agency_filter, require_agency_access, stamp_agency, is_agency_manager,
 )
-from app.utils import paginate, parse_form_date, datetime_from_date
+from app.utils import paginate, parse_form_date, datetime_from_date, business_today
 from app.vendors import vendors_bp
 from app.vendors.service import (
     normalize_vendor_name,
@@ -235,7 +235,7 @@ def index():
         vendor_linked=vendor_linked,
         search=search_query,
         filter=status_filter,
-        today=datetime.utcnow().date().isoformat(),
+        today=business_today().isoformat(),
         chart_series=vendors_listing_series(),
     )
 
@@ -494,7 +494,7 @@ def ledger(vendor_id):
         total_paid=total_paid,
         entry_filter=entry_filter,
         search=search_q,
-        today=datetime.utcnow().date().isoformat(),
+        today=business_today().isoformat(),
         chart_series=vendor_ledger_pie(
             total_purchased,
             total_paid,

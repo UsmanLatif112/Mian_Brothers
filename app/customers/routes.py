@@ -5,7 +5,7 @@ from app.models import db, Customer, Sale, Payment, CreditSale
 from app.tenancy import (
     apply_agency_filter, require_agency_access, stamp_agency, is_agency_manager,
 )
-from app.utils import paginate, parse_form_date, datetime_from_date
+from app.utils import paginate, parse_form_date, datetime_from_date, business_today
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
 )
@@ -255,7 +255,7 @@ def index():
         customer_linked=customer_linked,
         search=search_query,
         filter=status_filter,
-        today=datetime.utcnow().date().isoformat(),
+        today=business_today().isoformat(),
         opening_dates=opening_dates,
         chart_series=customers_listing_series(),
     )
@@ -623,7 +623,7 @@ def ledger(customer_id):
         total_received=total_received,
         entry_filter=entry_filter,
         search=search_q,
-        today=datetime.utcnow().date().isoformat(),
+        today=business_today().isoformat(),
         chart_series=customer_ledger_pie(ledger_entries),
     )
 

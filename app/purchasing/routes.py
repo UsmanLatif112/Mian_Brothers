@@ -8,7 +8,10 @@ from sqlalchemy import or_
 from app.purchasing import purchasing_bp
 from app.models import db, ItemPurchaseLog, Vendor
 from app.tenancy import apply_agency_filter, require_agency_access
-from app.utils import paginate, parse_period, PERIOD_CHOICES, parse_form_date, datetime_from_date
+from app.utils import (
+    paginate, parse_period, PERIOD_CHOICES, parse_form_date, datetime_from_date,
+    business_today,
+)
 from app.vendors.service import (
     resolve_vendor,
     purchase_log_total,
@@ -127,7 +130,7 @@ def index():
         status=status,
         status_choices=STATUS_CHOICES,
         search=search_q,
-        today=datetime.utcnow().date().isoformat(),
+        today=business_today().isoformat(),
     )
 
 

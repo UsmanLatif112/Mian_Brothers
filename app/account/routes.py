@@ -48,7 +48,8 @@ def _enrich_taken_rows(rows):
 
 
 def _today():
-    return datetime.utcnow().date()
+    from app.utils import business_today
+    return business_today()
 
 
 def _models_ns():

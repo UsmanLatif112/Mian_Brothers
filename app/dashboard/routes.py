@@ -666,7 +666,7 @@ def _top_credit_customers(limit=200000):
     Customers with current_balance_due > limit, highest due first.
     Also attaches oldest unpaid sale/loan date and last payment for display.
     """
-    today = datetime.utcnow().date()
+    today = business_today()
     rows = []
 
     candidates = (
@@ -733,9 +733,9 @@ def reports():
     end_date_str = request.form.get('end_date', '')
 
     if not start_date_str:
-        start_date_str = (datetime.utcnow().date() - timedelta(days=30)).strftime('%Y-%m-%d')
+        start_date_str = (business_today() - timedelta(days=30)).strftime('%Y-%m-%d')
     if not end_date_str:
-        end_date_str = datetime.utcnow().date().strftime('%Y-%m-%d')
+        end_date_str = business_today().strftime('%Y-%m-%d')
 
     start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
     end_dt = datetime.combine(datetime.strptime(end_date_str, '%Y-%m-%d').date(), datetime.max.time())

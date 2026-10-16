@@ -103,9 +103,10 @@ def parse_form_date(raw, default=None):
 
 def parse_form_datetime(raw, default=None):
     """Parse YYYY-MM-DDTHH:MM or YYYY-MM-DD HH:MM[:SS] from a form field."""
-    now = datetime.utcnow().replace(microsecond=0)
+    clock = datetime.utcnow().replace(microsecond=0)
+    today = business_today()
     if default is None:
-        default = now
+        default = datetime.combine(today, clock.time())
     raw = (raw or '').strip()
     if not raw:
         return default
@@ -114,8 +115,8 @@ def parse_form_datetime(raw, default=None):
         try:
             parsed = datetime.strptime(raw, fmt)
             if fmt == '%Y-%m-%d':
-                if parsed.date() == now.date():
-                    return now
+                if parsed.date() == today:
+                    return datetime.combine(today, clock.time())
                 return datetime.combine(parsed.date(), time.min)
             return parsed
         except ValueError:

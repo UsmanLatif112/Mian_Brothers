@@ -133,6 +133,8 @@ def create_app():
             'is_agency_manager': is_agency_manager(),
             'can_access_module': can_access_module,
             'ops_modules': OPS_MODULES,
+            # Form defaults use operational “today” (working date when set)
+            'today': wd.isoformat(),
             'working_date': wd.isoformat(),
             'calendar_today': cal.isoformat(),
             'working_date_active': wd != cal,
