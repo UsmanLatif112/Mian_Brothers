@@ -4,20 +4,16 @@
     {% if entry_type is defined and entry_type and entry_type != 'all' %}<input type="hidden" name="entry_type" value="{{ entry_type }}">{% endif %}
     {% if show_working_date %}
     <div class="topbar-working {% if working_date_active %}is-active{% endif %}"
-         title="{% if working_date_active %}Working as {{ working_date }} (calendar {{ calendar_today }}){% else %}Pick a date to use as Today app-wide{% endif %}">
-        <span class="topbar-working-icon" aria-hidden="true"><i class="bi bi-calendar3"></i></span>
-        <div class="topbar-working-body">
-            <label class="topbar-working-label" for="topbar-working-date">
-                {% if working_date_active %}Working as Today{% else %}Working date{% endif %}
-            </label>
-            <input type="date" id="topbar-working-date" name="working_date"
-                   class="form-control form-control-custom topbar-working-input"
-                   value="{{ working_date }}" aria-label="Working date">
-        </div>
+         title="{% if working_date_active %}Working as {{ working_date }} · calendar {{ calendar_today }}{% else %}Set working date (acts as Today app-wide){% endif %}">
+        <i class="bi bi-calendar2-week topbar-working-glyph" aria-hidden="true"></i>
+        <label class="visually-hidden" for="topbar-working-date">Working date</label>
+        <input type="date" id="topbar-working-date" name="working_date"
+               class="form-control form-control-custom topbar-working-input"
+               value="{{ working_date }}" aria-label="Working date">
         {% if working_date_active %}
         <a href="{{ url_for('dashboard.index', clear_working_date=1, period=period or 'all') }}"
            class="topbar-working-reset" title="Reset to calendar today" aria-label="Reset working date">
-            <i class="bi bi-x-lg"></i>
+            <i class="bi bi-x"></i>
         </a>
         {% endif %}
     </div>

@@ -377,85 +377,56 @@ body.sidebar-open .sidebar-backdrop {
     border-radius: 10px !important;
 }
 
+/* Same height/radius as period select — single-line, no stacked label */
 .topbar-working {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    min-height: 40px;
-    padding: 0.2rem 0.35rem 0.2rem 0.4rem;
-    border-radius: 12px;
+    gap: 0.3rem;
+    height: 36px;
+    padding: 0 0.3rem 0 0.55rem;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
-    background:
-        linear-gradient(180deg, color-mix(in srgb, var(--card-bg) 92%, #fff) 0%, var(--card-bg) 100%);
-    box-shadow: 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
-    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    background: var(--card-bg);
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.topbar-working:hover {
+    border-color: color-mix(in srgb, var(--accent-blue) 35%, var(--border-color));
 }
 
 .topbar-working.is-active {
-    border-color: color-mix(in srgb, var(--accent-blue) 50%, var(--border-color));
-    background:
-        linear-gradient(135deg,
-            color-mix(in srgb, var(--accent-blue) 14%, var(--card-bg)) 0%,
-            color-mix(in srgb, var(--accent-blue) 6%, var(--card-bg)) 100%);
-    box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--accent-blue) 18%, transparent),
-        0 1px 0 color-mix(in srgb, #fff 40%, transparent) inset;
+    border-color: color-mix(in srgb, var(--accent-blue) 45%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-blue) 8%, var(--card-bg));
 }
 
-.topbar-working-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+.topbar-working-glyph {
     flex-shrink: 0;
-    color: var(--text-secondary);
-    background: color-mix(in srgb, var(--border-color) 55%, transparent);
     font-size: 0.85rem;
-}
-
-.topbar-working.is-active .topbar-working-icon {
-    color: #fff;
-    background: var(--accent-blue);
-}
-
-.topbar-working-body {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    min-width: 0;
-    line-height: 1.05;
-}
-
-.topbar-working-label {
-    margin: 0;
-    padding: 0 0.15rem;
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
     color: var(--text-secondary);
-    white-space: nowrap;
+    line-height: 1;
 }
 
-.topbar-working.is-active .topbar-working-label {
+.topbar-working.is-active .topbar-working-glyph {
     color: var(--accent-blue);
 }
 
 .topbar-working-input {
-    width: 8.75rem;
+    width: 7.6rem;
     min-width: 0;
-    height: 22px !important;
-    padding: 0 0.15rem !important;
+    height: 32px !important;
+    padding: 0 !important;
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
-    font-size: 0.8rem !important;
-    font-weight: 600;
+    font-size: 0.78rem !important;
+    font-weight: 500;
     color: var(--text-primary);
-    line-height: 1.2;
+    line-height: 1;
+}
+
+.topbar-working.is-active .topbar-working-input {
+    color: var(--accent-blue);
+    font-weight: 600;
 }
 
 .topbar-working-input:focus {
@@ -467,23 +438,21 @@ body.sidebar-open .sidebar-backdrop {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    margin-right: 0.1rem;
-    border-radius: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
     color: var(--text-secondary);
     text-decoration: none;
-    background: color-mix(in srgb, var(--card-bg) 70%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent-blue) 20%, var(--border-color));
-    font-size: 0.7rem;
+    font-size: 0.85rem;
     flex-shrink: 0;
-    transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    opacity: 0.7;
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
 .topbar-working-reset:hover {
-    color: #b91c1c;
-    border-color: color-mix(in srgb, #ef4444 35%, var(--border-color));
-    background: color-mix(in srgb, #ef4444 10%, var(--card-bg));
+    opacity: 1;
+    color: #e11d48;
+    background: color-mix(in srgb, #e11d48 10%, transparent);
 }
 
 .working-date-chip {
@@ -573,10 +542,12 @@ body.sidebar-open .sidebar-backdrop {
     .topbar-filters .topbar-working {
         grid-column: 1 / -1;
         width: 100%;
+        justify-content: flex-start;
     }
 
     .topbar-filters .topbar-working-input {
-        width: 100%;
+        flex: 1 1 auto;
+        width: auto;
     }
 }
 
