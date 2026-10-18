@@ -707,7 +707,7 @@ def index():
     )
     stats = compute_period_stats(
         start, end, models_ns,
-        include_opening_credit=True,
+        include_opening_credit=False,
     )
 
     day_cash = apply_agency_filter(

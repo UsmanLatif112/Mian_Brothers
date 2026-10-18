@@ -1288,7 +1288,11 @@ def build_period_cash_entries(stats):
     AUTO_INV_PAY = 'Paid with inventory purchase:'
     vendor_payments = list(stats.get('vendor_payments') or [])
     absorbed_vendor_pay_ids = set()
-    from app.vendors.service import purchase_log_payment_status
+    from app.vendors.service import (
+        purchase_log_payment_status,
+        counts_toward_purchase_kpis,
+        payment_counts_toward_cash,
+    )
     from app.models import VendorPayment as _VendorPayment
 
     def _match_inventory_auto_payment(log, amount):
@@ -1330,7 +1334,10 @@ def build_period_cash_entries(stats):
 
     # Every inventory add = purchasing → journal OUT (paid or unpaid).
     # Paid-with-purchase auto payments are absorbed so we don't double-count.
+    # Skip opening stock ("Open for previous" / no vendor) + expense settles.
     for log in stats.get('purchase_logs') or []:
+        if not counts_toward_purchase_kpis(log):
+            continue
         amt = purchase_log_total(log)
         if amt <= 0:
             continue
@@ -1374,6 +1381,9 @@ def build_period_cash_entries(stats):
 
     for vp in vendor_payments:
         if vp.id in absorbed_vendor_pay_ids:
+            continue
+        # Opening-vendor ("Open for previous") payments stay out of journal
+        if not payment_counts_toward_cash(vp):
             continue
         pay_dt = vp.payment_date
         sale_date = pay_dt.date() if hasattr(pay_dt, 'date') else pay_dt
