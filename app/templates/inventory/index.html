@@ -153,18 +153,18 @@
                             <div class="directory-card-info">
                                 <div class="directory-card-title of-clip" data-of-tip="{{ item.name }}">{{ item.name }}</div>
                                 <div class="directory-card-meta">
-                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.category == 'other' and item.tracks_liters() %}Other · L{% elif item.category == 'other' %}Other{% elif item.tracks_liters() %}{{ item.category }} · L{% else %}{{ item.category }}{% endif %}</span>
+                                    <span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.category == 'other' %}Other{% elif item.tracks_liters() %}{{ item.category }} · L{% else %}{{ item.category }}{% endif %}</span>
                                     {% if item.company %}<span class="of-clip" data-of-tip="{{ item.company }}">{{ item.company }}</span>{% endif %}
                                     {% if item.item_type %}<span class="of-item-type of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
                                 </div>
-                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}{% if item.tracks_liters() %} · {{ (item.liters or 0) | num(2) }} L{% else %} · Qty {{ item.quantity }}{% endif %}">
+                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}{% if item.tracks_liters() %} · {{ (item.liters or 0) | num }} L{% else %} · Qty {{ item.quantity }}{% if item.liters %} · {{ item.liters | num }} L{% endif %}{% endif %}">
                                     Vendor: {{ item.vendor or '—' }}
                                     · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %}
                                     · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}
                                     {% if item.tracks_liters() %}
-                                    · {{ (item.liters or 0) | num(2) }} L
+                                    · {{ (item.liters or 0) | num }} L
                                     {% else %}
-                                    · Qty {{ item.quantity }}
+                                    · Qty {{ item.quantity }}{% if item.liters %} · {{ item.liters | num }} L{% endif %}
                                     {% endif %}
                                 </div>
                             </div>
@@ -226,14 +226,14 @@
                         {% if shop_items %}
                             {% for item in shop_items %}
                             <tr>
-                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.category == 'other' and item.tracks_liters() %}Other · L{% elif item.category == 'other' %}Other{% elif item.tracks_liters() %}{{ item.category }} · L{% else %}{{ item.category }}{% endif %}</span></td>
+                                <td><span class="badge badge-custom bg-secondary text-uppercase">{% if item.category == 'ft_mobile' %}FT Mobile Oil{% elif item.category == 'other' %}Other{% elif item.tracks_liters() %}{{ item.category }} · L{% else %}{{ item.category }}{% endif %}</span></td>
                                 <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ item.name }}">{{ item.name }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.company or '-' }}">{{ item.company or '-' }}</span></td>
                                 <td class="of-item-type"><span class="of-clip-cell" data-of-tip="{{ item.item_type or '-' }}">{{ item.item_type or '-' }}</span></td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.vendor or '-' }}">{{ item.vendor or '-' }}</span></td>
                                 <td>{{ item.cost_price | money }}{% if item.tracks_liters() %}<small class="text-muted-custom">/L</small>{% endif %}</td>
                                 <td>{{ item.sale_price | money }}{% if item.tracks_liters() %}<small class="text-muted-custom">/L</small>{% endif %}</td>
-                                <td class="fw-bold">{% if item.tracks_liters() %}{{ (item.liters or 0) | num(2) }} L{% elif item.liters is not none %}{{ item.liters | num(2) }}{% else %}—{% endif %}</td>
+                                <td class="fw-bold">{% if item.tracks_liters() %}{{ (item.liters or 0) | num }} L{% elif item.liters %}{{ item.liters | num }} L{% else %}—{% endif %}</td>
                                 <td>{% if item.tracks_liters() %}<span class="text-muted-custom">—</span>{% else %}<span class="fw-bold">{{ item.quantity }}</span>{% endif %}</td>
                                 <td class="text-end">
                                     <div class="btn-group gap-1">
@@ -353,15 +353,6 @@
                             <input type="text" class="form-control form-control-custom" id="item_name" name="item_name" placeholder="e.g. Havoline, Filter 480, Grease">
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" data-show="other">
-                            <label for="stock_unit" class="form-label form-label-custom">Unit</label>
-                            <select class="form-select form-control-custom" id="stock_unit" name="stock_unit">
-                                <option value="qty" selected>Pieces (qty)</option>
-                                <option value="liters">Liters</option>
-                            </select>
-                            <small class="text-muted-custom">Oils / bulk liquid → Liters. Filters, bottles, grease → Pieces.</small>
-                        </div>
-
                         {# Custom categories — company / type / name #}
                         <div class="col-12 col-md-6 field-group d-none" id="custom_company_wrap" data-show="custom">
                             <label for="custom_company" class="form-label form-label-custom">Company / Brand</label>
@@ -442,14 +433,22 @@
                             </div>
                         </div>
 
-                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel ft_mobile other_liters custom_liters">
+                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="other custom_qty">
+                            <label for="quantity" class="form-label form-label-custom">Quantity (packs / pcs)</label>
+                            <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="e.g. 5">
+                        </div>
+
+                        <div class="col-12 col-md-6 field-group d-none" id="liters_field_wrap" data-show="fuel ft_mobile other custom_liters">
                             <label for="liters" class="form-label form-label-custom">
                                 <span class="liters-label">Liters</span>
                             </label>
                             <div class="input-group">
-                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="e.g. 1000">
+                                <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="liters" name="liters" placeholder="e.g. 25">
                                 <span class="input-group-text">L</span>
                             </div>
+                            <small class="text-muted-custom d-none" id="other_liters_hint">
+                                Optional — e.g. 5 packs of 5&nbsp;L → qty 5, liters 25.
+                            </small>
                         </div>
 
                         <div class="col-12 field-group d-none" data-show="fuel ft_mobile other custom">
@@ -458,13 +457,8 @@
                                     <span class="text-muted-custom">This purchase batch total</span>
                                     <strong>PKR <span id="batch_cost_total">0.00</span></strong>
                                 </div>
-                                <small class="text-muted-custom">Example: 1000 L × 200 = 200,000 · next buy 2000 L × 250 = 500,000 (two Purchasing rows).</small>
+                                <small class="text-muted-custom">Batch total = cost × quantity (or liters for fuel / FT).</small>
                             </div>
-                        </div>
-
-                        <div class="col-12 col-md-6 field-group d-none" id="quantity_field_wrap" data-show="other_qty custom_qty">
-                            <label for="quantity" class="form-label form-label-custom">Quantity</label>
-                            <input type="number" step="1" min="1" class="form-control form-control-custom" id="quantity" name="quantity" placeholder="Enter quantity">
                         </div>
                     </div>
 
@@ -593,11 +587,6 @@
         { select: 'custom_company', wrap: 'custom_company_other_wrap', input: 'custom_company_other', match: 'Other' },
         { select: 'custom_type', wrap: 'custom_type_other_wrap', input: 'custom_type_other', match: 'Other' },
     ];
-
-    const otherStockUnit = () => {
-        const el = document.getElementById('stock_unit');
-        return (el && el.value) || 'qty';
-    };
 
     const syncOtherNameFields = () => {
         const cat = categorySelect.value;
@@ -835,17 +824,9 @@
 
         document.querySelectorAll('#add-item-form .field-group').forEach(el => {
             const showFor = (el.dataset.show || '').split(/\s+/).filter(Boolean);
-            const otherLiters = cat === 'other' && otherStockUnit() === 'liters';
-            const otherQty = cat === 'other' && otherStockUnit() === 'qty';
             const customLiters = isCustom && unit === 'liters';
             const customQty = isCustom && unit === 'qty';
             let visible = cat && showFor.includes(showKey);
-            if (showFor.includes('other_liters')) {
-                visible = otherLiters;
-            }
-            if (showFor.includes('other_qty')) {
-                visible = otherQty;
-            }
             if (showFor.includes('custom_liters')) {
                 visible = customLiters;
             }
@@ -853,10 +834,10 @@
                 visible = customQty;
             }
             if (el.id === 'liters_field_wrap') {
-                visible = cat === 'fuel' || cat === 'ft_mobile' || otherLiters || customLiters;
+                visible = cat === 'fuel' || cat === 'ft_mobile' || cat === 'other' || customLiters;
             }
             if (el.id === 'quantity_field_wrap') {
-                visible = otherQty || customQty;
+                visible = cat === 'other' || customQty;
             }
             el.classList.toggle('d-none', !visible);
 
@@ -867,10 +848,8 @@
                 if (['cost_price', 'sale_price', 'vendor_id', 'payment_status'].includes(input.id)
                     || (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id))
                     || (cat === 'ft_mobile' && ['ft_mobile_company', 'liters'].includes(input.id))
-                    || (cat === 'other' && ['item_name', 'stock_unit'].includes(input.id))
+                    || (cat === 'other' && ['item_name', 'quantity'].includes(input.id))
                     || (isCustom && input.id === 'custom_item_name')
-                    || (otherLiters && input.id === 'liters')
-                    || (otherQty && input.id === 'quantity')
                     || (customLiters && input.id === 'liters')
                     || (customQty && input.id === 'quantity')) {
                     input.required = true;
@@ -879,8 +858,17 @@
         });
 
         const litersLabel = document.querySelector('.liters-label');
+        const otherLitersHint = document.getElementById('other_liters_hint');
         if (litersLabel) {
-            litersLabel.textContent = 'Liters';
+            litersLabel.textContent = cat === 'other' ? 'Liters (optional)' : 'Liters';
+        }
+        if (otherLitersHint) {
+            otherLitersHint.classList.toggle('d-none', cat !== 'other');
+        }
+        const litersInput = document.getElementById('liters');
+        if (litersInput) {
+            litersInput.min = cat === 'other' ? '0' : '0.01';
+            litersInput.placeholder = cat === 'other' ? 'e.g. 25 (optional)' : 'e.g. 1000';
         }
         updateBatchTotal();
         syncOtherNameFields();
@@ -894,9 +882,7 @@
         const isCustom = cat && !SYSTEM_CATS.has(cat);
         const cost = Number(document.getElementById('cost_price')?.value || 0);
         let qty = 0;
-        if (cat === 'fuel' || cat === 'ft_mobile'
-            || (cat === 'other' && otherStockUnit() === 'liters')
-            || (isCustom && unit === 'liters')) {
+        if (cat === 'fuel' || cat === 'ft_mobile' || (isCustom && unit === 'liters')) {
             qty = Number(document.getElementById('liters')?.value || 0);
         } else {
             qty = Number(document.getElementById('quantity')?.value || 0);
@@ -925,7 +911,7 @@
     const modalTitle = document.getElementById('addInventoryModalLabel');
     const submitBtn = document.getElementById('submit-btn');
     const PRODUCT_LOCK_IDS = [
-        'fuel_type_id', 'ft_mobile_company', 'item_name', 'stock_unit',
+        'fuel_type_id', 'ft_mobile_company', 'item_name',
         'ft_mobile_company_other', 'custom_company', 'custom_type',
         'custom_item_name', 'custom_company_other', 'custom_type_other',
     ];
@@ -1059,8 +1045,6 @@
             if (cat !== 'other') setCategoryValue('other');
             const nameEl = document.getElementById('item_name');
             if (nameEl) nameEl.value = d.item || '';
-            const unitEl = document.getElementById('stock_unit');
-            if (unitEl) unitEl.value = (d.stockUnit === 'liters') ? 'liters' : 'qty';
             syncVisibleFields();
         } else if (cat) {
             setNamedSelect('custom_company', 'custom_company_other', d.company);
@@ -1166,7 +1150,6 @@
     });
 
     categorySelect.addEventListener('change', syncVisibleFields);
-    document.getElementById('stock_unit')?.addEventListener('change', syncVisibleFields);
     otherPairs.forEach(({ select }) => {
         const sel = document.getElementById(select);
         if (sel) sel.addEventListener('change', syncOtherNameFields);

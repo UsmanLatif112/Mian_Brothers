@@ -361,12 +361,8 @@ def index():
         liters_raw = request.form.get('liters')
         is_custom = category not in ('fuel', 'ft_mobile', 'other')
         cat_unit = ((cat_row.unit_mode if cat_row else None) or 'qty').lower()
-        # Other: pieces/liters chosen on the form; custom uses category unit_mode
-        stock_unit = (request.form.get('stock_unit') or '').strip().lower()
-        if is_custom:
-            stock_unit = 'liters' if cat_unit == 'liters' else 'qty'
-        elif stock_unit not in ('qty', 'liters'):
-            stock_unit = 'qty'
+        # Other is always qty (+ optional liters). Custom follows category unit_mode.
+        stock_unit = 'liters' if (is_custom and cat_unit == 'liters') else 'qty'
 
         item_name = (request.form.get('item_name') or request.form.get('item_name_custom') or '').strip()
         if not item_name:
@@ -378,7 +374,7 @@ def index():
                 flash('Item name is required.', 'danger')
                 return redirect(url_for('inventory.index'))
 
-        # Liters stock: Other (unit=Liters) or custom category with unit_mode=liters
+        # Custom liters-only categories (not Other)
         if stock_unit == 'liters' and category != 'ft_mobile':
             try:
                 liters_val = float(liters_raw)
@@ -443,8 +439,8 @@ def index():
             create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
             db.session.commit()
             flash(
-                f"Purchase logged: {liters_val:,.2f}L {item_name} "
-                f"(stock now {float(shop_item.liters):,.2f}L).",
+                f"Purchase logged: {liters_val:g}L {item_name} "
+                f"(stock now {float(shop_item.liters):g}L).",
                 'success',
             )
             return redirect(url_for('inventory.index'))
@@ -457,13 +453,27 @@ def index():
             flash(f'Invalid quantity: {e}', 'danger')
             return redirect(url_for('inventory.index'))
 
+        # Optional liters on Other (e.g. 5 packs × 5L = 25L)
         liters_val = None
+        if liters_raw not in (None, ''):
+            try:
+                liters_val = float(liters_raw)
+                if liters_val < 0:
+                    raise ValueError('Liters cannot be negative.')
+                if liters_val == 0:
+                    liters_val = None
+            except (TypeError, ValueError) as e:
+                flash(f'Invalid liters value: {e}', 'danger')
+                return redirect(url_for('inventory.index'))
+
         shop_item = _find_or_create_shop_item(category, item_name, company, item_type)
         if shop_item:
             shop_item.quantity = int(shop_item.quantity or 0) + qty_val
             shop_item.vendor = vendor.name
             shop_item.cost_price = cost_val
             shop_item.stock_unit = 'qty'
+            if liters_val is not None:
+                shop_item.liters = float(shop_item.liters or 0) + liters_val
         else:
             shop_item = OtherItem(
                 category=category,
@@ -473,7 +483,7 @@ def index():
                 vendor=vendor.name,
                 cost_price=cost_val,
                 sale_price=sale_val,
-                liters=None,
+                liters=liters_val,
                 quantity=qty_val,
                 stock_unit='qty',
             )
@@ -529,10 +539,15 @@ def index():
                 f'Unpaid PKR {batch_total:,.2f} added to vendor payable '
                 f'(payable now PKR {float(vendor.current_balance_payable):,.2f}).'
             )
+        liters_note = (
+            f' · {liters_val:g} L (on hand {float(shop_item.liters or 0):g} L)'
+            if liters_val is not None else ''
+        )
         msg = (
-            f"Purchase logged: {qty_val} × {item_name} @ PKR {cost_val:,.2f} "
-            f"(batch cost PKR {batch_total:,.2f}). Stock now {shop_item.quantity}. "
-            f"Sale price for product: PKR {sale_val:,.2f}. Vendor: {vendor.name}. {pay_note}"
+            f"Purchase logged: {qty_val} × {item_name} @ PKR {cost_val:g} "
+            f"(batch cost PKR {batch_total:g}). Stock now {shop_item.quantity} pcs"
+            f"{liters_note}. "
+            f"Sale price: PKR {sale_val:g}. Vendor: {vendor.name}. {pay_note}"
         )
         flash(msg, 'success')
         return redirect(url_for('inventory.index'))
