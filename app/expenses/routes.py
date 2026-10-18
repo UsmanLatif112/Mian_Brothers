@@ -23,6 +23,10 @@ PER_PAGE = 15
 def index():
     today = business_today()
 
+    # First open → Today (bookmarkable URL), same as Sales / Journal
+    if request.method == 'GET' and not request.args:
+        return redirect(url_for('expenses.index', period='today'))
+
     if request.method == 'POST':
         action = request.form.get('action', 'create')
 
@@ -227,7 +231,7 @@ def index():
         flash('Unknown action.', 'danger')
         return redirect(url_for('expenses.index'))
 
-    period, start, end = parse_period(request.args)
+    period, start, end = parse_period(request.args, default_period='today')
 
     total = float(
         apply_agency_filter(
