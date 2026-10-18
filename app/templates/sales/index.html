@@ -619,7 +619,8 @@
                         <div class="mb-2 small text-muted-custom" id="edit_item_label">Item</div>
                         <div class="mb-3">
                             <label class="form-label form-label-custom" for="edit_customer_id">Customer</label>
-                            <select class="form-select form-control-custom" id="edit_customer_id" name="customer_id">
+                            <select class="form-select form-control-custom js-search-customer" id="edit_customer_id" name="customer_id"
+                                    data-placeholder="Walk-in / search customer...">
                                 <option value="">Walk-in</option>
                                 {% for c in customers %}
                                 <option value="{{ c.id }}">{{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %}</option>
@@ -643,7 +644,7 @@
                         <div class="mb-3">
                             <label class="form-label form-label-custom" for="edit_amount">Total Amount (PKR)</label>
                             <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_amount" name="amount" placeholder="0.00">
-                            <small class="text-muted-custom">Edit if billed total differs from qty × rate − discount.</small>
+                            <small class="text-muted-custom">Auto: qty × rate − discount. Edit total only if billed amount differs.</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label form-label-custom" for="edit_payment_status">Payment status</label>
@@ -654,7 +655,7 @@
                         </div>
                         <div class="mb-3 d-none" id="edit_amount_paid_wrap">
                             <label class="form-label form-label-custom" for="edit_amount_paid">Cash paid now (PKR)</label>
-                            <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_amount_paid" name="amount_paid">
+                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_amount_paid" name="amount_paid" disabled>
                         </div>
                         <div class="mb-1">
                             <label class="form-label form-label-custom" for="edit_remarks">Remarks</label>
@@ -1165,11 +1166,58 @@
         const paidInput = document.getElementById('edit_amount_paid');
         const litersInput = document.getElementById('edit_liters');
         const rateInput = document.getElementById('edit_rate');
+        const discountInput = document.getElementById('edit_discount');
+        const editAmountEl = document.getElementById('edit_amount');
+        const customerSel = document.getElementById('edit_customer_id');
+        let editAmountManual = false;
+
+        const setSelectValue = (el, value) => {
+            if (!el) return;
+            const v = value == null ? '' : String(value);
+            if (el.tomselect) {
+                if (v && !el.tomselect.options[v]) {
+                    const opt = el.querySelector(`option[value="${CSS.escape(v)}"]`);
+                    if (opt) {
+                        el.tomselect.addOption({ value: v, text: opt.textContent.trim() });
+                    }
+                }
+                el.tomselect.setValue(v, true);
+            } else {
+                el.value = v;
+            }
+        };
+
         const syncPaymentAmount = () => {
             if (paidWrap) paidWrap.classList.add('d-none');
-            if (paidInput) paidInput.required = false;
+            if (paidInput) {
+                paidInput.required = false;
+                paidInput.disabled = true;
+                paidInput.removeAttribute('min');
+                paidInput.value = '';
+            }
         };
+
+        const recalcEditTotal = () => {
+            if (!editAmountEl || editAmountManual) return;
+            const qty = Number(litersInput && litersInput.value);
+            const rate = Number(rateInput && rateInput.value);
+            const disc = Number(discountInput && discountInput.value);
+            const q = Number.isFinite(qty) ? qty : 0;
+            const r = Number.isFinite(rate) ? rate : 0;
+            const d = Number.isFinite(disc) && disc > 0 ? disc : 0;
+            const total = Math.max(q * r - d, 0);
+            editAmountEl.value = total > 0 ? total.toFixed(2) : '';
+        };
+
         if (paySel) paySel.addEventListener('change', syncPaymentAmount);
+        ['input', 'change'].forEach((evt) => {
+            if (litersInput) litersInput.addEventListener(evt, () => { editAmountManual = false; recalcEditTotal(); });
+            if (rateInput) rateInput.addEventListener(evt, () => { editAmountManual = false; recalcEditTotal(); });
+            if (discountInput) discountInput.addEventListener(evt, () => { editAmountManual = false; recalcEditTotal(); });
+        });
+        if (editAmountEl) {
+            editAmountEl.addEventListener('input', () => { editAmountManual = true; });
+        }
 
         editModal.addEventListener('show.bs.modal', (event) => {
             const btn = event.relatedTarget;
@@ -1180,6 +1228,7 @@
             const isSale = et === 'sale';
             if (saleFields) saleFields.classList.toggle('d-none', !isSale);
             if (simpleFields) simpleFields.classList.toggle('d-none', isSale);
+            editAmountManual = false;
 
             // Disable unused fields so they are not submitted with wrong names conflicting
             if (isSale) {
@@ -1187,36 +1236,41 @@
                 document.getElementById('edit_simple_note').disabled = true;
                 litersInput.disabled = false;
                 rateInput.disabled = false;
-                document.getElementById('edit_discount').disabled = false;
-                const editAmountEl = document.getElementById('edit_amount');
+                if (discountInput) discountInput.disabled = false;
                 if (editAmountEl) editAmountEl.disabled = false;
-                document.getElementById('edit_payment_status').disabled = false;
-                document.getElementById('edit_customer_id').disabled = false;
+                if (paySel) paySel.disabled = false;
+                if (customerSel) customerSel.disabled = false;
                 document.getElementById('edit_remarks').disabled = false;
-                paidInput.disabled = false;
 
                 document.getElementById('edit_item_label').textContent = 'Item: ' + (btn.getAttribute('data-item-name') || '—');
-                document.getElementById('edit_customer_id').value = btn.getAttribute('data-customer-id') || '';
+                setSelectValue(customerSel, btn.getAttribute('data-customer-id') || '');
                 litersInput.value = btn.getAttribute('data-liters') || '0';
                 rateInput.value = btn.getAttribute('data-rate') || '0';
-                document.getElementById('edit_discount').value = btn.getAttribute('data-discount') || '0';
+                if (discountInput) discountInput.value = btn.getAttribute('data-discount') || '0';
                 if (editAmountEl) editAmountEl.value = btn.getAttribute('data-amount') || '';
-                paySel.value = btn.getAttribute('data-payment-status') || 'paid';
-                paidInput.value = btn.getAttribute('data-amount-paid') || '';
+                let payStatus = (btn.getAttribute('data-payment-status') || 'paid').toLowerCase();
+                if (payStatus !== 'paid' && payStatus !== 'unpaid') payStatus = 'unpaid';
+                setSelectValue(paySel, payStatus);
                 document.getElementById('edit_remarks').value = btn.getAttribute('data-remarks') || '';
-                // Fuel ledger-only: keep qty/rate editable but stock not adjusted (no other_item)
                 syncPaymentAmount();
+                // If stored amount matches qty×rate−discount, keep auto mode for further edits
+                const qty = Number(litersInput.value || 0);
+                const rate = Number(rateInput.value || 0);
+                const disc = Number(discountInput && discountInput.value || 0);
+                const expected = Math.max(qty * rate - disc, 0);
+                const loaded = Number(editAmountEl && editAmountEl.value || 0);
+                editAmountManual = Math.abs(loaded - expected) > 0.02;
+                if (!editAmountManual) recalcEditTotal();
             } else {
                 document.getElementById('edit_simple_amount').disabled = false;
                 document.getElementById('edit_simple_note').disabled = false;
                 litersInput.disabled = true;
                 rateInput.disabled = true;
-                document.getElementById('edit_discount').disabled = true;
-                const editAmountOff = document.getElementById('edit_amount');
-                if (editAmountOff) editAmountOff.disabled = true;
-                document.getElementById('edit_payment_status').disabled = true;
-                document.getElementById('edit_amount_paid').disabled = true;
-                document.getElementById('edit_customer_id').disabled = true;
+                if (discountInput) discountInput.disabled = true;
+                if (editAmountEl) editAmountEl.disabled = true;
+                if (paySel) paySel.disabled = true;
+                if (paidInput) paidInput.disabled = true;
+                if (customerSel) customerSel.disabled = true;
                 document.getElementById('edit_remarks').disabled = true;
 
                 document.getElementById('edit_simple_amount').value = btn.getAttribute('data-amount') || '';

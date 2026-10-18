@@ -228,18 +228,23 @@ def edit_credit_sale(cs, form):
     gross = round(qty * rate, 2)
     amount_raw = (form.get('amount') or '').strip()
     try:
+        discount = float(form.get('discount') if form.get('discount') not in (None, '') else (cs.discount or 0))
+        if discount < 0:
+            raise ValueError('Discount cannot be negative.')
+        if discount > gross + 1e-9:
+            raise ValueError(f'Discount cannot exceed sale total PKR {gross:,.2f}.')
+        expected = round(max(gross - discount, 0.0), 2)
         if amount_raw:
             amount = round(float(amount_raw), 2)
             if amount <= 0:
                 raise ValueError('Total amount must be greater than zero.')
-            discount = round(max(gross - amount, 0.0), 2)
+            # Keep discount when total matches qty×rate−discount; else treat amount as override
+            if abs(amount - expected) <= 0.02:
+                amount = expected
+            else:
+                discount = round(max(gross - amount, 0.0), 2)
         else:
-            discount = float(form.get('discount') or cs.discount or 0)
-            if discount < 0:
-                raise ValueError('Discount cannot be negative.')
-            if discount > gross:
-                raise ValueError(f'Discount cannot exceed sale total PKR {gross:,.2f}.')
-            amount = round(max(gross - discount, 0.0), 2)
+            amount = expected
     except (TypeError, ValueError) as e:
         raise EntryError(f'Invalid total/discount: {e}') from e
 
@@ -253,6 +258,7 @@ def edit_credit_sale(cs, form):
     payment_status = _payment_status(amount, amount_paid)
     credit_amt = max(amount - amount_paid, 0.0)
 
+    # Empty customer = walk-in (allowed for fully paid sales)
     customer_id_raw = (form.get('customer_id') or '').strip()
     if customer_id_raw:
         try:
@@ -260,7 +266,7 @@ def edit_credit_sale(cs, form):
         except (TypeError, ValueError) as e:
             raise EntryError('Invalid customer.') from e
     else:
-        new_customer_id = cs.customer_id
+        new_customer_id = None
 
     if credit_amt > 0 and not new_customer_id:
         raise EntryError('Customer is required when any amount is on credit.')
@@ -279,13 +285,37 @@ def edit_credit_sale(cs, form):
     old_qty = float(cs.liters or 0)
     item = OtherItem.query.get(cs.other_item_id) if cs.other_item_id else None
 
+    # Drop linked overpay payment/advance rows before rewriting the sale
+    old_customer_id = cs.customer_id
+    if old_customer_id and cs.sale_date:
+        item_label = (cs.item_name or '').strip()
+        overpay_hint = f'Overpayment from sale ({item_label})' if item_label else 'Overpayment from sale'
+        Payment.query.filter(
+            Payment.customer_id == old_customer_id,
+            db.func.date(Payment.payment_date) == cs.sale_date,
+            Payment.note.isnot(None),
+            Payment.note.ilike(f'%{overpay_hint}%'),
+        ).delete(synchronize_session=False)
+        CreditSale.query.filter(
+            CreditSale.customer_id == old_customer_id,
+            CreditSale.id != cs.id,
+            CreditSale.sale_date == cs.sale_date,
+            CreditSale.entry_type == 'advance',
+            CreditSale.remarks.isnot(None),
+            CreditSale.remarks.ilike(f'%{overpay_hint}%'),
+        ).delete(synchronize_session=False)
+
     # Reverse previous FIFO layers, adjust physical stock, then re-consume for new qty
     reverse_consumptions(SOURCE_CREDIT, cs.id)
 
     if item:
         apply_sale_stock_delta(item, old_qty, qty)
     elif cs.fuel_type_id:
-        inv = Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id).first()
+        from app.tenancy import apply_agency_filter
+        inv = apply_agency_filter(
+            Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id),
+            Inventory,
+        ).first()
         if inv:
             available = float(inv.current_stock_liters or 0) + old_qty
             if qty > available + 1e-9:
@@ -294,7 +324,6 @@ def edit_credit_sale(cs, form):
                 )
             inv.current_stock_liters = available - qty
 
-    old_customer_id = cs.customer_id
     cs.sale_date = entry_date
     cs.liters = qty
     cs.rate = rate
@@ -305,6 +334,7 @@ def edit_credit_sale(cs, form):
     cs.remarks = note
     cs.customer_id = new_customer_id
     cs.cogs_total = None
+    cs.overpayment = 0
 
     db.session.flush()
 
