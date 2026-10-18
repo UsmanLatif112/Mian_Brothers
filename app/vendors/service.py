@@ -251,27 +251,17 @@ def apply_purchase_vendor_payment(
     Never leave a paid batch as unpaid with a separate “auto” payment line.
 
     Inventory defaults to account funding so paid buys do not drain cash in hand.
-    Opening-stock vendor (\"Open for previous\") is always unpaid — no payment row.
+    \"Open for previous\" still respects Paid/Unpaid for the vendor ledger; those
+    rows stay out of Account All Purchasing KPIs via counts_toward_purchase_kpis.
     """
-    # Opening stock is not a real purchase — never create a till/account payment.
-    if is_opening_stock_purchase(purchase_log) or (
-        vendor is not None and is_opening_vendor_name(getattr(vendor, 'name', None))
-    ):
-        status = 'unpaid'
-        purchase_log.payment_status = status
-        if getattr(purchase_log, 'id', None):
-            for old in find_auto_payments_for_log(purchase_log):
-                db.session.delete(old)
-            db.session.flush()
-        if vendor:
-            db.session.flush()
-            recalculate_vendor_balance(vendor)
-        return None
-
     status = normalize_purchase_payment_status(payment_status)
     purchase_log.payment_status = status
     payment = None
-    funding = normalize_funding_source(funding_source, default='account')
+    # Opening-vendor pays never drain till/cash-in-hand
+    if vendor is not None and is_opening_vendor_name(getattr(vendor, 'name', None)):
+        funding = 'account'
+    else:
+        funding = normalize_funding_source(funding_source, default='account')
 
     # Drop any prior auto-payments for this log so we never get unpaid + paid duplicates
     if getattr(purchase_log, 'id', None):

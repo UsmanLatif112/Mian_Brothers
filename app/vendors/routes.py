@@ -473,7 +473,10 @@ def ledger(vendor_id):
                 entry.update(_pay_meta(auto_pay))
             ledger_entries.append(entry)
         else:
+            from app.vendors.service import is_opening_stock_purchase
             is_settle = (log.category or '').strip().lower() == 'expense_settle'
+            # Opening-vendor unpaid rows: show Opening (not Unpaid) — no real debt
+            row_status = 'opening' if is_opening_stock_purchase(log) else 'unpaid'
             ledger_entries.append({
                 'date': log.entry_date or datetime.min,
                 'type': 'purchase',
@@ -482,7 +485,7 @@ def ledger(vendor_id):
                 'credit': 0.0,
                 'ref_id': f"{'Settle' if is_settle else 'Purchase'} #{log.id}",
                 'pay_type': 'settle' if is_settle else (log.category or 'purchase'),
-                'payment_status': 'unpaid',
+                'payment_status': row_status,
                 'purchase_log_id': log.id,
             })
 

@@ -53,8 +53,6 @@ def _inventory_for_fuel(fuel_type_id, create=False):
 
 def _inventory_vendor_and_payment():
     """Require vendor; default payment status is unpaid (posts to vendor account)."""
-    from app.vendors.service import is_opening_vendor_name
-
     vendor_id = (request.form.get('vendor_id') or '').strip() or None
     vendor_name = (request.form.get('vendor') or '').strip() or None
     payment_status = (request.form.get('payment_status') or 'unpaid').strip().lower()
@@ -64,9 +62,6 @@ def _inventory_vendor_and_payment():
     vendor = resolve_vendor(vendor_id=vendor_id, vendor_name=vendor_name)
     if not vendor:
         return None, payment_status, 'Vendor is required. Search or add a vendor for this purchase.'
-    # Opening stock vendor never posts a cash payment
-    if is_opening_vendor_name(vendor.name):
-        payment_status = 'unpaid'
     return vendor, payment_status, None
 
 
