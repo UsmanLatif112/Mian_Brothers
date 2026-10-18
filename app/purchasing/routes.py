@@ -66,6 +66,9 @@ def index():
     search_q = (request.args.get('search') or '').strip()
     page = request.args.get('page', 1)
 
+    from app.vendors.service import OPENING_VENDOR_NAMES, normalize_vendor_name
+    from sqlalchemy import func as sa_func
+
     logs_q = apply_agency_filter(ItemPurchaseLog.query, ItemPurchaseLog).filter(
         ItemPurchaseLog.entry_date >= datetime.combine(start, datetime.min.time()),
         ItemPurchaseLog.entry_date <= datetime.combine(end, datetime.max.time().replace(microsecond=0)),
@@ -73,6 +76,8 @@ def index():
         ItemPurchaseLog.category != 'expense_settle',
         # Opening / previous stock (no vendor) stays out of purchasing activity
         ItemPurchaseLog.vendor_id.isnot(None),
+        # Named opening vendor (e.g. \"Open for previous\") also excluded
+        sa_func.lower(sa_func.trim(ItemPurchaseLog.vendor)).notin_(list(OPENING_VENDOR_NAMES)),
     )
 
     if category and category != 'all':

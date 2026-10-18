@@ -660,7 +660,7 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         for entry in legacy_stock_entries:
             purchase_total += float(entry.cost_per_liter or 0) * float(entry.liters_added or 0)
 
-    from app.vendors.service import payment_funding_source
+    from app.vendors.service import payment_funding_source, payment_counts_toward_cash
 
     vendor_payments = apply_agency_filter(
         VendorPayment.query.filter(
@@ -669,13 +669,14 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         ),
         VendorPayment,
     ).order_by(VendorPayment.payment_date.desc(), VendorPayment.id.desc()).all()
-    vendor_payments_total = sum(float(p.amount_paid or 0) for p in vendor_payments)
+    cash_vendor_payments = [p for p in vendor_payments if payment_counts_toward_cash(p)]
+    vendor_payments_total = sum(float(p.amount_paid or 0) for p in cash_vendor_payments)
     vendor_payments_till_total = sum(
-        float(p.amount_paid or 0) for p in vendor_payments
+        float(p.amount_paid or 0) for p in cash_vendor_payments
         if payment_funding_source(p) == 'till'
     )
     vendor_payments_account_total = sum(
-        float(p.amount_paid or 0) for p in vendor_payments
+        float(p.amount_paid or 0) for p in cash_vendor_payments
         if payment_funding_source(p) == 'account'
     )
 

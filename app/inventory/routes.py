@@ -37,8 +37,24 @@ from datetime import datetime
 PER_PAGE = 15
 
 
+def _inventory_for_fuel(fuel_type_id, create=False):
+    """Agency-scoped live tank row for a fuel type (never cross-agency)."""
+    inv = apply_agency_filter(
+        Inventory.query.filter_by(fuel_type_id=fuel_type_id),
+        Inventory,
+    ).first()
+    if inv is None and create:
+        inv = Inventory(fuel_type_id=fuel_type_id, current_stock_liters=0.0, reorder_threshold=0)
+        stamp_agency(inv)
+        db.session.add(inv)
+        db.session.flush()
+    return inv
+
+
 def _inventory_vendor_and_payment():
     """Require vendor; default payment status is unpaid (posts to vendor account)."""
+    from app.vendors.service import is_opening_vendor_name
+
     vendor_id = (request.form.get('vendor_id') or '').strip() or None
     vendor_name = (request.form.get('vendor') or '').strip() or None
     payment_status = (request.form.get('payment_status') or 'unpaid').strip().lower()
@@ -48,6 +64,9 @@ def _inventory_vendor_and_payment():
     vendor = resolve_vendor(vendor_id=vendor_id, vendor_name=vendor_name)
     if not vendor:
         return None, payment_status, 'Vendor is required. Search or add a vendor for this purchase.'
+    # Opening stock vendor never posts a cash payment
+    if is_opening_vendor_name(vendor.name):
+        payment_status = 'unpaid'
     return vendor, payment_status, None
 
 
@@ -181,12 +200,8 @@ def index():
             stamp_agency(stock_entry)
             db.session.add(stock_entry)
 
-            inventory = Inventory.query.filter_by(fuel_type_id=fuel_type.id).first()
-            if not inventory:
-                inventory = Inventory(fuel_type_id=fuel_type.id, current_stock_liters=0.0)
-                stamp_agency(inventory)
-                db.session.add(inventory)
-            inventory.current_stock_liters = float(inventory.current_stock_liters) + liters_val
+            inventory = _inventory_for_fuel(fuel_type.id, create=True)
+            inventory.current_stock_liters = float(inventory.current_stock_liters or 0) + liters_val
             new_stock = float(inventory.current_stock_liters)
 
             # Sale price applies to the whole live stock for this fuel type
@@ -218,7 +233,10 @@ def index():
             db.session.add(purchase_log)
             link_purchase_to_vendor(vendor.name, purchase_log, stock_entry, vendor=vendor)
             apply_purchase_vendor_payment(
-                vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+                vendor, purchase_log,
+                payment_status=payment_status,
+                payment_date=entry_dt,
+                funding_source='account',
             )
             create_batch_from_purchase_log(purchase_log)
             db.session.commit()
@@ -310,7 +328,10 @@ def index():
             db.session.add(purchase_log)
             link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
             apply_purchase_vendor_payment(
-                vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+                vendor, purchase_log,
+                payment_status=payment_status,
+                payment_date=entry_dt,
+                funding_source='account',
             )
             create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
             db.session.commit()
@@ -414,7 +435,10 @@ def index():
             db.session.add(purchase_log)
             link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
             apply_purchase_vendor_payment(
-                vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+                vendor, purchase_log,
+                payment_status=payment_status,
+                payment_date=entry_dt,
+                funding_source='account',
             )
             create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
             db.session.commit()
@@ -487,7 +511,10 @@ def index():
         db.session.add(purchase_log)
         link_purchase_to_vendor(vendor.name, purchase_log, vendor=vendor)
         apply_purchase_vendor_payment(
-            vendor, purchase_log, payment_status=payment_status, payment_date=entry_dt
+            vendor, purchase_log,
+            payment_status=payment_status,
+            payment_date=entry_dt,
+            funding_source='account',
         )
         create_batch_from_purchase_log(purchase_log, other_item_id=shop_item.id)
         db.session.commit()
@@ -515,7 +542,7 @@ def index():
     fuel_sale_rates = {}
     fuel_last_costs = {}
     for ft in fuel_types:
-        live_stock[ft.id] = Inventory.query.filter_by(fuel_type_id=ft.id).first()
+        live_stock[ft.id] = _inventory_for_fuel(ft.id)
         fuel_sale_rates[ft.id] = fuel_rate_for(ft.id, FuelPrice) or 0.0
         last_buy = (
             apply_agency_filter(
@@ -722,11 +749,7 @@ def edit_fuel(fuel_type_id):
         return redirect(url_for('inventory.index'))
 
     fuel.name = name
-    inventory = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
-    if not inventory:
-        inventory = Inventory(fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0)
-        stamp_agency(inventory)
-        db.session.add(inventory)
+    inventory = _inventory_for_fuel(fuel.id, create=True)
     inventory.current_stock_liters = stock_val
     inventory.reorder_threshold = threshold_val
     db.session.commit()
@@ -994,7 +1017,7 @@ def api_fuels():
     """Fuel types from inventory — used by Add Inventory dropdown."""
     fuels = []
     for ft in apply_agency_filter(FuelType.query, FuelType, include_shared=True).order_by(FuelType.name.asc()).all():
-        inv = Inventory.query.filter_by(fuel_type_id=ft.id).first()
+        inv = _inventory_for_fuel(ft.id)
         stock = float(inv.current_stock_liters) if inv else 0.0
         rate = fuel_rate_for(ft.id, FuelPrice) or 0.0
         fuels.append({
@@ -1030,11 +1053,7 @@ def quick_fuel():
     else:
         require_agency_access(fuel)
 
-    inv = Inventory.query.filter_by(fuel_type_id=fuel.id).first()
-    if not inv:
-        inv = Inventory(fuel_type_id=fuel.id, current_stock_liters=0, reorder_threshold=0)
-        stamp_agency(inv)
-        db.session.add(inv)
+    inv = _inventory_for_fuel(fuel.id, create=True)
 
     db.session.commit()
     stock = float(inv.current_stock_liters or 0)

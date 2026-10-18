@@ -9,6 +9,15 @@ from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 AUTO_PAY_NOTE_PREFIX = 'Paid with inventory purchase:'
 EXPENSE_SETTLE_CATEGORY = 'expense_settle'
 
+# Named vendors used for opening / previous stock (excluded from purchasing KPIs + till).
+OPENING_VENDOR_NAMES = frozenset({
+    'open for previous',
+    'opening',
+    'opening stock',
+    'previous stock',
+    'previous / opening',
+})
+
 
 def normalize_funding_source(raw, default='till'):
     """till = cash in hand; account = cash-taken / Account pool."""
@@ -23,6 +32,12 @@ def payment_funding_source(payment, default='account'):
     return normalize_funding_source(getattr(payment, 'funding_source', None), default=default)
 
 
+def is_opening_vendor_name(name):
+    """True for the special opening-stock vendor label(s)."""
+    key = ' '.join(str(name or '').strip().lower().split())
+    return key in OPENING_VENDOR_NAMES
+
+
 def is_expense_settle_purchase(log):
     """True when ItemPurchaseLog is an expense→vendor unpaid settle (not stock)."""
     return (getattr(log, 'category', None) or '').strip().lower() == EXPENSE_SETTLE_CATEGORY
@@ -30,12 +45,18 @@ def is_expense_settle_purchase(log):
 
 def is_opening_stock_purchase(log):
     """
-    Opening / previous stock seed rows (no vendor).
+    Opening / previous stock — no vendor, or vendor named "Open for previous".
     Already on hand — must not inflate Purchasing or Account purchase KPIs.
     """
+    name = getattr(log, 'vendor', None) or ''
+    if is_opening_vendor_name(name):
+        return True
+    vendor_ref = getattr(log, 'vendor_ref', None)
+    if vendor_ref is not None and is_opening_vendor_name(getattr(vendor_ref, 'name', None)):
+        return True
     if getattr(log, 'vendor_id', None):
         return False
-    return not (getattr(log, 'vendor', None) or '').strip()
+    return not (name or '').strip()
 
 
 def counts_toward_purchase_kpis(log):
@@ -43,6 +64,21 @@ def counts_toward_purchase_kpis(log):
     if is_expense_settle_purchase(log):
         return False
     if is_opening_stock_purchase(log):
+        return False
+    return True
+
+
+def payment_counts_toward_cash(payment):
+    """Opening-stock vendor payments must not drain cash in hand / account pool."""
+    if not payment:
+        return False
+    log = getattr(payment, 'purchase_log', None)
+    if log is None and getattr(payment, 'purchase_log_id', None):
+        log = ItemPurchaseLog.query.get(payment.purchase_log_id)
+    if log is not None and is_opening_stock_purchase(log):
+        return False
+    vendor = getattr(payment, 'vendor', None)
+    if vendor is not None and is_opening_vendor_name(getattr(vendor, 'name', None)):
         return False
     return True
 
@@ -205,7 +241,7 @@ def purchase_log_payment_status(log):
 
 
 def apply_purchase_vendor_payment(
-    vendor, purchase_log, payment_status='unpaid', payment_date=None, funding_source='till',
+    vendor, purchase_log, payment_status='unpaid', payment_date=None, funding_source='account',
 ):
     """
     After purchase is linked:
@@ -213,11 +249,29 @@ def apply_purchase_vendor_payment(
     unpaid → payment_status=unpaid, payable increases by batch total
     paid   → payment_status=paid + one linked VendorPayment (ledger shows ONE paid row)
     Never leave a paid batch as unpaid with a separate “auto” payment line.
+
+    Inventory defaults to account funding so paid buys do not drain cash in hand.
+    Opening-stock vendor (\"Open for previous\") is always unpaid — no payment row.
     """
+    # Opening stock is not a real purchase — never create a till/account payment.
+    if is_opening_stock_purchase(purchase_log) or (
+        vendor is not None and is_opening_vendor_name(getattr(vendor, 'name', None))
+    ):
+        status = 'unpaid'
+        purchase_log.payment_status = status
+        if getattr(purchase_log, 'id', None):
+            for old in find_auto_payments_for_log(purchase_log):
+                db.session.delete(old)
+            db.session.flush()
+        if vendor:
+            db.session.flush()
+            recalculate_vendor_balance(vendor)
+        return None
+
     status = normalize_purchase_payment_status(payment_status)
     purchase_log.payment_status = status
     payment = None
-    funding = normalize_funding_source(funding_source, default='till')
+    funding = normalize_funding_source(funding_source, default='account')
 
     # Drop any prior auto-payments for this log so we never get unpaid + paid duplicates
     if getattr(purchase_log, 'id', None):
@@ -432,10 +486,15 @@ def recalculate_vendor_balance(vendor):
     """Rebuild payable balance from opening + purchases − payments."""
     total_purchases = 0.0
     for log in ItemPurchaseLog.query.filter_by(vendor_id=vendor.id).all():
+        if is_opening_stock_purchase(log):
+            continue
         total_purchases += purchase_log_total(log)
 
     opening = float(vendor.previous_payable or 0)
-    total_paid = sum(float(p.amount_paid or 0) for p in vendor.payments)
+    total_paid = sum(
+        float(p.amount_paid or 0) for p in vendor.payments
+        if payment_counts_toward_cash(p)
+    )
     vendor.current_balance_payable = opening + total_purchases - total_paid
     return vendor.current_balance_payable
 

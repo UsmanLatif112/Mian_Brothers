@@ -101,8 +101,11 @@
         showNavLoader('Loading…');
     });
 
-    document.addEventListener('turbo:before-visit', () => {
+    document.addEventListener('turbo:before-visit', (event) => {
         visitPending = true;
+        // Back/forward restore — skip full-screen loader (was causing flicker)
+        const action = event.detail && event.detail.action;
+        if (action === 'restore') return;
         showNavLoader(submitPending ? 'Saving…' : 'Loading…');
     });
 
@@ -166,7 +169,11 @@
         hideNavLoader(true);
     });
 
-    document.addEventListener('turbo:visit', () => {
+    document.addEventListener('turbo:visit', (event) => {
+        const action = event.detail && event.detail.action;
+        if (action === 'restore') {
+            hideNavLoader(true);
+        }
         document.body.classList.remove('sidebar-open');
         const backdrop = document.getElementById('sidebarBackdrop');
         if (backdrop) backdrop.hidden = true;

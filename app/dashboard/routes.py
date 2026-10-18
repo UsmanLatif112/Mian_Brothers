@@ -499,23 +499,31 @@ def index():
     ).order_by(OtherItem.name.asc()).all()
 
     today = business_today()
-    total_stock_value = 0.0
-    # One cost timeline for all fuel stock rows (not get_cost_for_sale per row)
-    fuel_cost_as_of = _fuel_cost_timeline(today)
-    for inv in inventory_items:
-        liters = float(inv.current_stock_liters or 0)
-        if liters <= 0:
-            continue
-        cost = fuel_cost_as_of(inv.fuel_type_id, today)
-        total_stock_value += liters * float(cost or 0)
-    for item in other_items:
-        cost = float(item.cost_price or 0)
-        if item.tracks_liters():
-            qty = float(item.liters or 0)
-        else:
-            qty = float(item.quantity or 0)
-        if qty > 0:
-            total_stock_value += qty * cost
+    # Prefer FIFO batch value (qty_remaining × unit_cost); fall back to live qty × last cost.
+    from app.models import StockBatch
+    batch_rows = apply_agency_filter(
+        StockBatch.query.filter(StockBatch.qty_remaining > 0),
+        StockBatch,
+    ).all()
+    total_stock_value = sum(
+        float(b.qty_remaining or 0) * float(b.unit_cost or 0) for b in batch_rows
+    )
+    if total_stock_value <= 0:
+        fuel_cost_as_of = _fuel_cost_timeline(today)
+        for inv in inventory_items:
+            liters = float(inv.current_stock_liters or 0)
+            if liters <= 0:
+                continue
+            cost = fuel_cost_as_of(inv.fuel_type_id, today)
+            total_stock_value += liters * float(cost or 0)
+        for item in other_items:
+            cost = float(item.cost_price or 0)
+            if item.tracks_liters():
+                qty = float(item.liters or 0)
+            else:
+                qty = float(item.quantity or 0)
+            if qty > 0:
+                total_stock_value += qty * cost
     total_stock_value = round(total_stock_value, 2)
 
     insights = _dashboard_insights(start, end, stock_summary, other_items)
