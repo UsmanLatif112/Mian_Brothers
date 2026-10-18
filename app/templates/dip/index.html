@@ -123,17 +123,39 @@
                             </tbody>
                         </table>
                     </div>
-                    <form method="POST" action="{{ url_for('dip.add_row_form') }}">
+                    <form method="POST" action="{{ url_for('dip.add_row_form') }}" class="dip-add-form" data-kind="{{ kind }}">
                         <input type="hidden" name="fuel_kind" value="{{ kind }}">
-                        <label class="form-label form-label-custom" for="bulk_rows_{{ kind }}">
-                            Add entries (bulk)
-                        </label>
-                        <textarea id="bulk_rows_{{ kind }}" name="bulk_rows" rows="5"
-                                  class="form-control form-control-custom mb-2"
-                                  required
-                                  placeholder="One per line: dip-liters&#10;94-220&#10;130-304&#10;166-600"></textarea>
+                        <label class="form-label form-label-custom">Add entries</label>
+                        <div class="table-responsive mb-2">
+                            <table class="table table-sm table-custom align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40%;">Dip</th>
+                                        <th style="width: 40%;">Liters</th>
+                                        <th class="text-end" style="width: 20%;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="dip-add-rows">
+                                    <tr class="dip-add-row">
+                                        <td>
+                                            <input type="number" step="0.001" min="0.001" name="dip"
+                                                   class="form-control form-control-custom dip-add-dip" autocomplete="off">
+                                        </td>
+                                        <td>
+                                            <input type="number" step="0.001" min="0" name="liters"
+                                                   class="form-control form-control-custom dip-add-liters" autocomplete="off">
+                                        </td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-danger border-0 dip-add-remove" title="Remove row" disabled>
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                         <p class="text-muted-custom mb-2" style="font-size: 0.85rem;">
-                            Format: <code>dip-liters</code> per line (also space or comma). Existing dips are updated.
+                            Press <strong>Enter</strong> to move to the next row. Existing dips are updated.
                         </p>
                         <button type="submit" class="btn btn-primary-custom">
                             <i class="bi bi-plus-circle me-1"></i> Add entries
@@ -213,6 +235,73 @@
             }
         });
     }
+
+    const syncRemoveButtons = (tbody) => {
+        const rows = tbody.querySelectorAll('.dip-add-row');
+        rows.forEach((row) => {
+            const btn = row.querySelector('.dip-add-remove');
+            if (btn) btn.disabled = rows.length <= 1;
+        });
+    };
+
+    const makeAddRow = () => {
+        const tr = document.createElement('tr');
+        tr.className = 'dip-add-row';
+        tr.innerHTML =
+            '<td><input type="number" step="0.001" min="0.001" name="dip" class="form-control form-control-custom dip-add-dip" autocomplete="off"></td>' +
+            '<td><input type="number" step="0.001" min="0" name="liters" class="form-control form-control-custom dip-add-liters" autocomplete="off"></td>' +
+            '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger border-0 dip-add-remove" title="Remove row"><i class="bi bi-x-lg"></i></button></td>';
+        return tr;
+    };
+
+    const focusDip = (row) => {
+        const input = row && row.querySelector('.dip-add-dip');
+        if (input) input.focus();
+    };
+
+    document.querySelectorAll('.dip-add-form').forEach((form) => {
+        const tbody = form.querySelector('.dip-add-rows');
+        if (!tbody) return;
+
+        form.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            const target = e.target;
+            if (!target || !target.classList) return;
+            if (!target.classList.contains('dip-add-dip') && !target.classList.contains('dip-add-liters')) return;
+            e.preventDefault();
+
+            const row = target.closest('.dip-add-row');
+            if (!row) return;
+
+            if (target.classList.contains('dip-add-dip')) {
+                const liters = row.querySelector('.dip-add-liters');
+                if (liters) liters.focus();
+                return;
+            }
+
+            let next = row.nextElementSibling;
+            if (!next || !next.classList.contains('dip-add-row')) {
+                next = makeAddRow();
+                tbody.appendChild(next);
+                syncRemoveButtons(tbody);
+            }
+            focusDip(next);
+        });
+
+        form.addEventListener('click', (e) => {
+            const btn = e.target.closest('.dip-add-remove');
+            if (!btn || btn.disabled) return;
+            const row = btn.closest('.dip-add-row');
+            if (!row) return;
+            row.remove();
+            if (!tbody.querySelector('.dip-add-row')) {
+                tbody.appendChild(makeAddRow());
+            }
+            syncRemoveButtons(tbody);
+        });
+
+        syncRemoveButtons(tbody);
+    });
 
     const fuelEl = document.getElementById('calc_fuel');
     const dipEl = document.getElementById('calc_dip');

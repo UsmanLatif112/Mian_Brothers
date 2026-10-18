@@ -9,53 +9,12 @@ from app.decorators import role_required
 from app.models import db, DipChart
 from app.tenancy import apply_agency_filter, stamp_agency, require_agency_access, get_write_agency_id
 
-PETROL_DEFAULTS = (
-    (94, 220),
-    (130, 304),
-    (166, 600),
-    (178, 679),
-    (220, 818),
-    (262, 1254),
-    (272, 1301),
-)
-DIESEL_DEFAULTS = (
-    (70, 99),
-    (84, 156),
-    (92, 211),
-    (100, 226),
-    (116, 515),
-    (130, 600),
-    (152, 589),
-    (160, 620),
-)
-
 
 def _normalize_kind(raw):
     kind = (raw or '').strip().lower()
     if kind in ('petrol', 'diesel'):
         return kind
     return None
-
-
-def ensure_dip_defaults(agency_id=None):
-    """Seed default dip charts once per agency (or shared if no agency)."""
-    aid = agency_id if agency_id is not None else get_write_agency_id()
-    created = 0
-    for kind, rows in (('petrol', PETROL_DEFAULTS), ('diesel', DIESEL_DEFAULTS)):
-        q = DipChart.query.filter_by(fuel_kind=kind)
-        if aid is not None:
-            q = q.filter_by(agency_id=aid)
-        else:
-            q = q.filter(DipChart.agency_id.is_(None))
-        if q.first():
-            continue
-        for dip, liters in rows:
-            row = DipChart(fuel_kind=kind, dip=dip, liters=liters, agency_id=aid)
-            db.session.add(row)
-            created += 1
-    if created:
-        db.session.commit()
-    return created
 
 
 def _charts_for(kind):
@@ -93,7 +52,6 @@ def closest_dip_row(kind, dip_value):
 @login_required
 @role_required('super_admin', 'admin')
 def index():
-    ensure_dip_defaults()
     petrol = _charts_for('petrol')
     diesel = _charts_for('diesel')
     return render_template(
@@ -118,7 +76,6 @@ def api_calculate():
     except (TypeError, ValueError) as e:
         return jsonify({'ok': False, 'error': f'Invalid dip: {e}'}), 400
 
-    ensure_dip_defaults()
     row = closest_dip_row(kind, dip_in)
     if not row:
         return jsonify({'ok': False, 'error': f'No {kind} dip chart entries yet.'}), 400
@@ -148,7 +105,6 @@ def api_rows():
     kind = _normalize_kind(request.args.get('fuel_kind') or request.args.get('kind'))
     if not kind:
         return jsonify({'ok': False, 'error': 'fuel_kind required'}), 400
-    ensure_dip_defaults()
     rows = [
         {
             'id': r.id,
@@ -247,69 +203,71 @@ def _parse_bulk_pairs(raw_text):
     return pairs, errors
 
 
+def _upsert_pairs(kind, pairs):
+    """Insert/update chart rows. Returns (added, updated)."""
+    aid = get_write_agency_id()
+    added = updated = 0
+    for dip, liters in pairs:
+        existing = apply_agency_filter(
+            DipChart.query.filter_by(fuel_kind=kind, dip=dip), DipChart
+        ).first()
+        if existing:
+            existing.liters = liters
+            updated += 1
+        else:
+            db.session.add(stamp_agency(DipChart(
+                fuel_kind=kind, dip=dip, liters=liters, agency_id=aid
+            )))
+            added += 1
+    if added or updated:
+        db.session.commit()
+    return added, updated
+
+
 @dip_bp.route('/rows/add', methods=['POST'])
 @login_required
 @role_required('super_admin', 'admin')
 def add_row_form():
-    """Add one or many chart rows. Prefers bulk textarea when present."""
+    """Add one or many chart rows (row inputs, bulk text, or single pair)."""
     kind = _normalize_kind(request.form.get('fuel_kind'))
     if not kind:
         flash('Invalid fuel type.', 'danger')
         return redirect(url_for('dip.index'))
 
-    bulk = (request.form.get('bulk_rows') or '').strip()
-    if bulk:
-        pairs, errors = _parse_bulk_pairs(bulk)
-        if errors and not pairs:
-            flash(errors[0], 'danger')
-            return redirect(url_for('dip.index', tab=kind))
-        if not pairs:
-            flash('No valid dip lines found.', 'danger')
-            return redirect(url_for('dip.index', tab=kind))
+    pairs = []
+    errors = []
 
-        aid = get_write_agency_id()
-        added = updated = 0
-        for dip, liters in pairs:
-            existing = apply_agency_filter(
-                DipChart.query.filter_by(fuel_kind=kind, dip=dip), DipChart
-            ).first()
-            if existing:
-                existing.liters = liters
-                updated += 1
-            else:
-                db.session.add(stamp_agency(DipChart(
-                    fuel_kind=kind, dip=dip, liters=liters, agency_id=aid
-                )))
-                added += 1
-        db.session.commit()
-        msg = f'Added {added}, updated {updated} {kind} entr{"y" if (added + updated) == 1 else "ies"}.'
-        if errors:
-            msg += f' Skipped {len(errors)} invalid line(s).'
-        flash(msg, 'success' if (added or updated) else 'warning')
+    dips = request.form.getlist('dip')
+    liters_list = request.form.getlist('liters')
+    if dips or liters_list:
+        for i, raw_dip in enumerate(dips):
+            raw_dip = (raw_dip or '').strip()
+            raw_liters = (liters_list[i] if i < len(liters_list) else '').strip()
+            if not raw_dip and not raw_liters:
+                continue
+            try:
+                dip = float(raw_dip)
+                liters = float(raw_liters)
+                if dip <= 0 or liters < 0:
+                    raise ValueError('out of range')
+                pairs.append((dip, liters))
+            except (TypeError, ValueError):
+                errors.append(f'Row {i + 1}: invalid dip/liters')
+
+    if not pairs:
+        bulk = (request.form.get('bulk_rows') or '').strip()
+        if bulk:
+            pairs, errors = _parse_bulk_pairs(bulk)
+
+    if not pairs:
+        flash(errors[0] if errors else 'Enter at least one dip and liters.', 'danger')
         return redirect(url_for('dip.index', tab=kind))
 
-    try:
-        dip = float(request.form.get('dip'))
-        liters = float(request.form.get('liters'))
-        if dip <= 0 or liters < 0:
-            raise ValueError('invalid')
-    except (TypeError, ValueError):
-        flash('Invalid dip entry.', 'danger')
-        return redirect(url_for('dip.index', tab=kind))
-
-    aid = get_write_agency_id()
-    existing = apply_agency_filter(
-        DipChart.query.filter_by(fuel_kind=kind, dip=dip), DipChart
-    ).first()
-    if existing:
-        existing.liters = liters
-        flash(f'Updated {kind} dip {dip:g} → {liters:g}.', 'success')
-    else:
-        db.session.add(stamp_agency(DipChart(
-            fuel_kind=kind, dip=dip, liters=liters, agency_id=aid
-        )))
-        flash(f'Added {kind} dip {dip:g} → {liters:g}.', 'success')
-    db.session.commit()
+    added, updated = _upsert_pairs(kind, pairs)
+    msg = f'Added {added}, updated {updated} {kind} entr{"y" if (added + updated) == 1 else "ies"}.'
+    if errors:
+        msg += f' Skipped {len(errors)} invalid row(s).'
+    flash(msg, 'success' if (added or updated) else 'warning')
     return redirect(url_for('dip.index', tab=kind))
 
 

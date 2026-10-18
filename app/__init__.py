@@ -299,29 +299,13 @@ def run_schema_boot():
 
 
 def ensure_dip_chart_schema():
-    """Create dip_charts table and seed defaults per agency."""
-    from app.models import DipChart, Agency  # noqa: F401 — register model
+    """Create dip_charts table only — never seed rows (user-managed)."""
+    from app.models import DipChart  # noqa: F401 — register model
 
     try:
         db.create_all()
     except Exception as e:
         print(f'dip_charts create_all skipped: {e}')
-        return
-
-    try:
-        from app.dip.routes import ensure_dip_defaults
-        agencies = Agency.query.all()
-        if agencies:
-            for ag in agencies:
-                ensure_dip_defaults(agency_id=ag.id)
-        else:
-            ensure_dip_defaults(agency_id=None)
-    except Exception as e:
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
-        print(f'dip chart seed skipped: {e}')
 
 
 def ensure_agency_schema():
