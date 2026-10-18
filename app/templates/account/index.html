@@ -291,7 +291,7 @@
             }
             if (amount > remaining + 0.01) {
                 e.preventDefault();
-                window.ofAlert({ message: `Amount cannot exceed available cash (${remaining.toFixed(2)}).` });
+                window.ofAlert({ message: `Amount cannot exceed available cash (${(window.ofNum || String)(remaining, 2)}).` });
             }
         });
     }
@@ -339,7 +339,7 @@
             }
             if (amount > editMax + 0.01) {
                 e.preventDefault();
-                window.ofAlert({ message: `Amount cannot exceed available cash (${editMax.toFixed(2)}).` });
+                window.ofAlert({ message: `Amount cannot exceed available cash (${(window.ofNum || String)(editMax, 2)}).` });
             }
         });
     }

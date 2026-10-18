@@ -243,8 +243,8 @@
             <div class="thermal-line-desc">{{ entry.date.strftime('%d/%m %H:%M') if entry.date else '—' }} · {{ entry.ref_id }}</div>
             <div class="thermal-line-desc">{{ entry.desc }}</div>
             <div class="thermal-row">
-                <span>{% if entry.payment_status == 'paid' or entry.type == 'payment' %}PAID{% elif entry.payment_status == 'unpaid' %}UNPAID{% elif entry.debit > 0 %}Pur{% else %}Pay{% endif %} {% if entry.debit > 0 %}{{ '%.2f'|format(entry.debit) }}{% elif entry.credit > 0 %}{{ '%.2f'|format(entry.credit) }}{% endif %}</span>
-                <span>Bal {{ '%.2f'|format(entry.running_balance) }}</span>
+                <span>{% if entry.payment_status == 'paid' or entry.type == 'payment' %}PAID{% elif entry.payment_status == 'unpaid' %}UNPAID{% elif entry.debit > 0 %}Pur{% else %}Pay{% endif %} {% if entry.debit > 0 %}{{ entry.debit | num(2) }}{% elif entry.credit > 0 %}{{ entry.credit | num(2) }}{% endif %}</span>
+                <span>Bal {{ entry.running_balance | num(2) }}</span>
             </div>
         </div>
         {% else %}
@@ -253,9 +253,9 @@
     </div>
     <hr class="thermal-rule">
     <div class="thermal-totals">
-        <div class="thermal-row"><span>Total purchase</span><span>{{ '%.2f'|format(total_purchased) }}</span></div>
-        <div class="thermal-row"><span>Total pay</span><span>{{ '%.2f'|format(total_paid) }}</span></div>
-        <div class="thermal-row"><span>Payable</span><span>{{ '%.2f'|format(vendor.current_balance_payable or 0) }}</span></div>
+        <div class="thermal-row"><span>Total purchase</span><span>{{ total_purchased | num(2) }}</span></div>
+        <div class="thermal-row"><span>Total pay</span><span>{{ total_paid | num(2) }}</span></div>
+        <div class="thermal-row"><span>Payable</span><span>{{ (vendor.current_balance_payable or 0) | num(2) }}</span></div>
     </div>
     <hr class="thermal-rule">
     <div class="thermal-foot">Thank you · OctaneFlow</div>

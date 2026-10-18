@@ -1,3 +1,24 @@
+/* Number display — strip trailing .0 / .00 / .000 across the app */
+(function initOfNumberFormat() {
+    function ofNum(value, maxDecimals) {
+        const maxDp = maxDecimals == null ? 3 : Number(maxDecimals);
+        const x = Number(value);
+        if (!Number.isFinite(x)) return '0';
+        const fixed = x.toFixed(Number.isFinite(maxDp) ? Math.max(0, maxDp) : 3);
+        const cleaned = String(parseFloat(fixed));
+        const parts = cleaned.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return parts.join('.');
+    }
+
+    function ofMoney(value, maxDecimals) {
+        return 'PKR ' + ofNum(value, maxDecimals == null ? 2 : maxDecimals);
+    }
+
+    window.ofNum = ofNum;
+    window.ofMoney = ofMoney;
+})();
+
 /* Global motion loader — card + fuel pump; nav resume kept until window.load */
 (function initOfLoader() {
     let busy = 0;

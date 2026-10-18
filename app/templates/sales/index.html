@@ -65,20 +65,20 @@
 <!-- Period stats -->
 <div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-4 dashboard-stats">
     {% set petrol_credit_meta %}
-        {{ "{:,.2f}".format(stats.petrol_credit_liters) }} L
+        {{ stats.petrol_credit_liters | num(2) }} L
         ({{ stats.petrol_credit_gross | money }} − {{ stats.petrol_credit_discount | money }})
     {% endset %}
     {% set diesel_credit_meta %}
-        {{ "{:,.2f}".format(stats.diesel_credit_liters) }} L
+        {{ stats.diesel_credit_liters | num(2) }} L
         ({{ stats.diesel_credit_gross | money }} − {{ stats.diesel_credit_discount | money }})
     {% endset %}
     {% set metric_cards = [
-        ('Petrol Total', stats.petrol_total, "{:,.2f} L".format(stats.petrol_total_liters), 'stock'),
-        ('Petrol Cash', stats.petrol_cash, "{:,.2f} L".format(stats.petrol_cash_liters), 'profit'),
+        ('Petrol Total', stats.petrol_total, ((stats.petrol_total_liters | num(2)) ~ " L"), 'stock'),
+        ('Petrol Cash', stats.petrol_cash, ((stats.petrol_cash_liters | num(2)) ~ " L"), 'profit'),
         ('Petrol Credit', stats.petrol_credit, petrol_credit_meta|trim, 'credit'),
-        ('Diesel Total', stats.diesel_total, "{:,.2f} L".format(stats.diesel_total_liters), 'stock'),
-        ('Diesel Cash', stats.diesel_cash, "{:,.2f} L".format(stats.diesel_cash_liters), 'profit'),
-        ('Total Cash Sale', stats.total_cash_sale, "{:,.2f} L · Petrol + Diesel".format(stats.total_cash_liters), 'profit'),
+        ('Diesel Total', stats.diesel_total, ((stats.diesel_total_liters | num(2)) ~ " L"), 'stock'),
+        ('Diesel Cash', stats.diesel_cash, ((stats.diesel_cash_liters | num(2)) ~ " L"), 'profit'),
+        ('Total Cash Sale', stats.total_cash_sale, ((stats.total_cash_liters | num(2)) ~ " L · Petrol + Diesel"), 'profit'),
         ('Diesel Credit', stats.diesel_credit, diesel_credit_meta|trim, 'credit'),
         ('Other Cash', stats.other_cash, 'Paid other / FT items', 'profit'),
         ('Other Credit', stats.other_credit, 'Unpaid other / FT items', 'credit'),
@@ -136,7 +136,7 @@
                             <tr>
                                 <td class="text-nowrap">{% if fuel_first and loop.first %}{{ day.date }}{% endif %}</td>
                                 <td class="fw-semibold">{% if loop.first %}{{ fuel.fuel_name }}{% endif %}</td>
-                                <td class="text-end text-nowrap">{{ "{:,.2f}".format(b.liters) }} L</td>
+                                <td class="text-end text-nowrap">{{ b.liters | num(2) }} L</td>
                                 <td class="text-end text-nowrap">{{ b.rate | money }}</td>
                                 <td class="text-end text-nowrap">{{ b.sale | money }}</td>
                                 <td class="text-end text-nowrap text-success">{{ b.cash | money }}</td>
@@ -146,7 +146,7 @@
                             <tr class="price-band-subtotal">
                                 <td></td>
                                 <td class="fw-semibold">{{ fuel.fuel_name }} day total</td>
-                                <td class="text-end fw-semibold text-nowrap">{{ "{:,.2f}".format(fuel.total_liters) }} L</td>
+                                <td class="text-end fw-semibold text-nowrap">{{ fuel.total_liters | num(2) }} L</td>
                                 <td></td>
                                 <td class="text-end fw-semibold text-nowrap">{{ fuel.total_sale | money }}</td>
                                 <td class="text-end fw-semibold text-nowrap text-success">{{ fuel.total_cash | money }}</td>
@@ -159,7 +159,7 @@
                 <tfoot>
                     <tr class="fw-semibold">
                         <td colspan="2">Period total</td>
-                        <td class="text-end text-nowrap">{{ "{:,.2f}".format(price_bands.grand.total_liters) }} L</td>
+                        <td class="text-end text-nowrap">{{ price_bands.grand.total_liters | num(2) }} L</td>
                         <td></td>
                         <td class="text-end text-nowrap">{{ price_bands.grand.total_sale | money }}</td>
                         <td class="text-end text-nowrap text-success">{{ price_bands.grand.total_cash | money }}</td>
@@ -209,7 +209,7 @@
                                 <td><span class="badge bg-secondary text-uppercase">{% if over_val > 0 %}overpay{% elif cs.entry_type == 'loan' and (rem_l.startswith('expense settle') or rem_l.startswith('settle')) %}settle{% else %}{{ cs.entry_type }}{% endif %}</span></td>
                                 <td>{{ cs.customer.name if cs.customer else 'Walk-in' }}</td>
                                 <td><span class="of-clip-cell" data-of-tip="{{ cs.item_name }}">{{ cs.item_name }}</span></td>
-                                <td>{% if cs.entry_type == 'sale' %}{{ "%.2f"|format(cs.liters) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.tracks_liters()) %} L{% endif %}{% else %}—{% endif %}</td>
+                                <td>{% if cs.entry_type == 'sale' %}{{ cs.liters | num(2) }}{% if cs.is_fuel or (cs.other_item and cs.other_item.tracks_liters()) %} L{% endif %}{% else %}—{% endif %}</td>
                                 <td>
                                     {{ cs.amount | money }}
                                     {% if (cs.discount or 0)|float > 0 %}
@@ -308,7 +308,7 @@
             <div class="thermal-line-desc">#{{ cs.id }} · {{ cs.sale_date }} · {{ cs.entry_type }}</div>
             <div class="thermal-line-desc">{{ cs.customer.name if cs.customer else 'Walk-in' }} · {{ cs.item_name }}</div>
             <div class="thermal-row">
-                <span>{{ '%.2f'|format(cs.amount|float) }}</span>
+                <span>{{ cs.amount|float | num(2) }}</span>
                 <span>{% if over_val > 0 %}OVER{% else %}{{ (cs.payment_status or '')|upper }}{% endif %}</span>
             </div>
         </div>
@@ -318,10 +318,10 @@
     </div>
     <hr class="thermal-rule">
     <div class="thermal-totals">
-        <div class="thermal-row"><span>Cash sale</span><span>{{ '%.2f'|format(stats.total_cash_sale) }}</span></div>
-        <div class="thermal-row"><span>Credit sale</span><span>{{ '%.2f'|format(stats.activity_credit) }}</span></div>
-        <div class="thermal-row"><span>Receiving</span><span>{{ '%.2f'|format(stats.total_receiving) }}</span></div>
-        <div class="thermal-row"><span>Remaining</span><span>{{ '%.2f'|format(stats.remaining_balance) }}</span></div>
+        <div class="thermal-row"><span>Cash sale</span><span>{{ stats.total_cash_sale | num(2) }}</span></div>
+        <div class="thermal-row"><span>Credit sale</span><span>{{ stats.activity_credit | num(2) }}</span></div>
+        <div class="thermal-row"><span>Receiving</span><span>{{ stats.total_receiving | num(2) }}</span></div>
+        <div class="thermal-row"><span>Remaining</span><span>{{ stats.remaining_balance | num(2) }}</span></div>
     </div>
     <hr class="thermal-rule">
     <div class="thermal-foot">Thank you · OctaneFlow</div>
@@ -501,7 +501,7 @@
                                     {% if is_liters %}
                                     {% if item.category == 'ft_mobile' %}FT Mobile Oil{% else %}Other{% endif %}
                                     — {{ item.display_name() }} ({{ item.sale_price | money }}/L)
-                                    · {{ "{:,.2f}".format(item.liters or 0) }} L left
+                                    · {{ (item.liters or 0) | num(2) }} L left
                                     {% else %}
                                     Other — {{ item.display_name() }} ({{ item.sale_price | money }})
                                     · {{ item.quantity }} left
@@ -730,13 +730,13 @@
                 const opening = Number(openInput.value || 0);
                 const closing = Number(closeInput?.value || 0);
                 const sold = closing >= opening ? closing - opening : 0;
-                if (soldEl) soldEl.textContent = sold.toFixed(2);
+                if (soldEl) soldEl.textContent = (window.ofNum || String)(sold, 2);
                 total += sold;
             });
         });
-        if (fuelRateEl) fuelRateEl.textContent = rate.toFixed(2);
-        if (totalLitersEl) totalLitersEl.textContent = total.toFixed(2);
-        if (totalAmountEl) totalAmountEl.textContent = (total * rate).toFixed(2);
+        if (fuelRateEl) fuelRateEl.textContent = (window.ofNum || String)(rate, 2);
+        if (totalLitersEl) totalLitersEl.textContent = (window.ofNum || String)(total, 2);
+        if (totalAmountEl) totalAmountEl.textContent = (window.ofNum || String)(total * rate, 2);
     };
 
     if (fuelSelect) {
@@ -1028,9 +1028,9 @@
         }
         if (stockHint) {
             if (kind === 'ft' && stock !== undefined) {
-                stockHint.textContent = `In stock: ${Number(stock).toFixed(3)} L`;
+                stockHint.textContent = `In stock: ${(window.ofNum || String)(stock, 3)} L`;
             } else if (stock !== undefined && unit === 'qty') {
-                stockHint.textContent = `In stock: ${stock}`;
+                stockHint.textContent = `In stock: ${(window.ofNum || String)(stock, 3)}`;
             } else if (isFuelSelected()) {
                 stockHint.textContent = 'Fuel tank stock is deducted on this credit sale.';
             } else {
@@ -1039,9 +1039,9 @@
         }
         const amountDiffers = Math.abs(total - gross) > 0.001;
         if (creditSubtotalRow) creditSubtotalRow.classList.toggle('d-none', !(discount > 0 || amountDiffers));
-        if (creditSubtotal) creditSubtotal.textContent = gross.toFixed(2);
-        if (creditDiscountDisp) creditDiscountDisp.textContent = discount.toFixed(2);
-        if (creditAmount) creditAmount.textContent = total.toFixed(2);
+        if (creditSubtotal) creditSubtotal.textContent = (window.ofNum || String)(gross, 2);
+        if (creditDiscountDisp) creditDiscountDisp.textContent = (window.ofNum || String)(discount, 2);
+        if (creditAmount) creditAmount.textContent = (window.ofNum || String)(total, 2);
 
         // Update cash-field visibility before reading it for the summary.
         syncCustomerRequirement();
@@ -1061,17 +1061,18 @@
         const creditLeft = Math.max(total - paidDisp, 0);
         const overAmt = Math.max(paidDisp - total, 0);
         if (paymentHint) {
+            const fmtM = window.ofMoney || ((n) => `PKR ${(window.ofNum || String)(n, 2)}`);
             if (pay === 'unpaid') {
-                paymentHint.innerHTML = ` · Credit <strong class="text-warning">PKR ${total.toFixed(2)}</strong>`;
+                paymentHint.innerHTML = ` · Credit <strong class="text-warning">${fmtM(total)}</strong>`;
             } else if (overAmt > 0) {
                 paymentHint.innerHTML =
-                    ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
-                    ` · Credit <strong class="text-warning">PKR 0.00</strong>` +
-                    ` · Over <strong class="text-info">PKR ${overAmt.toFixed(2)}</strong>`;
+                    ` · Paid <strong class="text-success">${fmtM(paidDisp)}</strong>` +
+                    ` · Credit <strong class="text-warning">${fmtM(0)}</strong>` +
+                    ` · Over <strong class="text-info">${fmtM(overAmt)}</strong>`;
             } else {
                 paymentHint.innerHTML =
-                    ` · Paid <strong class="text-success">PKR ${paidDisp.toFixed(2)}</strong>` +
-                    ` · Credit <strong class="text-warning">PKR 0.00</strong>`;
+                    ` · Paid <strong class="text-success">${fmtM(paidDisp)}</strong>` +
+                    ` · Credit <strong class="text-warning">${fmtM(creditLeft)}</strong>`;
             }
         }
     };

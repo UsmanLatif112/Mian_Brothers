@@ -141,10 +141,10 @@
                                 <td>{{ log.cost_price | money }}</td>
                                 <td>
                                     {% if log.category in ['fuel', 'ft_mobile'] or (log.liters and not log.quantity) %}
-                                    {{ "{:,.2f}".format(log.liters or 0) }} L
+                                    {{ (log.liters or 0) | num(2) }} L
                                     {% else %}
                                     {{ log.quantity or 0 }}
-                                    {% if log.liters %} <span class="text-muted-custom">({{ "{:,.2f}".format(log.liters) }} L)</span>{% endif %}
+                                    {% if log.liters %} <span class="text-muted-custom">({{ log.liters | num(2) }} L)</span>{% endif %}
                                     {% endif %}
                                 </td>
                                 <td class="fw-semibold">{{ batch | money }}</td>

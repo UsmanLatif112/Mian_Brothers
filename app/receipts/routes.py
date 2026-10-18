@@ -19,10 +19,8 @@ def _agency_for(obj):
 
 
 def _money(value):
-    try:
-        return f"{float(value or 0):,.2f}"
-    except (TypeError, ValueError):
-        return "0.00"
+    from app.formatters import format_number
+    return format_number(value, max_decimals=2, default='0')
 
 
 @receipts_bp.route('/purchase/<int:log_id>')

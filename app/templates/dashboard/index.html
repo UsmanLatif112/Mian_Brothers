@@ -32,11 +32,11 @@
             <strong class="d-block">{{ dry_message }}</strong>
             <span class="alert-dry-meta">
                 {% if dry_message == 'Fuel Dry' %}
-                    Petrol {{ "{:,.1f}".format(petrol_stock or 0) }} L · Diesel {{ "{:,.1f}".format(diesel_stock or 0) }} L
+                    Petrol {{ (petrol_stock or 0) | num(1) }} L · Diesel {{ (diesel_stock or 0) | num(1) }} L
                 {% elif dry_message == 'Petrol Dry' %}
-                    Petrol left: {{ "{:,.1f}".format(petrol_stock or 0) }} L
+                    Petrol left: {{ (petrol_stock or 0) | num(1) }} L
                 {% else %}
-                    Diesel left: {{ "{:,.1f}".format(diesel_stock or 0) }} L
+                    Diesel left: {{ (diesel_stock or 0) | num(1) }} L
                 {% endif %}
             </span>
         </div>
@@ -72,7 +72,7 @@
             <span class="kpi-label">Petrol Sale</span>
         </div>
         <div class="kpi-value">{{ stats.petrol_sale | money }}</div>
-        <div class="kpi-meta">{{ "{:,.2f}".format(stats.petrol_liters) }} L</div>
+        <div class="kpi-meta">{{ stats.petrol_liters | num(2) }} L</div>
     </div>
 
     <div class="kpi-card kpi-diesel">
@@ -81,7 +81,7 @@
             <span class="kpi-label">Diesel Sale</span>
         </div>
         <div class="kpi-value text-success">{{ stats.diesel_sale | money }}</div>
-        <div class="kpi-meta">{{ "{:,.2f}".format(stats.diesel_liters) }} L</div>
+        <div class="kpi-meta">{{ stats.diesel_liters | num(2) }} L</div>
     </div>
 
     <div class="kpi-card kpi-other">

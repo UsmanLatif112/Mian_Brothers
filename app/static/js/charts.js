@@ -20,10 +20,14 @@
     }
 
     function money(n) {
-        return 'PKR ' + Number(n || 0).toLocaleString(undefined, {
+        if (typeof global.ofMoney === 'function') return global.ofMoney(n);
+        const x = Number(n || 0);
+        const text = x.toLocaleString(undefined, {
             minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
+            maximumFractionDigits: 2,
         });
+        // Strip trailing zeros from locale string when possible
+        return 'PKR ' + String(text).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
     }
 
     function destroyIfAny(canvas) {

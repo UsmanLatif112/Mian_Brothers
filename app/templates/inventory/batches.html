@@ -27,7 +27,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-3">
             <h2 class="h5 mb-0">{{ sec.label }}</h2>
             <div class="text-muted-custom" style="font-size: 0.9rem;">
-                Remaining <strong>{{ "{:,.3f}".format(sec.remaining) }} {{ sec.unit }}</strong>
+                Remaining <strong>{{ sec.remaining | num }} {{ sec.unit }}</strong>
                 · Value <strong>{{ sec.value | money }}</strong>
             </div>
         </div>
@@ -48,8 +48,8 @@
                     {% set unit = b.unit_cost | float %}
                     <tr>
                         <td>{{ b.received_at.strftime('%Y-%m-%d') if b.received_at else '—' }}</td>
-                        <td class="text-end">{{ "{:,.3f}".format(b.qty_received | float) }} {{ sec.unit }}</td>
-                        <td class="text-end">{{ "{:,.3f}".format(rem) }} {{ sec.unit }}</td>
+                        <td class="text-end">{{ b.qty_received | float | num }} {{ sec.unit }}</td>
+                        <td class="text-end">{{ rem | num }} {{ sec.unit }}</td>
                         <td class="text-end">{{ unit | money }}</td>
                         <td class="text-end">{{ (rem * unit) | money }}</td>
                     </tr>

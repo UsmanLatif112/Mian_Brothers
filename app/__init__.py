@@ -55,17 +55,32 @@ def create_app():
     from app.request_logging import setup_request_logging
     setup_request_logging(app)
 
+    from app.formatters import format_money, format_number
+
     @app.template_filter('money')
     def money_filter(value):
         from jinja2 import Undefined
         if value is None or isinstance(value, Undefined):
-            return "PKR 0.00"
+            return format_money(0)
         try:
-            return f"PKR {float(value):,.2f}"
+            return format_money(value)
         except (TypeError, ValueError):
-            return "PKR 0.00"
+            return format_money(0)
+
+    @app.template_filter('num')
+    def num_filter(value, max_decimals=3):
+        """Qty/liters/rate — no trailing .0 / .00 / .000."""
+        from jinja2 import Undefined
+        if value is None or isinstance(value, Undefined):
+            return format_number(0, max_decimals=int(max_decimals or 3))
+        try:
+            return format_number(value, max_decimals=int(max_decimals or 3))
+        except (TypeError, ValueError):
+            return format_number(0, max_decimals=int(max_decimals or 3))
 
     app.jinja_env.globals['CURRENCY'] = 'PKR'
+    app.jinja_env.globals['format_number'] = format_number
+    app.jinja_env.globals['format_money'] = format_money
 
     @app.context_processor
     def inject_branding():

@@ -50,7 +50,7 @@
                         <span class="text-muted-custom text-uppercase fs-6" style="font-weight: 500;">Live {{ ft.name }} Stock</span>
                         <h1 class="fw-bold mb-0 mt-1">
                             {% if stock is not none %}
-                            {{ "{:,.2f}".format(stock) }} <span class="fs-5 fw-normal text-muted-custom">Liters</span>
+                            {{ stock | num(2) }} <span class="fs-5 fw-normal text-muted-custom">Liters</span>
                             {% else %}
                             — <span class="fs-5 fw-normal text-muted-custom">No stock yet</span>
                             {% endif %}
@@ -87,7 +87,7 @@
                 
                 <div class="d-flex justify-content-between align-items-center text-muted-custom" style="font-size: 0.85rem;">
                     <div>
-                        <div>Reorder Point: <strong>{% if threshold is not none %}{{ "{:,.0f}".format(threshold) }} L{% else %}—{% endif %}</strong></div>
+                        <div>Reorder Point: <strong>{% if threshold is not none %}{{ threshold | num(0) }} L{% else %}—{% endif %}</strong></div>
                         <div class="mt-1">
                             Sale: <strong>{{ (fuel_sale_rates.get(ft.id) or 0) | money }}/L</strong>
                             {% if fuel_last_costs.get(ft.id) is not none %}
@@ -157,12 +157,12 @@
                                     {% if item.company %}<span class="of-clip" data-of-tip="{{ item.company }}">{{ item.company }}</span>{% endif %}
                                     {% if item.item_type %}<span class="of-item-type of-clip" data-of-tip="{{ item.item_type }}">{{ item.item_type }}</span>{% endif %}
                                 </div>
-                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}{% if item.tracks_liters() %} · {{ '{:,.2f}'.format(item.liters or 0) }} L{% else %} · Qty {{ item.quantity }}{% endif %}">
+                                <div class="directory-card-submeta of-clip" data-of-tip="Vendor: {{ item.vendor or '—' }} · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %} · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}{% if item.tracks_liters() %} · {{ (item.liters or 0) | num(2) }} L{% else %} · Qty {{ item.quantity }}{% endif %}">
                                     Vendor: {{ item.vendor or '—' }}
                                     · Cost {{ item.cost_price | money }}{% if item.tracks_liters() %}/L{% endif %}
                                     · Sale {{ item.sale_price | money }}{% if item.tracks_liters() %}/L{% endif %}
                                     {% if item.tracks_liters() %}
-                                    · {{ "{:,.2f}".format(item.liters or 0) }} L
+                                    · {{ (item.liters or 0) | num(2) }} L
                                     {% else %}
                                     · Qty {{ item.quantity }}
                                     {% endif %}
@@ -233,7 +233,7 @@
                                 <td><span class="of-clip-cell" data-of-tip="{{ item.vendor or '-' }}">{{ item.vendor or '-' }}</span></td>
                                 <td>{{ item.cost_price | money }}{% if item.tracks_liters() %}<small class="text-muted-custom">/L</small>{% endif %}</td>
                                 <td>{{ item.sale_price | money }}{% if item.tracks_liters() %}<small class="text-muted-custom">/L</small>{% endif %}</td>
-                                <td class="fw-bold">{% if item.tracks_liters() %}{{ "{:,.2f}".format(item.liters or 0) }} L{% elif item.liters is not none %}{{ "{:,.2f}".format(item.liters) }}{% else %}—{% endif %}</td>
+                                <td class="fw-bold">{% if item.tracks_liters() %}{{ (item.liters or 0) | num(2) }} L{% elif item.liters is not none %}{{ item.liters | num(2) }}{% else %}—{% endif %}</td>
                                 <td>{% if item.tracks_liters() %}<span class="text-muted-custom">—</span>{% else %}<span class="fw-bold">{{ item.quantity }}</span>{% endif %}</td>
                                 <td class="text-end">
                                     <div class="btn-group gap-1">
@@ -325,7 +325,7 @@
                                 {% for ft in fuel_types %}
                                 {% set stock = live_stock[ft.id].current_stock_liters if live_stock.get(ft.id) else 0 %}
                                 <option value="{{ ft.id }}" data-rate="{{ fuel_sale_rates.get(ft.id) or 0 }}" data-stock="{{ stock }}">
-                                    {{ ft.name }} · {{ "{:,.2f}".format(stock | float) }} L in stock
+                                    {{ ft.name }} · {{ stock | float | num(2) }} L in stock
                                 </option>
                                 {% endfor %}
                             </select>
@@ -902,7 +902,7 @@
             qty = Number(document.getElementById('quantity')?.value || 0);
         }
         const el = document.getElementById('batch_cost_total');
-        if (el) el.textContent = (cost * qty).toFixed(2);
+        if (el) el.textContent = (window.ofNum || String)(cost * qty, 2);
     };
 
     const fillFuelSalePrice = () => {

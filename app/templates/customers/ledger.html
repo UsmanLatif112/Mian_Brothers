@@ -239,8 +239,8 @@
             <div class="thermal-line-desc">{{ entry.date.strftime('%d/%m %H:%M') if entry.date else '—' }} · {{ entry.ref_id }}</div>
             <div class="thermal-line-desc">{{ entry.desc }}</div>
             <div class="thermal-row">
-                <span>{% if entry.debit > 0 %}Dr {{ '%.2f'|format(entry.debit) }}{% elif entry.credit > 0 %}Cr {{ '%.2f'|format(entry.credit) }}{% else %}—{% endif %}</span>
-                <span>Bal {{ '%.2f'|format(entry.running_balance) }}</span>
+                <span>{% if entry.debit > 0 %}Dr {{ entry.debit | num(2) }}{% elif entry.credit > 0 %}Cr {{ entry.credit | num(2) }}{% else %}—{% endif %}</span>
+                <span>Bal {{ entry.running_balance | num(2) }}</span>
             </div>
         </div>
         {% else %}
@@ -249,9 +249,9 @@
     </div>
     <hr class="thermal-rule">
     <div class="thermal-totals">
-        <div class="thermal-row"><span>Total sale</span><span>{{ '%.2f'|format(total_sales) }}</span></div>
-        <div class="thermal-row"><span>Total receive</span><span>{{ '%.2f'|format(total_received) }}</span></div>
-        <div class="thermal-row"><span>Receivable</span><span>{{ '%.2f'|format(customer.current_balance_due or 0) }}</span></div>
+        <div class="thermal-row"><span>Total sale</span><span>{{ total_sales | num(2) }}</span></div>
+        <div class="thermal-row"><span>Total receive</span><span>{{ total_received | num(2) }}</span></div>
+        <div class="thermal-row"><span>Receivable</span><span>{{ (customer.current_balance_due or 0) | num(2) }}</span></div>
     </div>
     <hr class="thermal-rule">
     <div class="thermal-foot">Thank you · OctaneFlow</div>

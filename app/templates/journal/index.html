@@ -248,7 +248,7 @@
             <div class="thermal-line-desc">{{ row.party }} · {{ row.item_name }}</div>
             <div class="thermal-row">
                 <span>{% if row.cash_direction == 'out' %}OUT{% else %}IN{% endif %}</span>
-                <span>{% if row.cash_direction == 'out' %}−{% endif %}{{ '%.2f'|format(row.amount) }}</span>
+                <span>{% if row.cash_direction == 'out' %}−{% endif %}{{ row.amount | num(2) }}</span>
             </div>
         </div>
         {% else %}
@@ -257,9 +257,9 @@
     </div>
     <hr class="thermal-rule">
     <div class="thermal-totals">
-        <div class="thermal-row"><span>Cash In</span><span>{{ '%.2f'|format(total_in) }}</span></div>
-        <div class="thermal-row"><span>Cash Out</span><span>{{ '%.2f'|format(total_out) }}</span></div>
-        <div class="thermal-row"><span>Net</span><span>{{ '%.2f'|format(net) }}</span></div>
+        <div class="thermal-row"><span>Cash In</span><span>{{ total_in | num(2) }}</span></div>
+        <div class="thermal-row"><span>Cash Out</span><span>{{ total_out | num(2) }}</span></div>
+        <div class="thermal-row"><span>Net</span><span>{{ net | num(2) }}</span></div>
     </div>
     <hr class="thermal-rule">
     <div class="thermal-foot">Thank you · OctaneFlow</div>

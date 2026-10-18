@@ -493,7 +493,8 @@
             const date = btn.getAttribute('data-expense-date') || '—';
             document.getElementById('settle_expense_id').value = id;
             document.getElementById('settle_expense_name').textContent = name;
-            document.getElementById('settle_expense_amount').textContent = 'PKR ' + Number(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('settle_expense_amount').textContent =
+                (window.ofMoney || ((n) => 'PKR ' + Number(n).toLocaleString()))(amount);
             document.getElementById('settle_expense_date').textContent = date;
             if (cashRadio) cashRadio.checked = true;
             clearSelect(customerSelect);
