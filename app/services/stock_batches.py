@@ -107,19 +107,22 @@ def delete_batch_for_purchase_log(log):
 
 
 def reverse_consumptions(source_type, source_id):
-    """Put consumed qty back onto batches for a sale/meter row."""
+    """Put consumed qty back onto batches for a sale/meter row. Returns qty restored."""
     rows = StockBatchConsumption.query.filter_by(
         source_type=source_type, source_id=int(source_id),
     ).all()
+    restored = 0.0
     for row in rows:
+        take = float(row.qty_consumed or 0)
+        restored += take
         batch = StockBatch.query.get(row.stock_batch_id)
         if batch:
-            batch.qty_remaining = float(batch.qty_remaining or 0) + float(row.qty_consumed or 0)
+            batch.qty_remaining = float(batch.qty_remaining or 0) + take
             if float(batch.qty_remaining) > float(batch.qty_received or 0):
                 batch.qty_remaining = float(batch.qty_received or 0)
         db.session.delete(row)
     db.session.flush()
-    return len(rows)
+    return restored
 
 
 def _open_batches(fuel_type_id=None, other_item_id=None):
@@ -204,6 +207,55 @@ def list_batches_for_item(other_item_id, include_empty=False):
     if not include_empty:
         q = q.filter(StockBatch.qty_remaining > 0)
     return q.order_by(StockBatch.received_at.asc(), StockBatch.id.asc()).all()
+
+
+def repair_fuel_credit_double_stock():
+    """
+    One-time: fuel CreditSales wrongly deducted tank + FIFO (meter already owns stock).
+    Restore liters to Inventory, reverse credit_sale consumptions, clear cogs_total.
+    Idempotent — skips rows with no FIFO layers and no cogs_total.
+    Returns (sale_count, {fuel_type_id: liters_restored}).
+    """
+    from app.models import CreditSale
+
+    sales = CreditSale.query.filter(
+        CreditSale.entry_type == 'sale',
+        CreditSale.fuel_type_id.isnot(None),
+        CreditSale.other_item_id.is_(None),
+    ).order_by(CreditSale.id.asc()).all()
+
+    restored_by_fuel = {}
+    count = 0
+    for cs in sales:
+        cons = StockBatchConsumption.query.filter_by(
+            source_type=SOURCE_CREDIT, source_id=cs.id,
+        ).all()
+        if not cons and cs.cogs_total is None:
+            continue
+
+        qty = float(cs.liters or 0)
+        reverse_consumptions(SOURCE_CREDIT, cs.id)
+        # Live tank was always reduced by full sale liters when the bug ran
+        restore_qty = qty if qty > 0 else sum(float(c.qty_consumed or 0) for c in cons)
+
+        inv = None
+        if cs.agency_id is not None:
+            inv = Inventory.query.filter_by(
+                fuel_type_id=cs.fuel_type_id, agency_id=cs.agency_id,
+            ).first()
+        if inv is None:
+            inv = Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id).first()
+
+        if inv and restore_qty > 0:
+            inv.current_stock_liters = float(inv.current_stock_liters or 0) + restore_qty
+            fid = cs.fuel_type_id
+            restored_by_fuel[fid] = restored_by_fuel.get(fid, 0.0) + restore_qty
+
+        cs.cogs_total = None
+        count += 1
+
+    db.session.commit()
+    return count, restored_by_fuel
 
 
 def backfill_batches_from_purchases():

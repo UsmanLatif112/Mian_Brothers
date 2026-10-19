@@ -405,15 +405,8 @@ def index():
                 if not rate:
                     flash(f'No active price for {fuel_type.name}.', 'danger')
                     return _sales_redirect()
-                inv = Inventory.query.filter_by(fuel_type_id=fuel_type.id).first()
-                available_fuel = float(inv.current_stock_liters or 0) if inv else 0.0
-                if available_fuel + 0.0001 < qty_val:
-                    flash(
-                        f'Insufficient {fuel_type.name} stock. '
-                        f'Available: {available_fuel:.2f}L, requested: {qty_val:.2f}L.',
-                        'danger',
-                    )
-                    return _sales_redirect()
+                # Fuel credit is customer-ledger only — tank stock is taken by meter sale.
+                stock_note = 'ledger only (tank via meter)'
             elif is_shop_sale:
                 other_item = OtherItem.query.get(item_key.split(':', 1)[1])
                 if not other_item:
@@ -527,10 +520,6 @@ def index():
                         )
                         return _sales_redirect()
 
-            if is_fuel_sale and inv:
-                inv.current_stock_liters = float(inv.current_stock_liters or 0) - qty_val
-                stock_note = f'tank −{qty_val:.2f}L (left {float(inv.current_stock_liters):.2f}L)'
-
             cs = stamp_agency(CreditSale(
                 customer_id=customer.id if customer else None,
                 fuel_type_id=fuel_type.id if fuel_type else None,
@@ -549,16 +538,9 @@ def index():
             ))
             db.session.add(cs)
             db.session.flush()
-            try:
-                if fuel_type:
-                    cs.cogs_total = consume_fifo(
-                        qty=qty_val,
-                        source_type=SOURCE_CREDIT,
-                        source_id=cs.id,
-                        fuel_type_id=fuel_type.id,
-                        allow_short=True,
-                    )
-                elif other_item:
+            # Shop/FT decrease stock + FIFO; fuel credit is ledger-only (meter owns tank).
+            if other_item:
+                try:
                     cs.cogs_total = consume_fifo(
                         qty=qty_val,
                         source_type=SOURCE_CREDIT,
@@ -566,10 +548,11 @@ def index():
                         other_item_id=other_item.id,
                         allow_short=True,
                     )
-            except BatchStockError as e:
-                db.session.rollback()
-                flash(str(e), 'danger')
-                return _sales_redirect()
+                except BatchStockError as e:
+                    db.session.rollback()
+                    flash(str(e), 'danger')
+                    return _sales_redirect()
+
 
             cleared_due = 0.0
             advance_amt = 0.0

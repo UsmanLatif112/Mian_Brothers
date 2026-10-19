@@ -30,14 +30,18 @@ def _is_ft_item(item):
 
 
 def restore_sale_stock(cs):
-    """Put back stock + FIFO batches consumed by a sale CreditSale."""
+    """Put back stock + FIFO batches consumed by a sale CreditSale.
+
+    Fuel credit sales are ledger-only (tank already moved by meter). Only restore
+    tank liters when this row previously had FIFO consumptions (legacy bug).
+    """
     if (cs.entry_type or 'sale').lower() != 'sale':
         return
     qty = float(cs.liters or 0)
     if qty <= 0:
         return
 
-    reverse_consumptions(SOURCE_CREDIT, cs.id)
+    restored_fifo = reverse_consumptions(SOURCE_CREDIT, cs.id)
 
     if cs.other_item_id:
         item = OtherItem.query.get(cs.other_item_id)
@@ -50,11 +54,11 @@ def restore_sale_stock(cs):
             item.quantity = int(item.quantity or 0) + int(round(qty))
         return
 
-    if not cs.fuel_type_id:
-        return
-    inv = Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id).first()
-    if inv:
-        inv.current_stock_liters = float(inv.current_stock_liters or 0) + qty
+    # Fuel: restore tank only if this sale wrongly consumed FIFO/stock before
+    if cs.fuel_type_id and restored_fifo > 0:
+        inv = Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id).first()
+        if inv:
+            inv.current_stock_liters = float(inv.current_stock_liters or 0) + restored_fifo
 
 
 def apply_sale_stock_delta(item, old_qty, new_qty):
@@ -305,24 +309,20 @@ def edit_credit_sale(cs, form):
             CreditSale.remarks.ilike(f'%{overpay_hint}%'),
         ).delete(synchronize_session=False)
 
-    # Reverse previous FIFO layers, adjust physical stock, then re-consume for new qty
-    reverse_consumptions(SOURCE_CREDIT, cs.id)
+    # Shop/FT: reverse FIFO, adjust physical stock, re-consume.
+    # Fuel credit: ledger-only — undo any legacy FIFO/tank take, do not re-deduct.
+    restored_fifo = reverse_consumptions(SOURCE_CREDIT, cs.id)
 
     if item:
         apply_sale_stock_delta(item, old_qty, qty)
-    elif cs.fuel_type_id:
+    elif cs.fuel_type_id and restored_fifo > 0:
         from app.tenancy import apply_agency_filter
         inv = apply_agency_filter(
             Inventory.query.filter_by(fuel_type_id=cs.fuel_type_id),
             Inventory,
         ).first()
         if inv:
-            available = float(inv.current_stock_liters or 0) + old_qty
-            if qty > available + 1e-9:
-                raise EntryError(
-                    f'Not enough fuel in tank. Available {available:.2f} L, need {qty:.2f} L.'
-                )
-            inv.current_stock_liters = available - qty
+            inv.current_stock_liters = float(inv.current_stock_liters or 0) + restored_fifo
 
     cs.sale_date = entry_date
     cs.liters = qty
@@ -338,24 +338,15 @@ def edit_credit_sale(cs, form):
 
     db.session.flush()
 
-    if qty > 0:
+    if qty > 0 and item:
         try:
-            if item:
-                cs.cogs_total = consume_fifo(
-                    qty=qty,
-                    source_type=SOURCE_CREDIT,
-                    source_id=cs.id,
-                    other_item_id=item.id,
-                    allow_short=True,
-                )
-            elif cs.fuel_type_id:
-                cs.cogs_total = consume_fifo(
-                    qty=qty,
-                    source_type=SOURCE_CREDIT,
-                    source_id=cs.id,
-                    fuel_type_id=cs.fuel_type_id,
-                    allow_short=True,
-                )
+            cs.cogs_total = consume_fifo(
+                qty=qty,
+                source_type=SOURCE_CREDIT,
+                source_id=cs.id,
+                other_item_id=item.id,
+                allow_short=True,
+            )
         except BatchStockError as e:
             raise EntryError(str(e)) from e
 

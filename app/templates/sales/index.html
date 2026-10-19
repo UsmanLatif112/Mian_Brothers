@@ -1032,7 +1032,7 @@
             } else if (stock !== undefined && unit === 'qty') {
                 stockHint.textContent = `In stock: ${(window.ofNum || String)(stock, 3)}`;
             } else if (isFuelSelected()) {
-                stockHint.textContent = 'Fuel tank stock is deducted on this credit sale.';
+                stockHint.textContent = 'Ledger only — tank stock is taken by meter sale.';
             } else {
                 stockHint.textContent = '';
             }
