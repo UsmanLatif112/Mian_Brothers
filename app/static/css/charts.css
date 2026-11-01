@@ -42,9 +42,11 @@
     min-height: 0;
 }
 
-/* Split insight cards: data left, doughnut right */
+/* Split insight cards: data left, doughnut right (pie centered in right column) */
 .chart-card--split {
     padding: 1rem 1.1rem 1.05rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .chart-card--split .chart-card-head {
@@ -58,10 +60,12 @@
 
 .chart-split {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(132px, 0.85fr);
-    gap: 0.75rem 1rem;
-    align-items: center;
-    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 152px;
+    gap: 0.75rem 0.85rem;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: 168px;
+    width: 100%;
 }
 
 .chart-split-data {
@@ -69,14 +73,18 @@
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+    justify-content: flex-start;
 }
 
 .chart-split-viz {
     min-width: 0;
+    width: 152px;
     display: flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
+    align-self: stretch;
+    height: 100%;
+    min-height: 148px;
 }
 
 .chart-legend {
@@ -86,8 +94,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
-    max-height: none;
-    overflow: visible;
+    max-height: 11.5rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
 }
 
 .chart-legend-item,
@@ -152,10 +162,10 @@
 }
 
 .chart-card--split .chart-canvas-wrap.is-pie {
-    width: 148px;
-    height: 148px;
+    width: 140px;
+    height: 140px;
     max-width: 100%;
-    margin: 0 auto;
+    margin: 0;
     flex: 0 0 auto;
 }
 
@@ -167,6 +177,11 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.9rem;
+    align-items: stretch;
+}
+
+.chart-insight-grid > .chart-card--split {
+    min-height: 100%;
 }
 
 .chart-line-panel {
@@ -189,13 +204,19 @@
     }
 
     .chart-split {
-        grid-template-columns: minmax(0, 1fr) minmax(110px, 140px);
-        gap: 0.65rem 0.75rem;
+        grid-template-columns: minmax(0, 1fr) 132px;
+        gap: 0.65rem 0.7rem;
+        min-height: 148px;
+    }
+
+    .chart-split-viz {
+        width: 132px;
+        min-height: 128px;
     }
 
     .chart-card--split .chart-canvas-wrap.is-pie {
-        width: 128px;
-        height: 128px;
+        width: 120px;
+        height: 120px;
     }
 }
 
