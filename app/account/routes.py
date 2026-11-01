@@ -1,12 +1,14 @@
 from datetime import datetime
 from types import SimpleNamespace
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.account import account_bp
 from app.account.service import (
-    cash_taken_rows, day_account_figures, set_previous_balance, upsert_till_balance,
+    cash_taken_rows, carry_previous_for_date, day_account_figures,
+    previous_balance_for_date, set_previous_balance, set_remaining_balance,
+    upsert_till_balance,
 )
 from app.models import (
     db, CashTaken, CreditSale, Customer, DailyCashCount, Expense,
@@ -107,13 +109,61 @@ def _parse_cash_taken_form(today):
     return taken_date, person_name, note, amount
 
 
-def _available_to_take(taken_date, exclude_row=None):
+def _parse_optional_money(field, label):
+    """Optional money field from cash-taken forms. None = leave as-is."""
+    raw = request.form.get(field)
+    if raw in (None, ''):
+        return None
+    try:
+        amount = float(raw)
+        if amount < 0:
+            raise ValueError(f'{label} cannot be negative.')
+    except (TypeError, ValueError) as e:
+        raise ValueError(f'Invalid {label.lower()}: {e}') from e
+    return amount
+
+
+def _available_to_take(taken_date, exclude_row=None, previous_override=None):
     """Remaining cash on taken_date, adding back exclude_row if it falls on that day."""
     stats = compute_period_stats(taken_date, taken_date, _models_ns())
     available = float(stats.get('remaining_balance') or 0)
+    system_prev = float(stats.get('previous_balance') or 0)
+    if previous_override is not None:
+        available += float(previous_override) - system_prev
     if exclude_row is not None and _as_date(exclude_row.taken_date) == taken_date:
         available += float(exclude_row.amount or 0)
     return available, stats
+
+
+@account_bp.route('/day-figures')
+@login_required
+def day_figures():
+    """JSON: previous / cash in hand / taken / remaining for a date (live cash-taken UI)."""
+    today = _today()
+    day = parse_form_date(request.args.get('date'), today)
+    exclude_id = request.args.get('exclude_taken_id', type=int)
+    exclude_row = CashTaken.query.get(exclude_id) if exclude_id else None
+    if exclude_row:
+        require_agency_access(exclude_row)
+
+    figures = day_account_figures(day, _models_ns())
+    previous = float(figures['previous_balance'] or 0)
+    cash_in_hand = float(figures['cash_in_hand'] or 0)
+    taken = float(figures['cash_taken_total'] or 0)
+    if exclude_row is not None and _as_date(exclude_row.taken_date) == day:
+        taken = max(0.0, taken - float(exclude_row.amount or 0))
+    remaining = cash_in_hand - taken
+    # Reset target = auto carry-forward (prior remaining), not a manual override
+    carry_prev = carry_previous_for_date(day)
+    return jsonify({
+        'date': day.isoformat(),
+        'previous_balance': previous,
+        'system_previous_balance': float(carry_prev or 0),
+        'effective_previous_balance': float(previous_balance_for_date(day) or 0),
+        'cash_in_hand': cash_in_hand,
+        'cash_taken_total': taken,
+        'remaining_balance': remaining,
+    })
 
 
 @account_bp.route('/', methods=['GET', 'POST'])
@@ -153,11 +203,15 @@ def index():
 
             try:
                 taken_date, person_name, note, amount = _parse_cash_taken_form(today)
+                previous_override = _parse_optional_money('previous_amount', 'Previous balance')
+                remaining_after = _parse_optional_money('remaining_after', 'Balance after cash taken')
             except ValueError as e:
                 flash(str(e), 'danger')
                 return redirect(url_for('account.index', **_filter_args()))
 
-            available, _ = _available_to_take(taken_date, exclude_row=row)
+            available, _ = _available_to_take(
+                taken_date, exclude_row=row, previous_override=previous_override,
+            )
             if amount > available + 0.01:
                 flash(
                     f'Amount PKR {amount:,.2f} exceeds available cash PKR {available:,.2f}.',
@@ -172,7 +226,12 @@ def index():
             row.note = note
             db.session.flush()
 
+            if previous_override is not None:
+                set_previous_balance(taken_date, previous_override, current_user.id)
+                db.session.flush()
             _refresh_till(taken_date)
+            if remaining_after is not None:
+                set_remaining_balance(taken_date, remaining_after, current_user.id)
             if old_date != taken_date:
                 _refresh_till(old_date)
             db.session.commit()
@@ -182,11 +241,13 @@ def index():
         # Create cash taken
         try:
             taken_date, person_name, note, amount = _parse_cash_taken_form(today)
+            previous_override = _parse_optional_money('previous_amount', 'Previous balance')
+            remaining_after = _parse_optional_money('remaining_after', 'Balance after cash taken')
         except ValueError as e:
             flash(str(e), 'danger')
             return redirect(url_for('account.index', **_filter_args()))
 
-        available, _ = _available_to_take(taken_date)
+        available, _ = _available_to_take(taken_date, previous_override=previous_override)
         if amount > available + 0.01:
             flash(
                 f'Amount PKR {amount:,.2f} exceeds available cash PKR {available:,.2f}.',
@@ -194,6 +255,9 @@ def index():
             )
             return redirect(url_for('account.index', **_filter_args()))
 
+        if previous_override is not None:
+            set_previous_balance(taken_date, previous_override, current_user.id)
+            db.session.flush()
         db.session.add(stamp_agency(CashTaken(
             taken_date=taken_date,
             amount=amount,
@@ -203,6 +267,8 @@ def index():
         )))
         db.session.flush()
         _refresh_till(taken_date)
+        if remaining_after is not None:
+            set_remaining_balance(taken_date, remaining_after, current_user.id)
         db.session.commit()
         flash(f'Cash taken recorded for {person_name}: PKR {amount:,.2f}.', 'success')
         return redirect(url_for('account.index', **_filter_args()))

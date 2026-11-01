@@ -193,11 +193,16 @@
                         <input type="date" class="form-control form-control-custom" id="taken_date" name="taken_date" value="{{ today }}" required>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label form-label-custom" for="ct_previous_amount">Previous Balance (PKR)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="ct_previous_amount" name="previous_amount" value="{{ '%.2f'|format(stats.previous_balance) }}">
+                        <small class="text-muted-custom">Opening balance for this day — editable.</small>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label form-label-custom" for="person_name">Taken By</label>
                         <input type="text" class="form-control form-control-custom" id="person_name" name="person_name" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label form-label-custom" for="amount">Amount (PKR)</label>
+                        <label class="form-label form-label-custom" for="amount">Amount Taken (PKR)</label>
                         <input
                             type="number"
                             step="0.01"
@@ -207,6 +212,12 @@
                             id="amount"
                             name="amount"
                             required>
+                    </div>
+                    <div class="mb-3 p-3 rounded" style="background: rgba(2,132,199,0.07);">
+                        <div class="d-flex justify-content-between small mb-2"><span class="text-muted-custom">Cash in hand</span><strong id="ct_live_cash">—</strong></div>
+                        <label class="form-label form-label-custom" for="ct_remaining_after">Previous Balance After Cash Taken (PKR)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="ct_remaining_after" name="remaining_after" value="">
+                        <small class="text-muted-custom">Updates live from amount — you can edit this too (next day’s previous).</small>
                     </div>
                     <div class="mb-1">
                         <label class="form-label form-label-custom" for="note">Note</label>
@@ -243,11 +254,16 @@
                         <input type="date" class="form-control form-control-custom" id="edit_taken_date" name="taken_date" required>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label form-label-custom" for="edit_previous_amount">Previous Balance (PKR)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_previous_amount" name="previous_amount" value="">
+                        <small class="text-muted-custom">Opening balance for this day — editable.</small>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label form-label-custom" for="edit_person_name">Taken By</label>
                         <input type="text" class="form-control form-control-custom" id="edit_person_name" name="person_name" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label form-label-custom" for="edit_amount">Amount (PKR)</label>
+                        <label class="form-label form-label-custom" for="edit_amount">Amount Taken (PKR)</label>
                         <input
                             type="number"
                             step="0.01"
@@ -256,6 +272,12 @@
                             id="edit_amount"
                             name="amount"
                             required>
+                    </div>
+                    <div class="mb-3 p-3 rounded" style="background: rgba(2,132,199,0.07);">
+                        <div class="d-flex justify-content-between small mb-2"><span class="text-muted-custom">Cash in hand</span><strong id="edit_live_cash">—</strong></div>
+                        <label class="form-label form-label-custom" for="edit_remaining_after">Previous Balance After Cash Taken (PKR)</label>
+                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_remaining_after" name="remaining_after" value="">
+                        <small class="text-muted-custom">Updates live from amount — you can edit this too (next day’s previous).</small>
                     </div>
                     <div class="mb-1">
                         <label class="form-label form-label-custom" for="edit_note">Note</label>
@@ -277,36 +299,140 @@
 {% block scripts %}
 <script>
 (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
-    const remaining = {{ '%.2f'|format(stats.remaining_balance) }};
+    const figuresUrl = {{ url_for('account.day_figures') | tojson }};
+    const money = (n) => (typeof window.ofMoney === 'function' ? window.ofMoney(n) : `PKR ${(Number(n) || 0).toFixed(2)}`);
+    const num = (n) => Number(n || 0);
 
-    const createForm = document.getElementById('cash-taken-form');
-    const createAmount = document.getElementById('amount');
-    if (createForm && createAmount) {
-        createForm.addEventListener('submit', (e) => {
-            const amount = Number(createAmount.value || 0);
-            if (!(amount > 0)) {
-                e.preventDefault();
-                window.ofAlert({ message: 'Enter an amount greater than zero.' });
-                return;
+    function wireCashTakenCalc({
+        dateEl, prevEl, amountEl, afterEl, liveCash, form, excludeIdEl, modal,
+    }) {
+        const state = {
+            bakedPrev: 0,
+            baseCash: 0,
+            otherTaken: 0,
+            maxAvailable: 0,
+            lockAfter: false,
+            lockAmount: false,
+        };
+
+        const cashNow = () => {
+            const userPrev = num(prevEl && prevEl.value);
+            return state.baseCash + (userPrev - state.bakedPrev);
+        };
+
+        const paintFromAmount = () => {
+            const cash = cashNow();
+            const amount = Math.max(0, num(amountEl && amountEl.value));
+            const pending = cash - state.otherTaken - amount;
+            if (liveCash) liveCash.textContent = money(cash);
+            state.maxAvailable = cash - state.otherTaken;
+            if (amountEl) amountEl.max = Math.max(0, state.maxAvailable).toFixed(2);
+            if (afterEl && document.activeElement !== afterEl && !state.lockAfter) {
+                afterEl.value = pending.toFixed(2);
             }
-            if (amount > remaining + 0.01) {
-                e.preventDefault();
-                window.ofAlert({ message: `Amount cannot exceed available cash (${(window.ofNum || String)(remaining, 2)}).` });
+        };
+
+        const paintFromAfter = () => {
+            const cash = cashNow();
+            const pending = Math.max(0, num(afterEl && afterEl.value));
+            const amount = Math.max(0, cash - state.otherTaken - pending);
+            if (liveCash) liveCash.textContent = money(cash);
+            state.maxAvailable = cash - state.otherTaken;
+            if (amountEl) {
+                amountEl.max = Math.max(0, state.maxAvailable).toFixed(2);
+                if (document.activeElement !== amountEl && !state.lockAmount) {
+                    amountEl.value = amount > 0 ? amount.toFixed(2) : '';
+                }
             }
-        });
+        };
+
+        const load = async () => {
+            const day = (dateEl && dateEl.value) || '';
+            if (!day) return;
+            const params = new URLSearchParams({ date: day });
+            const excludeId = excludeIdEl && excludeIdEl.value;
+            if (excludeId) params.set('exclude_taken_id', excludeId);
+            try {
+                const res = await fetch(`${figuresUrl}?${params}`, { headers: { Accept: 'application/json' }, ofSilent: true });
+                if (!res.ok) throw new Error('figures');
+                const data = await res.json();
+                state.bakedPrev = num(data.previous_balance);
+                state.baseCash = num(data.cash_in_hand);
+                state.otherTaken = num(data.cash_taken_total);
+                if (prevEl && document.activeElement !== prevEl) {
+                    prevEl.value = state.bakedPrev.toFixed(2);
+                }
+                paintFromAmount();
+            } catch (_) {
+                paintFromAmount();
+            }
+        };
+
+        if (dateEl) dateEl.addEventListener('change', load);
+        if (prevEl) prevEl.addEventListener('input', () => paintFromAmount());
+        if (amountEl) {
+            amountEl.addEventListener('input', () => {
+                state.lockAmount = true;
+                state.lockAfter = false;
+                paintFromAmount();
+            });
+        }
+        if (afterEl) {
+            afterEl.addEventListener('input', () => {
+                state.lockAfter = true;
+                state.lockAmount = false;
+                paintFromAfter();
+            });
+        }
+        if (form && amountEl) {
+            form.addEventListener('submit', (e) => {
+                const amount = num(amountEl.value);
+                if (!(amount > 0)) {
+                    e.preventDefault();
+                    window.ofAlert({ message: 'Enter an amount greater than zero.' });
+                    return;
+                }
+                if (amount > state.maxAvailable + 0.01) {
+                    e.preventDefault();
+                    window.ofAlert({
+                        message: `Amount cannot exceed available cash (${(window.ofNum || String)(state.maxAvailable, 2)}).`,
+                    });
+                }
+            });
+        }
+        if (modal) {
+            modal.addEventListener('shown.bs.modal', () => {
+                state.lockAfter = false;
+                state.lockAmount = false;
+                load();
+            });
+        } else {
+            load();
+        }
+        return { load };
     }
 
-    const editModal = document.getElementById('editCashTakenModal');
-    const editForm = document.getElementById('edit-cash-taken-form');
-    const editAmount = document.getElementById('edit_amount');
-    let editMax = remaining;
+    wireCashTakenCalc({
+        dateEl: document.getElementById('taken_date'),
+        prevEl: document.getElementById('ct_previous_amount'),
+        amountEl: document.getElementById('amount'),
+        afterEl: document.getElementById('ct_remaining_after'),
+        liveCash: document.getElementById('ct_live_cash'),
+        form: document.getElementById('cash-taken-form'),
+        modal: document.getElementById('cashTakenModal'),
+    });
 
-    const refreshEditMax = (rowAmount, rowDate) => {
-        const dateInput = document.getElementById('edit_taken_date');
-        const chosen = (dateInput && dateInput.value) || rowDate || '';
-        editMax = remaining + (chosen === rowDate ? Number(rowAmount || 0) : 0);
-        if (editAmount) editAmount.max = editMax.toFixed(2);
-    };
+    const editModal = document.getElementById('editCashTakenModal');
+    wireCashTakenCalc({
+        dateEl: document.getElementById('edit_taken_date'),
+        prevEl: document.getElementById('edit_previous_amount'),
+        amountEl: document.getElementById('edit_amount'),
+        afterEl: document.getElementById('edit_remaining_after'),
+        liveCash: document.getElementById('edit_live_cash'),
+        form: document.getElementById('edit-cash-taken-form'),
+        excludeIdEl: document.getElementById('edit_taken_id'),
+        modal: editModal,
+    });
 
     if (editModal) {
         editModal.addEventListener('show.bs.modal', (ev) => {
@@ -317,30 +443,10 @@
             document.getElementById('edit_person_name').value = btn.getAttribute('data-person-name') || '';
             document.getElementById('edit_amount').value = btn.getAttribute('data-amount') || '';
             document.getElementById('edit_note').value = btn.getAttribute('data-note') || '';
-            editModal.dataset.rowDate = btn.getAttribute('data-taken-date') || '';
-            editModal.dataset.rowAmount = btn.getAttribute('data-amount') || '';
-            refreshEditMax(editModal.dataset.rowAmount, editModal.dataset.rowDate);
-        });
-        const dateInput = document.getElementById('edit_taken_date');
-        if (dateInput) {
-            dateInput.addEventListener('change', () => {
-                refreshEditMax(editModal.dataset.rowAmount, editModal.dataset.rowDate);
-            });
-        }
-    }
-
-    if (editForm && editAmount) {
-        editForm.addEventListener('submit', (e) => {
-            const amount = Number(editAmount.value || 0);
-            if (!(amount > 0)) {
-                e.preventDefault();
-                window.ofAlert({ message: 'Enter an amount greater than zero.' });
-                return;
-            }
-            if (amount > editMax + 0.01) {
-                e.preventDefault();
-                window.ofAlert({ message: `Amount cannot exceed available cash (${(window.ofNum || String)(editMax, 2)}).` });
-            }
+            const prevInput = document.getElementById('edit_previous_amount');
+            if (prevInput) prevInput.value = '';
+            const afterInput = document.getElementById('edit_remaining_after');
+            if (afterInput) afterInput.value = '';
         });
     }
 });

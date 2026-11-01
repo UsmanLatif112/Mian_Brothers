@@ -14,8 +14,8 @@ def as_date(value):
     return value
 
 
-def previous_balance_for_date(day):
-    """Opening previous for this day: stored value, else prior day’s remaining."""
+def carry_previous_for_date(day):
+    """Prior day’s remaining (auto carry-forward), ignoring any manual override on day."""
     day = as_date(day)
     prior = (
         apply_agency_filter(
@@ -25,7 +25,20 @@ def previous_balance_for_date(day):
         .order_by(DailyTillBalance.balance_date.desc())
         .first()
     )
-    prior_remaining = float(prior.remaining_balance or 0) if prior else 0.0
+    return float(prior.remaining_balance or 0) if prior else 0.0
+
+
+def previous_balance_for_date(day):
+    """Opening previous for this day: stored value, else prior day’s remaining."""
+    day = as_date(day)
+    prior_remaining = carry_previous_for_date(day)
+    prior_exists = (
+        apply_agency_filter(
+            DailyTillBalance.query.filter(DailyTillBalance.balance_date < day),
+            DailyTillBalance,
+        ).first()
+        is not None
+    )
 
     current = apply_agency_filter(
         DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
@@ -34,7 +47,7 @@ def previous_balance_for_date(day):
         stored = float(current.previous_balance or 0)
         # Non-zero stored (or no prior day) wins; otherwise carry prior remaining
         # so an auto-created till row with previous=0 does not block carry-forward.
-        if stored > 0 or prior is None:
+        if stored > 0 or not prior_exists:
             return stored
         return prior_remaining
     return prior_remaining
@@ -126,6 +139,23 @@ def set_previous_balance(day, amount, user_id=None):
         db.session.add(row)
     row.previous_balance = float(amount or 0)
     row.remaining_balance = float(amount or 0) - cash_taken_total(day)
+    if user_id:
+        row.updated_by = user_id
+    return row
+
+
+def set_remaining_balance(day, amount, user_id=None):
+    """Set remaining (= next previous after cash taken) for a day."""
+    day = as_date(day)
+    row = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
+    if not row:
+        row = DailyTillBalance(balance_date=day)
+        stamp_agency(row)
+        db.session.add(row)
+        row.previous_balance = previous_balance_for_date(day)
+    row.remaining_balance = float(amount or 0)
     if user_id:
         row.updated_by = user_id
     return row
