@@ -217,17 +217,40 @@
                     afterDraw(chart) {
                         const { ctx, chartArea } = chart;
                         if (!chartArea) return;
+                        const arc = chart.getDatasetMeta(0)?.data?.[0];
+                        const hole = Math.max(28, Number(arc?.innerRadius || 0) || Math.min(chartArea.width, chartArea.height) * 0.3);
+                        const maxW = hole * 1.7;
                         const x = (chartArea.left + chartArea.right) / 2;
                         const y = (chartArea.top + chartArea.bottom) / 2;
+
+                        function fit(text, weight, startPx, minPx) {
+                            let size = startPx;
+                            let out = String(text || '');
+                            ctx.font = `${weight} ${size}px ${t.font}`;
+                            while (size > minPx && ctx.measureText(out).width > maxW) {
+                                size -= 1;
+                                ctx.font = `${weight} ${size}px ${t.font}`;
+                            }
+                            if (ctx.measureText(out).width > maxW) {
+                                while (out.length > 1 && ctx.measureText(`${out}…`).width > maxW) {
+                                    out = out.slice(0, -1);
+                                }
+                                out = `${out}…`;
+                            }
+                            return { text: out, size };
+                        }
+
                         ctx.save();
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         ctx.fillStyle = t.tick;
-                        ctx.font = `700 11px ${t.font}`;
-                        ctx.fillText(centerText.title || '', x, y - 8);
+                        const title = fit(centerText.title || '', '700', 11, 8);
+                        ctx.font = `700 ${title.size}px ${t.font}`;
+                        ctx.fillText(title.text, x, y - Math.max(7, title.size * 0.85));
                         ctx.fillStyle = document.documentElement.getAttribute('data-theme') === 'dark' ? '#f6f6f7' : '#1a1c1d';
-                        ctx.font = `800 14px ${t.font}`;
-                        ctx.fillText(centerText.value || '', x, y + 10);
+                        const value = fit(centerText.value || '', '800', 13, 9);
+                        ctx.font = `800 ${value.size}px ${t.font}`;
+                        ctx.fillText(value.text, x, y + Math.max(8, value.size * 0.75));
                         ctx.restore();
                     },
                 }]

@@ -216,18 +216,20 @@ def consume_fifo(*, qty, source_type, source_id, fuel_type_id=None, other_item_i
 
 
 def list_batches_for_fuel(fuel_type_id, include_empty=False):
+    from sqlalchemy.orm import joinedload
     q = apply_agency_filter(
         StockBatch.query.filter_by(fuel_type_id=fuel_type_id), StockBatch
-    )
+    ).options(joinedload(StockBatch.purchase_log))
     if not include_empty:
         q = q.filter(StockBatch.qty_remaining > 0)
     return q.order_by(StockBatch.received_at.asc(), StockBatch.id.asc()).all()
 
 
 def list_batches_for_item(other_item_id, include_empty=False):
+    from sqlalchemy.orm import joinedload
     q = apply_agency_filter(
         StockBatch.query.filter_by(other_item_id=other_item_id), StockBatch
-    )
+    ).options(joinedload(StockBatch.purchase_log))
     if not include_empty:
         q = q.filter(StockBatch.qty_remaining > 0)
     return q.order_by(StockBatch.received_at.asc(), StockBatch.id.asc()).all()

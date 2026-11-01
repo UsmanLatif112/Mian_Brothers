@@ -36,6 +36,7 @@
                 <thead>
                     <tr>
                         <th>Received</th>
+                        <th>Vendor</th>
                         <th class="text-end">Received</th>
                         <th class="text-end">Remaining</th>
                         <th class="text-end">Unit cost</th>
@@ -46,8 +47,16 @@
                     {% for b in sec.batches %}
                     {% set rem = b.qty_remaining | float %}
                     {% set unit = b.unit_cost | float %}
+                    {% set vendor_name = (b.purchase_log.vendor if b.purchase_log and b.purchase_log.vendor else None) %}
                     <tr>
                         <td>{{ b.received_at.strftime('%Y-%m-%d') if b.received_at else '—' }}</td>
+                        <td>
+                            {% if vendor_name %}
+                            <span class="of-clip-cell" data-of-tip="{{ vendor_name }}">{{ vendor_name }}</span>
+                            {% else %}
+                            <span class="text-muted-custom">—</span>
+                            {% endif %}
+                        </td>
                         <td class="text-end">{{ b.qty_received | float | num }} {{ sec.unit }}</td>
                         <td class="text-end">{{ rem | num }} {{ sec.unit }}</td>
                         <td class="text-end">{{ unit | money }}</td>
