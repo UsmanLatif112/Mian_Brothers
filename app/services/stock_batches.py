@@ -106,6 +106,30 @@ def delete_batch_for_purchase_log(log):
     db.session.flush()
 
 
+def delete_batches_for_fuel(fuel_type_id):
+    """Remove all FIFO batches (+ consumptions) for a fuel tank."""
+    if not fuel_type_id:
+        return
+    batches = StockBatch.query.filter_by(fuel_type_id=fuel_type_id).all()
+    for batch in batches:
+        for row in list(batch.consumptions or []):
+            db.session.delete(row)
+        db.session.delete(batch)
+    db.session.flush()
+
+
+def delete_batches_for_item(other_item_id):
+    """Remove all FIFO batches (+ consumptions) for a shop/FT item."""
+    if not other_item_id:
+        return
+    batches = StockBatch.query.filter_by(other_item_id=other_item_id).all()
+    for batch in batches:
+        for row in list(batch.consumptions or []):
+            db.session.delete(row)
+        db.session.delete(batch)
+    db.session.flush()
+
+
 def reverse_consumptions(source_type, source_id):
     """Put consumed qty back onto batches for a sale/meter row. Returns qty restored."""
     rows = StockBatchConsumption.query.filter_by(

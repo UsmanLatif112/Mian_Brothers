@@ -1169,21 +1169,21 @@ window.ofBootUi = function ofBootUi() {
                                       return;
                                   }
                                   return postJson(createUrl, { name: input.trim(), phone: String(phone).trim() })
-                                      .then((data) => {
-                                          if (!data.ok) {
+                              .then((data) => {
+                                  if (!data.ok) {
                                               window.ofAlert({ message: data.error || 'Could not add customer' });
-                                              callback();
-                                              return;
-                                          }
-                                          callback({
-                                              value: String(data.id),
-                                              text: data.text,
-                                              phone: data.phone || '',
-                                          });
-                                      })
-                                      .catch(() => {
+                                      callback();
+                                      return;
+                                  }
+                                  callback({
+                                      value: String(data.id),
+                                      text: data.text,
+                                      phone: data.phone || '',
+                                  });
+                              })
+                              .catch(() => {
                                           window.ofAlert({ message: 'Could not add customer' });
-                                          callback();
+                                  callback();
                                       });
                               });
                       }
@@ -1294,23 +1294,23 @@ window.ofBootUi = function ofBootUi() {
                                   }
                                   const sale_price = parseFloat(String(priceRaw) || '0') || 0;
                                   return postJson(createUrl, { name: input.trim(), sale_price })
-                                      .then((data) => {
-                                          if (!data.ok) {
+                              .then((data) => {
+                                  if (!data.ok) {
                                               window.ofAlert({ message: data.error || 'Could not add item' });
-                                              callback();
-                                              return;
-                                          }
-                                          callback({
-                                              value: data.value,
-                                              text: data.text,
-                                              rate: data.rate,
-                                              unit: 'qty',
-                                              stock: 0,
-                                          });
-                                      })
-                                      .catch(() => {
+                                      callback();
+                                      return;
+                                  }
+                                  callback({
+                                      value: data.value,
+                                      text: data.text,
+                                      rate: data.rate,
+                                      unit: 'qty',
+                                      stock: 0,
+                                  });
+                              })
+                              .catch(() => {
                                           window.ofAlert({ message: 'Could not add item' });
-                                          callback();
+                                  callback();
                                       });
                               });
                       }

@@ -181,6 +181,7 @@
                                         data-company="{{ item.company or '' }}"
                                         data-item-type="{{ item.item_type or '' }}"
                                         data-vendor="{{ item.vendor or '' }}"
+                                        data-vendor-id="{% for v in vendors %}{% if v.name == item.vendor %}{{ v.id }}{% endif %}{% endfor %}"
                                         data-cost="{{ item.cost_price }}"
                                         data-sale="{{ item.sale_price }}"
                                         data-liters="{{ item.liters if item.liters is not none else '' }}"
@@ -247,6 +248,7 @@
                                                 data-company="{{ item.company or '' }}"
                                                 data-item-type="{{ item.item_type or '' }}"
                                                 data-vendor="{{ item.vendor or '' }}"
+                                                data-vendor-id="{% for v in vendors %}{% if v.name == item.vendor %}{{ v.id }}{% endif %}{% endfor %}"
                                                 data-cost="{{ item.cost_price }}"
                                                 data-sale="{{ item.sale_price }}"
                                                 data-liters="{{ item.liters if item.liters is not none else '' }}"
@@ -501,8 +503,27 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="edit_item_vendor" class="form-label form-label-custom">Vendor</label>
-                        <input type="text" class="form-control form-control-custom" id="edit_item_vendor" name="vendor">
+                        <label for="edit_item_vendor_id" class="form-label form-label-custom">Vendor</label>
+                        <div class="of-select-with-add">
+                            <select class="form-select form-control-custom js-search-vendor js-create-vendor"
+                                    id="edit_item_vendor_id" name="vendor_id"
+                                    data-placeholder="Search or add vendor..."
+                                    data-create-url="{{ url_for('vendors.quick_vendor') }}">
+                                <option value="">Search or add vendor...</option>
+                                {% for v in vendors %}
+                                <option value="{{ v.id }}" data-phone="{{ v.phone or '' }}">
+                                    {{ v.name }}{% if v.phone %} · {{ v.phone }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <input type="hidden" name="vendor" id="edit_item_vendor_name">
+                            <button type="button" class="btn btn-outline-secondary of-quick-add-btn"
+                                    data-of-create-modal="#createVendorModal"
+                                    data-of-select-target="#edit_item_vendor_id"
+                                    title="Register vendor" aria-label="Register vendor">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -1290,13 +1311,33 @@
             document.getElementById('edit_item_name').value = btn.dataset.name || '';
             document.getElementById('edit_item_company').value = btn.dataset.company || '';
             document.getElementById('edit_item_type').value = btn.dataset.itemType || '';
-            document.getElementById('edit_item_vendor').value = btn.dataset.vendor || '';
             document.getElementById('edit_item_cost').value = btn.dataset.cost || '';
             document.getElementById('edit_item_sale').value = btn.dataset.sale || '';
             document.getElementById('edit_item_liters').value = btn.dataset.liters || '';
             document.getElementById('edit_item_qty').value = btn.dataset.quantity || '0';
+            const vendorName = btn.dataset.vendor || '';
+            const vendorId = btn.dataset.vendorId || '';
+            const nameInput = document.getElementById('edit_item_vendor_name');
+            if (nameInput) nameInput.value = vendorName;
+            const vendorSel = document.getElementById('edit_item_vendor_id');
+            if (vendorSel) {
+                if (vendorSel.tomselect) {
+                    vendorSel.tomselect.setValue(vendorId, true);
+                } else {
+                    vendorSel.value = vendorId;
+                }
+            }
         });
     });
+
+    const editVendorSel = document.getElementById('edit_item_vendor_id');
+    if (editVendorSel) {
+        editVendorSel.addEventListener('change', () => {
+            const opt = editVendorSel.options[editVendorSel.selectedIndex];
+            const nameInput = document.getElementById('edit_item_vendor_name');
+            if (nameInput) nameInput.value = opt ? opt.textContent.trim().split('·')[0].trim() : '';
+        });
+    }
 
     document.querySelectorAll('.edit-fuel-btn').forEach((btn) => {
         btn.addEventListener('click', () => {

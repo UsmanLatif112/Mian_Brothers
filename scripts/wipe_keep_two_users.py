@@ -19,6 +19,8 @@ load_dotenv(os.path.join(_BASE, '.env'))
 
 KEEP_USER_MATCHERS = (
     {'name': 'U. Technologies', 'email': 'admin@udottechnologies.com'},
+    # Email may vary across restores; name is the stable match
+    {'name': 'Mian_filling_station', 'email': 'info@udottechnologies.com'},
     {'name': 'Mian_filling_station', 'email': 'mian_filling_station@gmail.com'},
 )
 

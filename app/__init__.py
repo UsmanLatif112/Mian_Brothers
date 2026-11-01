@@ -255,12 +255,12 @@ def create_app():
             db.session.remove()
         except Exception:
             pass
-
+    
     # Root route redirect
     @app.route('/')
     def root():
         return redirect(url_for('dashboard.index'))
-
+        
     # DB migrations are NEVER run from create_app / Passenger workers.
     # Run separately: PYTHONPATH=. python scripts/migrate_schema.py
     return app

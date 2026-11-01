@@ -25,6 +25,9 @@ from app.services.stock_batches import (
     create_batch_from_purchase_log,
     list_batches_for_fuel,
     list_batches_for_item,
+    delete_batches_for_fuel,
+    delete_batches_for_item,
+    delete_batch_for_purchase_log,
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
@@ -625,13 +628,17 @@ def edit_item(item_id):
     item = OtherItem.query.get_or_404(item_id)
     require_agency_access(item)
     name = (request.form.get('name') or '').strip()
-    vendor = (request.form.get('vendor') or '').strip() or None
+    vendor_id = (request.form.get('vendor_id') or '').strip() or None
+    vendor_name = (request.form.get('vendor') or '').strip() or None
     company = (request.form.get('company') or '').strip() or None
     item_type = (request.form.get('item_type') or '').strip() or None
 
     if not name:
         flash('Item name is required.', 'danger')
         return redirect(url_for('inventory.index'))
+
+    vendor = resolve_vendor(vendor_id=vendor_id, vendor_name=vendor_name)
+    vendor_label = vendor.name if vendor else vendor_name
 
     try:
         cost_val = float(request.form.get('cost_price') or 0)
@@ -656,7 +663,7 @@ def edit_item(item_id):
 
     prev_sale = float(item.sale_price or 0)
     item.name = name
-    item.vendor = vendor
+    item.vendor = vendor_label
     item.company = company
     item.item_type = item_type
     item.cost_price = cost_val
@@ -700,6 +707,9 @@ def delete_item(item_id):
     )
     ItemPriceLog.query.filter_by(other_item_id=item.id).delete(synchronize_session=False)
 
+    # FIFO layers first (FK → stock_batches → other_items / purchase logs)
+    delete_batches_for_item(item.id)
+
     purchase_logs = ItemPurchaseLog.query.filter(
         ItemPurchaseLog.category == (item.category or 'other'),
         ItemPurchaseLog.item_name == item.name,
@@ -709,6 +719,7 @@ def delete_item(item_id):
     vendor_ids = set()
     for log in purchase_logs:
         # Stock lives on the item row we're deleting — skip reverse_purchase_stock
+        delete_batch_for_purchase_log(log)
         for pay in find_auto_payments_for_log(log):
             db.session.delete(pay)
         if log.vendor_id:
@@ -815,6 +826,9 @@ def delete_fuel(fuel_type_id):
     )
     Sale.query.filter_by(fuel_type_id=fuel.id).delete(synchronize_session=False)
 
+    # FIFO batches/consumptions before meters / purchase logs / fuel row
+    delete_batches_for_fuel(fuel.id)
+
     # Machines → their meter readings first
     machine_ids = [m.id for m in Machine.query.filter_by(fuel_type_id=fuel.id).all()]
     if machine_ids:
@@ -828,6 +842,7 @@ def delete_fuel(fuel_type_id):
     fuel_purchases = ItemPurchaseLog.query.filter_by(fuel_type_id=fuel.id).all()
     vendor_ids = {log.vendor_id for log in fuel_purchases if log.vendor_id}
     for log in fuel_purchases:
+        delete_batch_for_purchase_log(log)
         for pay in find_auto_payments_for_log(log):
             db.session.delete(pay)
         db.session.delete(log)
