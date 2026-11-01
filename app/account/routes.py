@@ -11,10 +11,10 @@ from app.account.service import (
     upsert_till_balance,
 )
 from app.models import (
-    db, CashTaken, CreditSale, Customer, DailyCashCount, Expense,
+    db, CashTaken, CreditSale, Customer, DailyCashCount, DailyTillBalance, Expense,
     FuelPrice, FuelType, MeterReading, Payment,
 )
-from app.tenancy import require_agency_access, stamp_agency
+from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import PERIOD_CHOICES, compute_period_stats, parse_form_date, parse_period
 
 
@@ -33,9 +33,8 @@ def _enrich_taken_rows(rows):
             cache[day] = day_account_figures(day, models)
         ctx = cache[day]
         amount = float(row.amount or 0)
-        day_taken = float(ctx['cash_taken_total'] or 0)
-        # Next-day / pending balance for the date
-        pending = float(ctx['cash_in_hand'] or 0) - day_taken
+        # Prefer saved remaining (e.g. user set 5005) — that becomes next day’s previous
+        pending = float(ctx.get('pending_balance') or 0)
         enriched.append(SimpleNamespace(
             id=row.id,
             taken_date=row.taken_date,
@@ -152,9 +151,17 @@ def day_figures():
     taken = float(figures['cash_taken_total'] or 0)
     if exclude_row is not None and _as_date(exclude_row.taken_date) == day:
         taken = max(0.0, taken - float(exclude_row.amount or 0))
-    remaining = cash_in_hand - taken
-    # Reset target = auto carry-forward (prior remaining), not a manual override
+        # Recompute live remaining without this row; keep saved pending if no exclude adjust needed
+        remaining = cash_in_hand - taken
+    else:
+        # Use saved “after cash taken” when present (e.g. 5005), else cash − taken
+        remaining = float(figures.get('pending_balance') if figures.get('pending_balance') is not None
+                          else (cash_in_hand - taken))
     carry_prev = carry_previous_for_date(day)
+    till = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
+    ).first()
+    saved_remaining = float(till.remaining_balance) if till is not None else None
     return jsonify({
         'date': day.isoformat(),
         'previous_balance': previous,
@@ -163,6 +170,7 @@ def day_figures():
         'cash_in_hand': cash_in_hand,
         'cash_taken_total': taken,
         'remaining_balance': remaining,
+        'saved_remaining': saved_remaining,
     })
 
 

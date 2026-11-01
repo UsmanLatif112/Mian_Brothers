@@ -1,5 +1,5 @@
 """Till carry-forward helpers for Account and Sales pages."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from sqlalchemy import func
@@ -69,13 +69,17 @@ def day_account_figures(day, models_ns):
     till = apply_agency_filter(
         DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
     ).first()
+    computed_pending = cash_in_hand - taken
+    pending = computed_pending
     if till:
-        # If live activity under-reports, rebuild from stored remaining + taken
-        reconstructed = float(till.remaining_balance or 0) + taken
+        stored_remaining = float(till.remaining_balance or 0)
+        # Prefer saved “after cash taken” (may differ from cash − taken, e.g. 5005 vs 5000)
+        pending = stored_remaining
+        # If live activity under-reports, rebuild cash from stored remaining + taken
+        reconstructed = stored_remaining + taken
         if reconstructed > cash_in_hand:
             cash_in_hand = reconstructed
 
-    pending = cash_in_hand - taken
     return {
         'previous_balance': previous,
         'cash_in_hand': cash_in_hand,
@@ -145,8 +149,13 @@ def set_previous_balance(day, amount, user_id=None):
 
 
 def set_remaining_balance(day, amount, user_id=None):
-    """Set remaining (= next previous after cash taken) for a day."""
+    """
+    Set remaining after cash taken for a day, and seed next day’s previous balance.
+
+    Example: take 295,000 from 300,000 → 5,000; user sets 5,005 → next day opens at 5,005.
+    """
     day = as_date(day)
+    amount = float(amount or 0)
     row = apply_agency_filter(
         DailyTillBalance.query.filter_by(balance_date=day), DailyTillBalance
     ).first()
@@ -155,9 +164,26 @@ def set_remaining_balance(day, amount, user_id=None):
         stamp_agency(row)
         db.session.add(row)
         row.previous_balance = previous_balance_for_date(day)
-    row.remaining_balance = float(amount or 0)
+    row.remaining_balance = amount
     if user_id:
         row.updated_by = user_id
+
+    # Lock next calendar day opening to this amount (Amount Taken stays unchanged)
+    next_day = day + timedelta(days=1)
+    nxt = apply_agency_filter(
+        DailyTillBalance.query.filter_by(balance_date=next_day), DailyTillBalance
+    ).first()
+    if not nxt:
+        nxt = DailyTillBalance(balance_date=next_day)
+        stamp_agency(nxt)
+        db.session.add(nxt)
+    nxt.previous_balance = amount
+    # Keep next-day remaining consistent with its takes (usually 0 yet)
+    nxt.remaining_balance = amount - cash_taken_total(next_day)
+    if user_id:
+        nxt.updated_by = user_id
+
+    db.session.flush()
     return row
 
 
