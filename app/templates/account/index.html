@@ -217,7 +217,7 @@
                         <div class="d-flex justify-content-between small mb-2"><span class="text-muted-custom">Cash in hand</span><strong id="ct_live_cash">—</strong></div>
                         <label class="form-label form-label-custom" for="ct_remaining_after">Previous Balance After Cash Taken (PKR)</label>
                         <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="ct_remaining_after" name="remaining_after" value="">
-                        <small class="text-muted-custom">Updates live from amount — you can edit this too (next day’s previous).</small>
+                        <small class="text-muted-custom">Follows amount taken; edit freely without changing amount (next day’s previous).</small>
                     </div>
                     <div class="mb-1">
                         <label class="form-label form-label-custom" for="note">Note</label>
@@ -277,7 +277,7 @@
                         <div class="d-flex justify-content-between small mb-2"><span class="text-muted-custom">Cash in hand</span><strong id="edit_live_cash">—</strong></div>
                         <label class="form-label form-label-custom" for="edit_remaining_after">Previous Balance After Cash Taken (PKR)</label>
                         <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_remaining_after" name="remaining_after" value="">
-                        <small class="text-muted-custom">Updates live from amount — you can edit this too (next day’s previous).</small>
+                        <small class="text-muted-custom">Follows amount taken; edit freely without changing amount (next day’s previous).</small>
                     </div>
                     <div class="mb-1">
                         <label class="form-label form-label-custom" for="edit_note">Note</label>
@@ -311,8 +311,8 @@
             baseCash: 0,
             otherTaken: 0,
             maxAvailable: 0,
-            lockAfter: false,
-            lockAmount: false,
+            // Once user edits after-balance, don't overwrite it from amount/prev
+            afterManual: false,
         };
 
         const cashNow = () => {
@@ -320,29 +320,16 @@
             return state.baseCash + (userPrev - state.bakedPrev);
         };
 
-        const paintFromAmount = () => {
+        const paint = ({ syncAfter = true } = {}) => {
             const cash = cashNow();
             const amount = Math.max(0, num(amountEl && amountEl.value));
             const pending = cash - state.otherTaken - amount;
             if (liveCash) liveCash.textContent = money(cash);
             state.maxAvailable = cash - state.otherTaken;
             if (amountEl) amountEl.max = Math.max(0, state.maxAvailable).toFixed(2);
-            if (afterEl && document.activeElement !== afterEl && !state.lockAfter) {
+            // Amount Taken never changes from previous/after edits — only after syncs from amount
+            if (syncAfter && afterEl && !state.afterManual && document.activeElement !== afterEl) {
                 afterEl.value = pending.toFixed(2);
-            }
-        };
-
-        const paintFromAfter = () => {
-            const cash = cashNow();
-            const pending = Math.max(0, num(afterEl && afterEl.value));
-            const amount = Math.max(0, cash - state.otherTaken - pending);
-            if (liveCash) liveCash.textContent = money(cash);
-            state.maxAvailable = cash - state.otherTaken;
-            if (amountEl) {
-                amountEl.max = Math.max(0, state.maxAvailable).toFixed(2);
-                if (document.activeElement !== amountEl && !state.lockAmount) {
-                    amountEl.value = amount > 0 ? amount.toFixed(2) : '';
-                }
             }
         };
 
@@ -359,29 +346,31 @@
                 state.bakedPrev = num(data.previous_balance);
                 state.baseCash = num(data.cash_in_hand);
                 state.otherTaken = num(data.cash_taken_total);
+                state.afterManual = false;
                 if (prevEl && document.activeElement !== prevEl) {
                     prevEl.value = state.bakedPrev.toFixed(2);
                 }
-                paintFromAmount();
+                paint({ syncAfter: true });
             } catch (_) {
-                paintFromAmount();
+                paint({ syncAfter: true });
             }
         };
 
         if (dateEl) dateEl.addEventListener('change', load);
-        if (prevEl) prevEl.addEventListener('input', () => paintFromAmount());
+        // Opening previous: refresh cash + after-balance only — never touch Amount Taken
+        if (prevEl) prevEl.addEventListener('input', () => paint({ syncAfter: !state.afterManual }));
+        // Amount Taken: drive after-balance (unless user already typed after manually)
         if (amountEl) {
             amountEl.addEventListener('input', () => {
-                state.lockAmount = true;
-                state.lockAfter = false;
-                paintFromAmount();
+                state.afterManual = false;
+                paint({ syncAfter: true });
             });
         }
+        // After-balance: editable on its own — do not change Amount Taken
         if (afterEl) {
             afterEl.addEventListener('input', () => {
-                state.lockAfter = true;
-                state.lockAmount = false;
-                paintFromAfter();
+                state.afterManual = true;
+                paint({ syncAfter: false });
             });
         }
         if (form && amountEl) {
@@ -402,8 +391,7 @@
         }
         if (modal) {
             modal.addEventListener('shown.bs.modal', () => {
-                state.lockAfter = false;
-                state.lockAmount = false;
+                state.afterManual = false;
                 load();
             });
         } else {
