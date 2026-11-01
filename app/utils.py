@@ -1488,7 +1488,8 @@ def build_period_cash_entries(stats):
         d = getattr(row, 'sale_date', None)
         return (d or datetime.min.date(), getattr(row, 'id', 0) or 0)
 
-    rows.sort(key=_sort_key, reverse=True)
+    # Oldest → newest (chronological)
+    rows.sort(key=_sort_key, reverse=False)
     return rows
 
 

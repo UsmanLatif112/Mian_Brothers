@@ -76,21 +76,115 @@ def adjust_batch_for_purchase_log(log, old_qty, new_qty, unit_cost=None):
     if batch is None:
         return create_batch_from_purchase_log(log)
 
-    old_qty = float(old_qty or 0)
     new_qty = float(new_qty or 0)
-    delta = new_qty - old_qty
-    consumed = float(batch.qty_received or 0) - float(batch.qty_remaining or 0)
+    consumed = max(0.0, float(batch.qty_received or 0) - float(batch.qty_remaining or 0))
     batch.qty_received = new_qty
-    batch.qty_remaining = max(0.0, new_qty - consumed)
+    # Keep already-sold qty; remaining = what is still on hand from this layer
+    batch.qty_remaining = max(0.0, min(new_qty, new_qty - consumed))
     if unit_cost is not None:
         batch.unit_cost = float(unit_cost)
-    if delta != 0:
-        # Prefer adjusting remaining by delta when not over-consumed
-        batch.qty_remaining = max(0.0, float(batch.qty_remaining or 0) + delta)
-        if float(batch.qty_remaining) > float(batch.qty_received):
-            batch.qty_remaining = float(batch.qty_received)
     db.session.flush()
     return batch
+
+
+def sync_item_batches_to_stock(item):
+    """
+    After an inventory item qty/liters edit, align FIFO layers to live stock.
+    Decrease: shrink newest layers (received + remaining) so FIFO matches.
+    Increase: top up newest batch, or create an adjustment layer.
+    """
+    if not item or not getattr(item, 'id', None):
+        return
+    if item.tracks_liters():
+        target = float(item.liters or 0)
+    else:
+        target = float(item.quantity or 0)
+
+    batches = list_batches_for_item(item.id, include_empty=True)
+    current = sum(float(b.qty_remaining or 0) for b in batches)
+    if abs(current - target) < 1e-9:
+        return
+
+    if target < current - 1e-9:
+        left = current - target
+        for batch in reversed(batches):
+            if left <= 1e-12:
+                break
+            rem = float(batch.qty_remaining or 0)
+            if rem <= 0:
+                continue
+            take = min(rem, left)
+            batch.qty_remaining = rem - take
+            recv = float(batch.qty_received or 0)
+            batch.qty_received = max(float(batch.qty_remaining), recv - take)
+            left -= take
+        db.session.flush()
+        return
+
+    need = target - current
+    if batches:
+        newest = batches[-1]
+        newest.qty_received = float(newest.qty_received or 0) + need
+        newest.qty_remaining = float(newest.qty_remaining or 0) + need
+        db.session.flush()
+        return
+
+    batch = stamp_agency(StockBatch(
+        other_item_id=item.id,
+        purchase_log_id=None,
+        qty_received=need,
+        qty_remaining=need,
+        unit_cost=float(item.cost_price or 0),
+        received_at=datetime.utcnow(),
+    ))
+    db.session.add(batch)
+    db.session.flush()
+
+
+def sync_fuel_batches_to_stock(fuel_type_id, target_liters):
+    """Align fuel FIFO layers after a manual tank stock edit."""
+    if not fuel_type_id:
+        return
+    target = float(target_liters or 0)
+    batches = list_batches_for_fuel(fuel_type_id, include_empty=True)
+    current = sum(float(b.qty_remaining or 0) for b in batches)
+    if abs(current - target) < 1e-9:
+        return
+
+    if target < current - 1e-9:
+        left = current - target
+        for batch in reversed(batches):
+            if left <= 1e-12:
+                break
+            rem = float(batch.qty_remaining or 0)
+            if rem <= 0:
+                continue
+            take = min(rem, left)
+            batch.qty_remaining = rem - take
+            recv = float(batch.qty_received or 0)
+            batch.qty_received = max(float(batch.qty_remaining), recv - take)
+            left -= take
+        db.session.flush()
+        return
+
+    need = target - current
+    if batches:
+        newest = batches[-1]
+        newest.qty_received = float(newest.qty_received or 0) + need
+        newest.qty_remaining = float(newest.qty_remaining or 0) + need
+        db.session.flush()
+        return
+
+    batch = stamp_agency(StockBatch(
+        fuel_type_id=fuel_type_id,
+        purchase_log_id=None,
+        qty_received=need,
+        qty_remaining=need,
+        unit_cost=0,
+        received_at=datetime.utcnow(),
+    ))
+    db.session.add(batch)
+    db.session.flush()
 
 
 def delete_batch_for_purchase_log(log):

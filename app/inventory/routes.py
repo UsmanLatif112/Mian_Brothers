@@ -28,6 +28,8 @@ from app.services.stock_batches import (
     delete_batches_for_fuel,
     delete_batches_for_item,
     delete_batch_for_purchase_log,
+    sync_item_batches_to_stock,
+    sync_fuel_batches_to_stock,
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
@@ -690,6 +692,9 @@ def edit_item(item_id):
             updated_by=current_user.id,
         )))
 
+    # Keep FIFO layers in sync with the edited on-hand qty/liters
+    sync_item_batches_to_stock(item)
+
     db.session.commit()
     flash(f'Updated {item.name}.', 'success')
     return redirect(url_for('inventory.index'))
@@ -773,6 +778,7 @@ def edit_fuel(fuel_type_id):
     inventory = _inventory_for_fuel(fuel.id, create=True)
     inventory.current_stock_liters = stock_val
     inventory.reorder_threshold = threshold_val
+    sync_fuel_batches_to_stock(fuel.id, stock_val)
     db.session.commit()
     flash(f'Updated {fuel.name} stock.', 'success')
     return redirect(url_for('inventory.index'))
