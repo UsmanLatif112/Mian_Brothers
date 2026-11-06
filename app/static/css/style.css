@@ -1669,7 +1669,7 @@ a.kpi-card:focus-visible {
 
 @media (min-width: 992px) {
     .kpi-grid-main {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 
     .kpi-grid {
@@ -1689,7 +1689,7 @@ a.kpi-card:focus-visible {
 
 @media (min-width: 1200px) {
     .kpi-grid-main {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 
     .dashboard-panels {

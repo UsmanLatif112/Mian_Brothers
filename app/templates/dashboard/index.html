@@ -139,6 +139,8 @@
     </div>
 </section>
 
+{% set paid_to_vendor = stats.vendor_payments_total or 0 %}
+{% set taken_after_vendor = (stats.cash_taken_total or 0) - paid_to_vendor %}
 <section class="kpi-grid kpi-grid-main mt-3" aria-label="Till cash">
     <div class="kpi-card kpi-cash">
         <div class="kpi-card-top">
@@ -156,6 +158,24 @@
         </div>
         <div class="kpi-value text-danger">{{ stats.cash_taken_total | money }}</div>
         <div class="kpi-meta">Total cash taken in period</div>
+    </div>
+
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-truck"></i></span>
+            <span class="kpi-label">Paid to Vendor</span>
+        </div>
+        <div class="kpi-value text-danger">{{ paid_to_vendor | money }}</div>
+        <div class="kpi-meta">All vendor payments in period</div>
+    </div>
+
+    <div class="kpi-card kpi-cash">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-dash-circle"></i></span>
+            <span class="kpi-label">Taken − Vendor</span>
+        </div>
+        <div class="kpi-value {% if taken_after_vendor >= 0 %}text-success{% else %}text-danger{% endif %}">{{ taken_after_vendor | money }}</div>
+        <div class="kpi-meta">Amount taken − paid to vendor</div>
     </div>
 
     <div class="kpi-card kpi-purchase">
