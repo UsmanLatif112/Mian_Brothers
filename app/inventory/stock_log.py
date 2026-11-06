@@ -398,7 +398,7 @@ def build_stock_log(product, start, end):
             abs(p['qty']) > 1e-9 or abs(o['qty']) > 1e-9 or abs(s['qty']) > 1e-9
             or abs(c['credit']) > 1e-9 or abs(c['amount']) > 1e-9
         )
-        # Opening-vendor stock folds into opening for the day (not purchase)
+        # Opening-vendor stock folds into the single Opening column (not purchase)
         day_opening = running + o['qty']
         day_closing = day_opening + p['qty'] - s['qty']
         running = day_closing

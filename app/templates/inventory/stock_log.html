@@ -81,7 +81,7 @@
             <div class="card-body card-body-premium">
                 <span class="metric-label text-muted-custom text-uppercase">Purchased</span>
                 <div class="metric-value fw-bold mb-0">{{ totals.purchase_qty | num(2) }} <small class="fs-6 fw-normal text-muted-custom">{{ product.unit }}</small></div>
-                <small class="text-muted-custom">{{ totals.purchase_amount | money }}{% if totals.opening_stock_in %} · excl. opening {{ totals.opening_stock_in | num(2) }} {{ product.unit }}{% endif %}</small>
+                <small class="text-muted-custom">{{ totals.purchase_amount | money }}</small>
             </div>
         </div>
     </div>
@@ -128,7 +128,6 @@
                     <th>Name</th>
                     <th>Date</th>
                     <th class="text-end">Opening</th>
-                    <th class="text-end">Opening In</th>
                     <th class="text-end">Purchase</th>
                     <th class="text-end">Sale</th>
                     <th class="text-end">Stock</th>
@@ -143,10 +142,7 @@
                     <tr>
                         <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ row.name }}">{{ row.name }}</span></td>
                         <td class="text-nowrap">{{ row.date }}</td>
-                        <td class="text-end text-nowrap">{{ (row.stock_opening - (row.opening_stock_in or 0)) | num(2) }} {{ row.unit }}</td>
-                        <td class="text-end text-nowrap {% if row.opening_stock_in %}text-primary{% endif %}">
-                            {% if row.opening_stock_in %}{{ row.opening_stock_in | num(2) }} {{ row.unit }}{% else %}—{% endif %}
-                        </td>
+                        <td class="text-end text-nowrap">{{ row.stock_opening | num(2) }} {{ row.unit }}</td>
                         <td class="text-end text-nowrap {% if row.purchase_qty %}text-success{% endif %}">
                             {% if row.purchase_qty %}{{ row.purchase_qty | num(2) }} {{ row.unit }}{% else %}—{% endif %}
                         </td>
@@ -167,7 +163,7 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="10" class="text-center text-muted-custom py-4">
+                        <td colspan="9" class="text-center text-muted-custom py-4">
                             {% if not product %}Select petrol, diesel, or a shop product to view the log.{% else %}No stock movements in this period.{% endif %}
                         </td>
                     </tr>
@@ -178,7 +174,6 @@
                 <tr class="fw-semibold">
                     <td colspan="2">Period total</td>
                     <td class="text-end text-nowrap">{{ totals.opening | num(2) }} {{ product.unit }}</td>
-                    <td class="text-end text-nowrap text-primary">{{ totals.opening_stock_in | num(2) }} {{ product.unit }}</td>
                     <td class="text-end text-nowrap text-success">{{ totals.purchase_qty | num(2) }} {{ product.unit }}</td>
                     <td class="text-end text-nowrap text-danger">{{ totals.sale_qty | num(2) }} {{ product.unit }}</td>
                     <td class="text-end text-nowrap">{{ totals.closing | num(2) }} {{ product.unit }}</td>
