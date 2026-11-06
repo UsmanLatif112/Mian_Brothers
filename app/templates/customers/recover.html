@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}Recover List — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text d-flex align-items-center gap-3 min-w-0">
+            <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers"><i class="bi bi-arrow-left"></i></a>
+            <div class="min-w-0">
+                <p class="page-eyebrow mb-1">CRM</p>
+                <h1 class="page-title text-truncate">Recover List</h1>
+            </div>
+        </div>
+        <div class="page-header-actions d-flex flex-wrap align-items-center gap-2">
+            <form method="GET" action="{{ url_for('customers.recover') }}" class="d-flex flex-wrap align-items-center gap-2" data-allow-multi-submit="1">
+                <div class="input-group" style="width: min(220px, 100%);">
+                    <span class="input-group-text">PKR</span>
+                    <input type="number" step="0.01" min="0" class="form-control form-control-custom"
+                           name="min_amount" value="{{ min_amount or '' }}"
+                           placeholder="Min due (optional)" aria-label="Minimum receivable">
+                </div>
+                <button type="submit" class="btn btn-outline-secondary" title="Apply filter">
+                    <i class="bi bi-funnel me-1"></i><span class="btn-label"> Apply</span>
+                </button>
+            </form>
+            <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+                <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
+            </button>
+        </div>
+    </div>
+</header>
+
+<section class="ledger-kpi-row mb-3" aria-label="Recover KPIs">
+    <article class="ledger-kpi">
+        <div class="ledger-kpi-label">Customers</div>
+        <div class="ledger-kpi-value">{{ rows|length }}</div>
+        <div class="ledger-kpi-meta">
+            {% if threshold is not none %}
+            Due &gt; {{ threshold | money }}
+            {% else %}
+            All customers
+            {% endif %}
+        </div>
+    </article>
+    <article class="ledger-kpi {% if total_due > 0 %}stat-warning{% endif %}">
+        <div class="ledger-kpi-label">Total receivable</div>
+        <div class="ledger-kpi-value {% if total_due > 0 %}text-warning{% endif %}">{{ total_due | money }}</div>
+        <div class="ledger-kpi-meta">Positive balances only</div>
+    </article>
+</section>
+
+<div class="card card-premium list-panel">
+    <div class="table-responsive">
+        <table class="table table-custom table-hover mb-0 list-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Customer Name</th>
+                    <th>Address</th>
+                    <th>Phone</th>
+                    <th>Amount to pay</th>
+                    <th>Pending days</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if rows %}
+                    {% for row in rows %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <a href="{{ url_for('customers.ledger', customer_id=row.id) }}"
+                               class="fw-semibold text-decoration-none" style="color: var(--text-primary);">
+                                {{ row.name }}
+                            </a>
+                        </td>
+                        <td>{{ row.address or '—' }}</td>
+                        <td>{{ row.phone or '—' }}</td>
+                        <td>
+                            {% if row.amount > 0 %}
+                            <span class="badge badge-custom badge-danger-custom fw-bold">{{ row.amount | money }}</span>
+                            {% elif row.amount < 0 %}
+                            <span class="badge badge-custom badge-success-custom fw-bold">{{ row.amount | money }}</span>
+                            {% else %}
+                            <span class="badge badge-custom badge-staff">{{ row.amount | money }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.amount > 0 and row.days_overdue %}
+                            <span class="fw-semibold">{{ row.days_overdue }} day{{ 's' if row.days_overdue != 1 else '' }}</span>
+                            {% if row.oldest_date %}
+                            <small class="d-block text-muted-custom" style="font-size: 0.75rem;">since {{ row.oldest_date }}</small>
+                            {% endif %}
+                            {% elif row.amount > 0 %}
+                            <span class="text-muted-custom">0 days</span>
+                            {% else %}
+                            <span class="text-muted-custom">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="empty-state text-center py-5">
+                            <div class="empty-state-icon"><i class="bi bi-people-fill"></i></div>
+                            <p class="text-muted-custom mb-0">No customers match this recover filter.</p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# 80mm thermal invoice (same print path as ledger / sales) #}
+<aside class="thermal-slip" aria-hidden="true">
+    <div class="thermal-slip-head">
+        <div class="thermal-brand">{{ brand_name or 'OctaneFlow' }}</div>
+        <div class="thermal-sub">Recover List</div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-meta"><span>Printed</span><span>{{ today }}</span></div>
+    <div class="thermal-meta">
+        <span>Filter</span>
+        <span>{% if threshold is not none %}Due &gt; {{ '%.2f'|format(threshold) }}{% else %}All customers{% endif %}</span>
+    </div>
+    <div class="thermal-meta"><span>Count</span><span>{{ rows|length }}</span></div>
+    <hr class="thermal-rule">
+    <div class="thermal-title">Collection Sheet</div>
+    <div class="thermal-lines">
+        {% for row in rows %}
+        <div class="thermal-line">
+            <div class="thermal-line-desc">{{ loop.index }}. {{ row.name }}</div>
+            {% if row.phone %}<div class="thermal-line-desc">Ph {{ row.phone }}</div>{% endif %}
+            {% if row.address %}<div class="thermal-line-desc">{{ row.address }}</div>{% endif %}
+            <div class="thermal-row">
+                <span>Due {{ '%.2f'|format(row.amount) }}</span>
+                <span>{% if row.amount > 0 %}{{ row.days_overdue }}d{% else %}—{% endif %}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="thermal-line-desc">No customers</div>
+        {% endfor %}
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-totals">
+        <div class="thermal-row"><span>Total due</span><span>{{ '%.2f'|format(total_due) }}</span></div>
+    </div>
+    <hr class="thermal-rule">
+    <div class="thermal-foot">Thank you · {{ brand_name or 'OctaneFlow' }}</div>
+</aside>
+{% endblock %}
+
+{% block scripts %}
+{% if auto_print %}
+<script>
+    (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
+        setTimeout(function () { window.print(); }, 250);
+    });
+</script>
+{% endif %}
+{% endblock %}

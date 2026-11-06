@@ -29,7 +29,19 @@
             <p class="page-eyebrow">CRM</p>
             <h1 class="page-title">Customer Directory & Ledgers</h1>
         </div>
-        <div class="page-header-actions">
+        <div class="page-header-actions d-flex flex-wrap align-items-center gap-2">
+            <form method="GET" action="{{ url_for('customers.recover') }}" class="d-flex flex-wrap align-items-center gap-2" id="recover-print-form" data-allow-multi-submit="1">
+                <input type="hidden" name="auto_print" value="1">
+                <div class="input-group" style="width: min(200px, 100%);">
+                    <span class="input-group-text">PKR</span>
+                    <input type="number" step="0.01" min="0" class="form-control form-control-custom"
+                           name="min_amount" id="recover_min_amount"
+                           placeholder="Min due (all)" aria-label="Minimum receivable for recover list">
+                </div>
+                <button type="submit" class="btn btn-outline-secondary" title="Print recover list">
+                    <i class="bi bi-printer me-1"></i><span class="btn-label"> Print Recover</span>
+                </button>
+            </form>
             <button class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#createCustomerModal" title="Register New Customer">
                 <i class="bi bi-person-plus me-2"></i><span class="btn-label"> Register New Customer</span>
             </button>

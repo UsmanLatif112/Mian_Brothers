@@ -1208,8 +1208,8 @@ def stock_log():
 
     args = request.args.to_dict()
     if not (args.get('period') or '').strip():
-        args['period'] = 'today'
-    period, start, end = parse_period(args, default_period='today')
+        args['period'] = 'all'
+    period, start, end = parse_period(args, default_period='all')
 
     choices = product_choices()
     product_key = (request.args.get('product') or '').strip()

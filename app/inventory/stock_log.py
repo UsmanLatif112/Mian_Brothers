@@ -10,6 +10,7 @@ from app.models import (
     MeterReading, CreditSale,
 )
 from app.tenancy import apply_agency_filter
+from app.vendors.service import is_opening_stock_purchase, is_opening_vendor_name
 
 
 def _as_date(value):
@@ -98,8 +99,9 @@ def _live_stock(product):
 
 
 def _fuel_movements(fuel_type_id, start, end):
-    """Purchases / meter sales / credit sales by day for a fuel tank."""
+    """Purchases / opening-stock / meter sales / credit sales by day for a fuel tank."""
     purchases_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
+    opening_in_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
     sales_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
     credit_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0, 'credit': 0.0})
 
@@ -118,8 +120,9 @@ def _fuel_movements(fuel_type_id, start, end):
         day = _as_date(log.entry_date)
         qty = float(log.liters or 0)
         amt = qty * float(log.cost_price or 0)
-        purchases_by_day[day]['qty'] += qty
-        purchases_by_day[day]['amount'] += amt
+        bucket = opening_in_by_day if is_opening_stock_purchase(log) else purchases_by_day
+        bucket[day]['qty'] += qty
+        bucket[day]['amount'] += amt
         log_days.add(day)
 
     entries = apply_agency_filter(
@@ -136,8 +139,13 @@ def _fuel_movements(fuel_type_id, start, end):
             continue  # already counted via purchase log
         qty = float(se.liters_added or 0)
         amt = qty * float(se.cost_per_liter or 0)
-        purchases_by_day[day]['qty'] += qty
-        purchases_by_day[day]['amount'] += amt
+        # StockEntry.supplier may be the opening vendor name
+        if is_opening_vendor_name(getattr(se, 'supplier', None)):
+            opening_in_by_day[day]['qty'] += qty
+            opening_in_by_day[day]['amount'] += amt
+        else:
+            purchases_by_day[day]['qty'] += qty
+            purchases_by_day[day]['amount'] += amt
 
     meters = apply_agency_filter(
         MeterReading.query.filter(
@@ -174,12 +182,13 @@ def _fuel_movements(fuel_type_id, start, end):
         credit_by_day[day]['amount'] += amt
         credit_by_day[day]['credit'] += credit
 
-    return purchases_by_day, sales_by_day, credit_by_day
+    return purchases_by_day, opening_in_by_day, sales_by_day, credit_by_day
 
 
 def _item_movements(item, start, end):
-    """Purchases / sales / credit by day for a shop or FT item."""
+    """Purchases / opening-stock / sales / credit by day for a shop or FT item."""
     purchases_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
+    opening_in_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
     sales_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
     credit_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0, 'credit': 0.0})
     tracks_l = item.tracks_liters()
@@ -204,8 +213,9 @@ def _item_movements(item, start, end):
         else:
             qty = float(log.quantity or 0)
         amt = qty * float(log.cost_price or 0)
-        purchases_by_day[day]['qty'] += qty
-        purchases_by_day[day]['amount'] += amt
+        bucket = opening_in_by_day if is_opening_stock_purchase(log) else purchases_by_day
+        bucket[day]['qty'] += qty
+        bucket[day]['amount'] += amt
 
     sales = apply_agency_filter(
         CreditSale.query.filter(
@@ -228,7 +238,7 @@ def _item_movements(item, start, end):
         credit_by_day[day]['amount'] += amt
         credit_by_day[day]['credit'] += credit
 
-    return purchases_by_day, sales_by_day, credit_by_day
+    return purchases_by_day, opening_in_by_day, sales_by_day, credit_by_day
 
 
 def _movements_through(product, start, end):
@@ -241,33 +251,31 @@ def _movements_through(product, start, end):
 def _qty_after(product, from_day):
     """Net stock change from from_day (inclusive) through far future → used to back into opening."""
     far = from_day + timedelta(days=36500)
-    purchases, sales, _ = _movements_through(product, from_day, far)
-    purchased = sum(v['qty'] for v in purchases.values())
+    purchases, opening_in, sales, _ = _movements_through(product, from_day, far)
+    stock_in = (
+        sum(v['qty'] for v in purchases.values())
+        + sum(v['qty'] for v in opening_in.values())
+    )
     sold = sum(v['qty'] for v in sales.values())
-    return purchased - sold
+    return stock_in - sold
 
 
 def build_stock_log(product, start, end):
     """
     Daily rows for one product in [start, end].
 
-    Columns: name, date, opening stock, purchase qty, sale qty, closing stock,
-    purchase amount, sale amount, credit sale amount.
+    \"Open for previous\" stock is treated as opening (not purchase).
     """
     if not product:
         return [], {}
 
     live = _live_stock(product)
-    # Opening at start = live − (purchases − sales) from start onward
+    # Opening at start = live − (stock in − sales) from start onward
     net_from_start = _qty_after(product, start)
     opening = live - net_from_start
 
-    purchases, sales, credits = _movements_through(product, start, end)
+    purchases, opening_in, sales, credits = _movements_through(product, start, end)
 
-    days = sorted(set(purchases) | set(sales) | set(credits))
-    # Fill empty calendar days in range only when there is activity somewhere,
-    # still show only days with movement for a cleaner statement — user asked listing
-    # of stock for that date; include every day that has any movement.
     rows = []
     running = opening
     totals = {
@@ -278,19 +286,22 @@ def build_stock_log(product, start, end):
         'credit_amount': 0.0,
         'opening': opening,
         'closing': opening,
+        'opening_stock_in': 0.0,
     }
 
     # Walk every day in range so stock-for-date is continuous
     day = start
     while day <= end:
         p = purchases.get(day, {'qty': 0.0, 'amount': 0.0})
+        o = opening_in.get(day, {'qty': 0.0, 'amount': 0.0})
         s = sales.get(day, {'qty': 0.0, 'amount': 0.0})
         c = credits.get(day, {'qty': 0.0, 'amount': 0.0, 'credit': 0.0})
         has_move = (
-            abs(p['qty']) > 1e-9 or abs(s['qty']) > 1e-9
+            abs(p['qty']) > 1e-9 or abs(o['qty']) > 1e-9 or abs(s['qty']) > 1e-9
             or abs(c['credit']) > 1e-9 or abs(c['amount']) > 1e-9
         )
-        day_opening = running
+        # Opening-vendor stock folds into opening for the day (not purchase)
+        day_opening = running + o['qty']
         day_closing = day_opening + p['qty'] - s['qty']
         running = day_closing
 
@@ -307,6 +318,7 @@ def build_stock_log(product, start, end):
                 sale_amount=sale_amount,
                 credit_amount=c['credit'],
                 credit_sale_amount=c['amount'],
+                opening_stock_in=o['qty'],
                 unit=product['unit'],
             ))
             totals['purchase_qty'] += p['qty']
@@ -314,6 +326,7 @@ def build_stock_log(product, start, end):
             totals['purchase_amount'] += p['amount']
             totals['sale_amount'] += sale_amount
             totals['credit_amount'] += c['credit']
+            totals['opening_stock_in'] += o['qty']
 
         day += timedelta(days=1)
 
@@ -321,3 +334,4 @@ def build_stock_log(product, start, end):
     # Newest first for reading recent activity
     rows.reverse()
     return rows, totals
+

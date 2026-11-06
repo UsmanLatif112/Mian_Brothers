@@ -296,7 +296,7 @@
             <form action="{{ url_for('inventory.index') }}" method="POST" id="add-item-form" class="inventory-modal-form"
                   data-create-action="{{ url_for('inventory.index') }}">
                 <div class="modal-header border-0 pb-2">
-                    <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory (Purchase Batch)</h5>
+                        <h5 class="modal-title fw-bold" id="addInventoryModalLabel">Add Inventory (Purchase Batch)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body pt-2 inventory-modal-body">
@@ -867,7 +867,7 @@
 
             el.querySelectorAll('input, select').forEach(input => {
                 if (input.type === 'hidden') return;
-                input.required = false;
+                        input.required = false;
                 if (!visible) return;
                 if (['cost_price', 'sale_price', 'vendor_id', 'payment_status'].includes(input.id)
                     || (cat === 'fuel' && ['fuel_type_id', 'liters'].includes(input.id))
@@ -1273,8 +1273,8 @@
             const name = (document.getElementById('item_name')?.value || '').trim();
             if (!name) {
                 fail('Please enter an item name.');
-                return;
-            }
+                    return;
+                }
             companyHidden.value = '';
             typeHidden.value = '';
         } else if (cat && !SYSTEM_CATS.has(cat)) {

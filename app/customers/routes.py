@@ -16,6 +16,7 @@ from app.customers.service import (
     customer_has_linked_activity,
     register_customer,
     customer_option_label,
+    build_recovery_list,
 )
 from datetime import datetime
 
@@ -641,6 +642,29 @@ def ledger(customer_id):
         search=search_q,
         today=business_today().isoformat(),
         chart_series=customer_ledger_pie(ledger_entries),
+    )
+
+
+@customers_bp.route('/recover')
+@login_required
+def recover():
+    """
+    Receivable recovery list for collection / print.
+    Optional min_amount: only customers with due strictly above that amount.
+    Empty amount → every customer (none missing).
+    """
+    min_raw = (request.args.get('min_amount') or '').strip()
+    rows, threshold = build_recovery_list(min_raw or None)
+    total_due = sum(r['amount'] for r in rows if r['amount'] > 0)
+    auto_print = (request.args.get('auto_print') or '').strip() in ('1', 'true', 'yes')
+    return render_template(
+        'customers/recover.html',
+        rows=rows,
+        min_amount=min_raw,
+        threshold=threshold,
+        total_due=total_due,
+        today=business_today().isoformat(),
+        auto_print=auto_print,
     )
 
 

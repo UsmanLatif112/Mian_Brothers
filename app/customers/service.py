@@ -1,8 +1,10 @@
 """Customer balance helpers — rebuild due from ledger sources of truth."""
 
+from datetime import datetime
+
 from app.models import db, Customer, CreditSale, Payment, Sale
-from app.tenancy import stamp_agency
-from app.utils import parse_form_date
+from app.tenancy import apply_agency_filter, stamp_agency
+from app.utils import business_today, parse_form_date
 
 
 def customer_option_label(customer):
@@ -144,3 +146,119 @@ def recalculate_customer_balance(customer):
 
     customer.current_balance_due = balance
     return balance
+
+
+def _credit_row_still_owed(cs):
+    """Unpaid receivable left on a CreditSale row (opening / loan / sale)."""
+    et = (cs.entry_type or 'sale').lower()
+    if et == 'advance':
+        return 0.0
+    amt = float(cs.amount or 0)
+    paid = float(cs.amount_paid or 0)
+    if et in ('loan', 'opening'):
+        return max(amt - paid, 0.0) if paid > 0 else amt
+    status = (cs.payment_status or 'unpaid').lower()
+    if status == 'paid' and paid <= 0:
+        paid = amt
+    return max(amt - paid, 0.0)
+
+
+def _as_date(value):
+    if value is None:
+        return None
+    if hasattr(value, 'date') and callable(value.date):
+        try:
+            return value.date()
+        except Exception:
+            pass
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def build_recovery_list(min_amount=None):
+    """
+    Recovery / collect list for print.
+
+    - min_amount is None / empty → every customer (none missing).
+    - otherwise → customers whose receivable (incl. opening) is strictly greater
+      than min_amount.
+
+    Each row: name, address, phone, amount due, overdue/pending days from the
+    oldest still-unpaid credit (opening, loan, sale, legacy).
+    """
+    today = business_today()
+    query = apply_agency_filter(Customer.query, Customer)
+
+    try:
+        threshold = float(min_amount) if min_amount not in (None, '') else None
+    except (TypeError, ValueError):
+        threshold = None
+
+    if threshold is not None:
+        query = query.filter(Customer.current_balance_due > threshold)
+
+    customers = query.order_by(
+        Customer.current_balance_due.desc(),
+        Customer.name.asc(),
+    ).all()
+    if not customers:
+        return [], threshold
+
+    ids = [c.id for c in customers]
+    oldest_by_customer = {}
+
+    credit_rows = (
+        CreditSale.query
+        .filter(
+            CreditSale.customer_id.in_(ids),
+            CreditSale.entry_type.in_(('sale', 'loan', 'opening')),
+        )
+        .all()
+    )
+    for cs in credit_rows:
+        if _credit_row_still_owed(cs) <= 0:
+            continue
+        d = _as_date(cs.sale_date)
+        if d is None:
+            continue
+        prev = oldest_by_customer.get(cs.customer_id)
+        if prev is None or d < prev:
+            oldest_by_customer[cs.customer_id] = d
+
+    legacy_rows = (
+        Sale.query
+        .filter(
+            Sale.customer_id.in_(ids),
+            Sale.payment_type == 'credit',
+        )
+        .all()
+    )
+    for sale in legacy_rows:
+        if float(sale.total_amount or 0) <= 0:
+            continue
+        d = _as_date(sale.sale_date)
+        if d is None:
+            continue
+        prev = oldest_by_customer.get(sale.customer_id)
+        if prev is None or d < prev:
+            oldest_by_customer[sale.customer_id] = d
+
+    rows = []
+    for customer in customers:
+        due = float(customer.current_balance_due or 0)
+        oldest = oldest_by_customer.get(customer.id)
+        if due > 0 and oldest is not None:
+            days_overdue = max((today - oldest).days, 0)
+        else:
+            days_overdue = 0
+        rows.append({
+            'id': customer.id,
+            'name': customer.name or '',
+            'phone': customer.phone or '',
+            'address': customer.address or '',
+            'amount': due,
+            'oldest_date': oldest,
+            'days_overdue': days_overdue,
+        })
+    return rows, threshold
