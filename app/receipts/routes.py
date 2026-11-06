@@ -39,7 +39,7 @@ def purchase(log_id):
     if log.company:
         parts.append(f"({log.company})")
     if qty is not None:
-        parts.append(f"· {float(qty):,.2f} {unit} @ {_money(log.cost_price)}")
+        parts.append(f"· {float(qty):,.2f} {unit}")
     if log.category:
         parts.append(f"· {log.category}")
     vendor = None
@@ -79,7 +79,6 @@ def _sale_particulars(cs):
         return ' · '.join(bits) if bits else 'Sale'
 
     qty = float(cs.liters or 0)
-    rate = float(cs.rate or 0)
     disc = float(cs.discount or 0)
     if cs.is_fuel or (cs.other_item and cs.other_item.tracks_liters()):
         unit = 'L'
@@ -87,7 +86,7 @@ def _sale_particulars(cs):
         unit = 'pcs'
 
     if qty:
-        desc = f"{qty:,.2f} {unit} of {item} @ PKR {_money(rate)}"
+        desc = f"{qty:,.2f} {unit} of {item}"
     else:
         desc = item
     if disc > 0:
@@ -154,10 +153,7 @@ def sale(sale_id):
         date=legacy.sale_date.strftime('%Y-%m-%d %H:%M') if legacy.sale_date else '—',
         party_label='Customer',
         party=party,
-        desc=(
-            f"{float(legacy.liters or 0):,.2f} L of {fuel_name} "
-            f"@ PKR {_money(legacy.price_per_liter)}"
-        ),
+        desc=f"{float(legacy.liters or 0):,.2f} L of {fuel_name}",
         status=(legacy.payment_type or 'cash').upper(),
         amount=_money(total),
         total=_money(total),

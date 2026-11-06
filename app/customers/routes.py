@@ -527,7 +527,7 @@ def ledger(customer_id):
             paid = float(p.amount_paid or 0)
             credit = max(float(p.amount or 0) - paid, 0.0)
             disc = float(getattr(p, 'discount', 0) or 0)
-            desc = f"{float(p.liters):.2f} {unit} of {p.item_name} @ PKR {float(p.rate):,.2f}"
+            desc = f"{float(p.liters):.2f} {unit} of {p.item_name}"
             if disc > 0:
                 desc += f" (−{disc:,.2f} discount)"
             if paid > 0 and credit > 0:
@@ -547,7 +547,7 @@ def ledger(customer_id):
         ledger_entries.append({
             'date': p.sale_date,
             'type': 'purchase',
-            'desc': f"{p.liters:.2f}L of {p.fuel_type.name} @ PKR {float(p.price_per_liter):,.2f}/L (legacy)",
+            'desc': f"{p.liters:.2f}L of {p.fuel_type.name} (legacy)",
             'debit': float(p.total_amount) if p.payment_type == 'credit' else 0.0,
             'credit': 0.0,
             'ref_id': f"Legacy Sale #{p.id}",

@@ -405,7 +405,7 @@ def ledger(vendor_id):
     def _purchase_desc(log):
         if (log.category or '').strip().lower() == 'expense_settle':
             return log.item_name or 'Expense settle'
-        desc = f"{log.item_name} — {_qty_desc(log)} @ PKR {float(log.cost_price or 0):,.2f}"
+        desc = f"{log.item_name} — {_qty_desc(log)}"
         if log.company:
             desc = f"{log.company} {desc}"
         return desc

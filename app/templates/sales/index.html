@@ -308,7 +308,7 @@
             <div class="thermal-line-desc">#{{ cs.id }} · {{ cs.sale_date }} · {{ cs.customer.name if cs.customer else 'Walk-in' }}</div>
             <div class="thermal-line-desc">
                 {% if cs.entry_type == 'sale' and (cs.liters or 0)|float > 0 %}
-                {{ '%.2f'|format(cs.liters|float) }} {{ unit }} of {{ cs.item_name }} @ PKR {{ '%.2f'|format(cs.rate|float) }}
+                {{ '%.2f'|format(cs.liters|float) }} {{ unit }} of {{ cs.item_name }}
                 {% else %}
                 {{ cs.item_name }}{% if cs.remarks %} · {{ cs.remarks }}{% endif %}
                 {% endif %}
