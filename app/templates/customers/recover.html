@@ -3,7 +3,7 @@
 {% block title %}Recovery List — OctaneFlow{% endblock %}
 
 {% block content %}
-<header class="page-header mb-4 no-print">
+<header class="page-header mb-4 no-print recover-page-header">
     <div class="page-header-row">
         <div class="page-header-text d-flex align-items-center gap-3 min-w-0">
             <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers"><i class="bi bi-arrow-left"></i></a>
@@ -12,26 +12,26 @@
                 <h1 class="page-title text-truncate">Recovery List</h1>
             </div>
         </div>
-        <div class="page-header-actions d-flex flex-wrap align-items-center gap-2">
-            <form method="GET" action="{{ url_for('customers.recover') }}" class="d-flex flex-wrap align-items-center gap-2" data-allow-multi-submit="1">
-                <div class="input-group" style="width: min(200px, 100%);">
+        <div class="page-header-actions">
+            <form method="GET" action="{{ url_for('customers.recover') }}" class="recover-toolbar" data-allow-multi-submit="1">
+                <div class="input-group recover-toolbar-amount">
                     <span class="input-group-text">PKR</span>
                     <input type="number" step="0.01" min="0" class="form-control form-control-custom"
                            name="min_amount" value="{{ min_amount or '' }}"
                            placeholder="Amount (all)" aria-label="Minimum receivable">
                 </div>
-                <select name="days" class="form-select form-control-custom topbar-filter-select" aria-label="Pending days" style="min-width: 10rem;">
+                <select name="days" class="form-select form-control-custom recover-toolbar-days" aria-label="Pending days">
                     {% for value, label in days_choices %}
                     <option value="{{ value }}" {% if days_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-outline-secondary" title="Apply filters">
-                    <i class="bi bi-funnel me-1"></i><span class="btn-label"> Apply</span>
+                <button type="submit" class="btn btn-outline-secondary recover-toolbar-btn" title="Apply filters">
+                    <i class="bi bi-funnel"></i><span class="btn-label"> Apply</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary recover-toolbar-btn" id="recover-print-btn" title="Print recovery list">
+                    <i class="bi bi-printer"></i><span class="btn-label"> Print</span>
                 </button>
             </form>
-            <button type="button" class="btn btn-outline-secondary" id="recover-print-btn" title="Print recovery list">
-                <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
-            </button>
         </div>
     </div>
 </header>
@@ -171,12 +171,81 @@
 
 {% block scripts %}
 <style>
+/* One toolbar row: amount + days + Apply + Print — same height */
+.recover-page-header .page-header-row {
+    align-items: center;
+}
+.recover-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.recover-toolbar-amount {
+    width: 11.5rem;
+    flex: 0 0 auto;
+    height: 2.5rem;
+}
+.recover-toolbar-amount > .input-group-text,
+.recover-toolbar-amount > .form-control {
+    height: 100%;
+}
+.recover-toolbar-days,
+.recover-toolbar .ts-wrapper.recover-toolbar-days,
+.recover-toolbar .ts-wrapper.of-select {
+    width: 11rem;
+    min-width: 11rem;
+    flex: 0 0 auto;
+    height: 2.5rem !important;
+    margin: 0;
+}
+.recover-toolbar select.recover-toolbar-days {
+    height: 2.5rem;
+    min-height: 2.5rem;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+.recover-toolbar .ts-wrapper {
+    height: 2.5rem !important;
+}
+.recover-toolbar .ts-wrapper .ts-control {
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    display: flex !important;
+    align-items: center;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+.recover-toolbar-btn {
+    height: 2.5rem;
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0 0.9rem;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+@media (max-width: 767.98px) {
+    .recover-toolbar {
+        width: 100%;
+    }
+    .recover-toolbar-amount,
+    .recover-toolbar-days,
+    .recover-toolbar .ts-wrapper {
+        width: 100%;
+        min-width: 0;
+        flex: 1 1 100%;
+    }
+    .recover-toolbar-btn {
+        flex: 1 1 auto;
+    }
+}
+
 .recover-notes-cell {
     min-width: 8rem;
     border-bottom: 1px dashed var(--border-color, #ccc);
-}
-.recover-print-sheet {
-    /* Screen: hidden via .thermal-slip; print overrides below */
 }
 .recover-print-head {
     text-align: center;
