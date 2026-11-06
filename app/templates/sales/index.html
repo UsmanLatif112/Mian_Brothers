@@ -303,9 +303,16 @@
     <div class="thermal-lines">
         {% for cs in period_entries %}
         {% set over_val = (sale_overs.get(cs.id, (cs.overpayment or 0)|float) if sale_overs is defined else (cs.overpayment or 0)|float) %}
+        {% set unit = 'L' if cs.is_fuel or (cs.other_item and cs.other_item.tracks_liters()) else 'pcs' %}
         <div class="thermal-line">
-            <div class="thermal-line-desc">#{{ cs.id }} · {{ cs.sale_date }} · {{ cs.entry_type }}</div>
-            <div class="thermal-line-desc">{{ cs.customer.name if cs.customer else 'Walk-in' }} · {{ cs.item_name }}</div>
+            <div class="thermal-line-desc">#{{ cs.id }} · {{ cs.sale_date }} · {{ cs.customer.name if cs.customer else 'Walk-in' }}</div>
+            <div class="thermal-line-desc">
+                {% if cs.entry_type == 'sale' and (cs.liters or 0)|float > 0 %}
+                {{ '%.2f'|format(cs.liters|float) }} {{ unit }} of {{ cs.item_name }} @ PKR {{ '%.2f'|format(cs.rate|float) }}
+                {% else %}
+                {{ cs.item_name }}{% if cs.remarks %} · {{ cs.remarks }}{% endif %}
+                {% endif %}
+            </div>
             <div class="thermal-row">
                 <span>{{ cs.amount|float | num(2) }}</span>
                 <span>{% if over_val > 0 %}OVER{% else %}{{ (cs.payment_status or '')|upper }}{% endif %}</span>

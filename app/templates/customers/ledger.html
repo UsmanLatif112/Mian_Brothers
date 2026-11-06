@@ -39,7 +39,7 @@
         <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#ledgerModal" data-ledger-mode="payment" title="Record Payment">
             <i class="bi bi-wallet2 me-1"></i><span class="btn-label"> Record Payment</span>
         </button>
-        <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+        <button type="button" class="btn btn-outline-secondary" id="customer-statement-print-btn" title="Print statement">
             <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
         </button>
     </div>
@@ -220,41 +220,71 @@
     </div>
 </div>
 
-{# 80mm thermal invoice (Boltwood-style) #}
-<aside class="thermal-slip" aria-hidden="true">
-    <div class="thermal-slip-head">
-        <div class="thermal-brand">OctaneFlow</div>
-        <div class="thermal-sub">Customer Statement</div>
-    </div>
-    <hr class="thermal-rule">
-    <div class="thermal-meta"><span>Customer</span><span>{{ customer.name }}</span></div>
-    {% if customer.phone %}<div class="thermal-meta"><span>Phone</span><span>{{ customer.phone }}</span></div>{% endif %}
-    {% if customer.old_book_no %}<div class="thermal-meta"><span>Book No</span><span>{{ customer.old_book_no }}</span></div>{% endif %}
-    <div class="thermal-meta"><span>Printed</span><span>{{ today }}</span></div>
-    <hr class="thermal-rule">
-    <div class="thermal-title">Account Invoice</div>
-    <div class="thermal-lines">
-        {% for entry in ledger_entries %}
-        <div class="thermal-line">
-            <div class="thermal-line-desc">{{ entry.date.strftime('%d/%m %H:%M') if entry.date else '—' }} · {{ entry.ref_id }}</div>
-            <div class="thermal-line-desc">{{ entry.desc }}</div>
-            <div class="thermal-row">
-                <span>{% if entry.debit > 0 %}Dr {{ entry.debit | num(2) }}{% elif entry.credit > 0 %}Cr {{ entry.credit | num(2) }}{% else %}—{% endif %}</span>
-                <span>Bal {{ entry.running_balance | num(2) }}</span>
-            </div>
+{# A4 statement sheet (not thermal) #}
+<aside class="thermal-slip customer-statement-sheet" id="customerStatementSheet" aria-hidden="true">
+    <div class="customer-statement-head">
+        <div class="customer-statement-brand">{{ brand_name or 'OctaneFlow' }}</div>
+        <div class="customer-statement-title">Customer Statement</div>
+        <div class="customer-statement-party">
+            <strong>{{ customer.name }}</strong>
+            {% if customer.phone %} · {{ customer.phone }}{% endif %}
+            {% if customer.address %} · {{ customer.address }}{% endif %}
+            {% if customer.old_book_no %} · Book {{ customer.old_book_no }}{% endif %}
         </div>
-        {% else %}
-        <div class="thermal-line-desc">No entries</div>
-        {% endfor %}
+        <div class="customer-statement-meta">
+            Printed {{ today }}
+            · Receivable {{ '%.2f'|format(customer.current_balance_due or 0) }}
+            · {{ ledger_entries|length }} line{{ 's' if ledger_entries|length != 1 else '' }}
+        </div>
     </div>
-    <hr class="thermal-rule">
-    <div class="thermal-totals">
-        <div class="thermal-row"><span>Total sale</span><span>{{ total_sales | num(2) }}</span></div>
-        <div class="thermal-row"><span>Total receive</span><span>{{ total_received | num(2) }}</span></div>
-        <div class="thermal-row"><span>Receivable</span><span>{{ (customer.current_balance_due or 0) | num(2) }}</span></div>
-    </div>
-    <hr class="thermal-rule">
-    <div class="thermal-foot">Thank you · OctaneFlow</div>
+    <table class="customer-statement-table">
+        <thead>
+            <tr>
+                <th class="col-date">Date</th>
+                <th class="col-ref">Reference</th>
+                <th class="col-desc">Description</th>
+                <th class="col-dr">Debit (+)</th>
+                <th class="col-cr">Credit (−)</th>
+                <th class="col-bal">Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in ledger_entries|reverse %}
+            <tr>
+                <td class="col-date">{{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '' }}</td>
+                <td class="col-ref">{{ entry.ref_id }}</td>
+                <td class="col-desc">{{ entry.desc }}{% if entry.pay_type %} ({{ entry.pay_type }}){% endif %}</td>
+                <td class="col-dr">{% if entry.debit > 0 %}{{ '%.2f'|format(entry.debit) }}{% endif %}</td>
+                <td class="col-cr">{% if entry.credit > 0 %}{{ '%.2f'|format(entry.credit) }}{% endif %}</td>
+                <td class="col-bal">{{ '%.2f'|format(entry.running_balance or 0) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">No transactions</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3">Total sale / debit</td>
+                <td class="col-dr">{{ '%.2f'|format(total_sales or 0) }}</td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td colspan="3">Total receive / credit</td>
+                <td></td>
+                <td class="col-cr">{{ '%.2f'|format(total_received or 0) }}</td>
+                <td></td>
+            </tr>
+            <tr>
+                <td colspan="3">Receivable</td>
+                <td colspan="2"></td>
+                <td class="col-bal">{{ '%.2f'|format(customer.current_balance_due or 0) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+    <div class="customer-statement-foot">Thank you · {{ brand_name or 'OctaneFlow' }}</div>
 </aside>
 {% endblock %}
 
@@ -546,6 +576,121 @@
             }
         });
     }
+
+    const printBtn = document.getElementById('customer-statement-print-btn');
+    if (printBtn) {
+        printBtn.addEventListener('click', function () {
+            document.body.classList.add('of-print-customer-statement');
+            const cleanup = function () {
+                document.body.classList.remove('of-print-customer-statement');
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+            window.print();
+            setTimeout(cleanup, 1000);
+        });
+    }
 })();
 </script>
+<style>
+.customer-statement-head {
+    text-align: center;
+    margin-bottom: 12px;
+}
+.customer-statement-brand {
+    font-size: 16px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.customer-statement-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 2px;
+}
+.customer-statement-party {
+    font-size: 12px;
+    margin-top: 6px;
+}
+.customer-statement-meta {
+    font-size: 11px;
+    margin-top: 4px;
+}
+.customer-statement-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 11px;
+}
+.customer-statement-table th,
+.customer-statement-table td {
+    border: 1px solid #000;
+    padding: 5px 6px;
+    vertical-align: top;
+    word-break: break-word;
+}
+.customer-statement-table th {
+    font-weight: 700;
+    text-align: left;
+    background: #f3f3f3;
+}
+.customer-statement-table .col-date { width: 14%; }
+.customer-statement-table .col-ref { width: 12%; }
+.customer-statement-table .col-desc { width: 34%; }
+.customer-statement-table .col-dr,
+.customer-statement-table .col-cr,
+.customer-statement-table .col-bal {
+    width: 13%;
+    text-align: right;
+    white-space: nowrap;
+}
+.customer-statement-table tfoot td {
+    font-weight: 700;
+}
+.customer-statement-foot {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 11px;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 12mm;
+    }
+
+    html, body {
+        width: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body.of-print-customer-statement * {
+        visibility: hidden !important;
+    }
+
+    body.of-print-customer-statement .customer-statement-sheet,
+    body.of-print-customer-statement .customer-statement-sheet * {
+        visibility: visible !important;
+    }
+
+    body.of-print-customer-statement .customer-statement-sheet {
+        display: block !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        color: #000 !important;
+        background: #fff !important;
+        z-index: 99999 !important;
+    }
+}
+</style>
 {% endblock %}

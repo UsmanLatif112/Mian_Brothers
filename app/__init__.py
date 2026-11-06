@@ -134,6 +134,13 @@ def create_app():
         from app.utils import business_today, calendar_today
         wd = business_today()
         cal = calendar_today()
+        due_notifications = []
+        try:
+            if current_user.is_authenticated:
+                from app.customers.service import build_recovery_due_notifications
+                due_notifications = build_recovery_due_notifications(wd)
+        except Exception:
+            due_notifications = []
         return {
             'brand_name': brand_name,
             'brand_tag': brand_tag,
@@ -153,6 +160,7 @@ def create_app():
             'working_date': wd.isoformat(),
             'calendar_today': cal.isoformat(),
             'working_date_active': wd != cal,
+            'due_notifications': due_notifications,
         }
 
     @app.route('/media/uploads/<path:filename>')
@@ -1057,7 +1065,7 @@ def ensure_expenses_schema():
 
 
 def ensure_customers_schema():
-    """Add optional old_book_no / previous_credit on customers for SQLite and MySQL."""
+    """Add optional old_book_no / previous_credit / recovery due fields on customers."""
     from sqlalchemy import text, inspect
 
     inspector = inspect(db.engine)
@@ -1070,6 +1078,16 @@ def ensure_customers_schema():
         alters.append("ALTER TABLE customers ADD COLUMN old_book_no VARCHAR(50) NULL")
     if 'previous_credit' not in existing:
         alters.append("ALTER TABLE customers ADD COLUMN previous_credit NUMERIC(12, 2) NULL")
+    if 'recovery_due_date' not in existing:
+        alters.append("ALTER TABLE customers ADD COLUMN recovery_due_date DATE NULL")
+    if 'recovery_due_note' not in existing:
+        alters.append("ALTER TABLE customers ADD COLUMN recovery_due_note VARCHAR(255) NULL")
+    if 'recovery_notif_enabled' not in existing:
+        alters.append(
+            "ALTER TABLE customers ADD COLUMN recovery_notif_enabled BOOLEAN NOT NULL DEFAULT 1"
+        )
+    if 'recovery_due_updated_at' not in existing:
+        alters.append("ALTER TABLE customers ADD COLUMN recovery_due_updated_at DATETIME NULL")
 
     if not alters:
         return
@@ -1077,7 +1095,7 @@ def ensure_customers_schema():
     with db.engine.begin() as conn:
         for stmt in alters:
             conn.execute(text(stmt))
-    print("Upgraded customers schema for old_book_no / previous_credit.")
+    print("Upgraded customers schema (book / recovery due fields).")
 
 
 def ensure_vendors_schema():

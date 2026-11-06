@@ -723,6 +723,10 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 .topbar-dropdown-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     padding: 0.85rem 1rem;
     border-bottom: 1px solid var(--border-color);
 }
@@ -738,6 +742,82 @@ body.sidebar-open .sidebar-backdrop {
     color: var(--accent-blue);
     display: block;
     margin-bottom: 0.5rem;
+}
+
+.topbar-icon-btn.has-notif {
+    position: relative;
+}
+
+.topbar-notif-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 0 2px var(--card-bg, #fff);
+}
+
+.topbar-notif-list {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 0.35rem;
+}
+
+.topbar-notif-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+    border-left: 3px solid transparent;
+    margin-bottom: 0.2rem;
+}
+
+.topbar-notif-item:hover {
+    background: var(--hover-bg, rgba(0, 0, 0, 0.04));
+}
+
+.topbar-notif-success {
+    border-left-color: #16a34a;
+    background: rgba(22, 163, 74, 0.06);
+}
+
+.topbar-notif-warning {
+    border-left-color: #ca8a04;
+    background: rgba(202, 138, 4, 0.08);
+}
+
+.topbar-notif-danger {
+    border-left-color: #dc2626;
+    background: rgba(220, 38, 38, 0.07);
+}
+
+.topbar-notif-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.topbar-notif-success .topbar-notif-badge { color: #15803d; }
+.topbar-notif-warning .topbar-notif-badge { color: #a16207; }
+.topbar-notif-danger .topbar-notif-badge { color: #b91c1c; }
+
+.topbar-notif-text {
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--text-primary);
+}
+
+.topbar-notif-meta {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
 }
 
 .user-avatar {

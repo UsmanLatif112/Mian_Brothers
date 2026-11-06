@@ -145,7 +145,122 @@ def recalculate_customer_balance(customer):
             balance += float(legacy.total_amount or 0)
 
     customer.current_balance_due = balance
+    # Paid / cleared receivable → drop recovery due date automatically
+    if balance <= 0 and customer.recovery_due_date is not None:
+        clear_recovery_due(customer)
     return balance
+
+
+def clear_recovery_due(customer):
+    """Reset recovery due date / note when account is cleared."""
+    customer.recovery_due_date = None
+    customer.recovery_due_note = None
+    customer.recovery_notif_enabled = True
+    customer.recovery_due_updated_at = datetime.utcnow()
+    return customer
+
+
+def set_recovery_due(customer, due_date, note=None):
+    """
+    Set collection due date for a receivable customer.
+    Only allowed when current_balance_due > 0.
+    """
+    due = float(customer.current_balance_due or 0)
+    if due <= 0:
+        return None, 'Customer has no receivable balance'
+    if due_date is None:
+        return None, 'Due date is required'
+    customer.recovery_due_date = due_date
+    customer.recovery_due_note = (note or '').strip() or None
+    customer.recovery_notif_enabled = True
+    customer.recovery_due_updated_at = datetime.utcnow()
+    return customer, None
+
+
+def build_recovery_due_notifications(today=None):
+    """
+    Active recovery due alerts for the topbar bell.
+
+    - 1 day before → green (due tomorrow)
+    - due date → yellow (due today)
+    - 1–2 days after unpaid → danger (overdue)
+    - after 2 overdue days → disable further notifications
+    Auto-clears due date when balance is already paid.
+    """
+    today = today or business_today()
+    query = apply_agency_filter(
+        Customer.query.filter(Customer.recovery_due_date.isnot(None)),
+        Customer,
+    )
+    customers = query.order_by(Customer.recovery_due_date.asc(), Customer.name.asc()).all()
+    notifications = []
+    dirty = False
+
+    for customer in customers:
+        due_amt = float(customer.current_balance_due or 0)
+        if due_amt <= 0:
+            clear_recovery_due(customer)
+            dirty = True
+            continue
+
+        due_day = customer.recovery_due_date
+        if due_day is None:
+            continue
+        delta = (due_day - today).days  # positive = future, 0 = today, negative = overdue
+
+        # After 2 continuous overdue notification days, stop alerting
+        if delta <= -3:
+            if customer.recovery_notif_enabled:
+                customer.recovery_notif_enabled = False
+                customer.recovery_due_updated_at = datetime.utcnow()
+                dirty = True
+            continue
+
+        if not customer.recovery_notif_enabled:
+            continue
+
+        if delta == 1:
+            kind = 'success'
+            title = 'Due tomorrow'
+            text = f"{customer.name} is due tomorrow (PKR {due_amt:,.2f})"
+        elif delta == 0:
+            kind = 'warning'
+            title = 'Due today'
+            text = f"{customer.name} is due today (PKR {due_amt:,.2f})"
+        elif delta in (-1, -2):
+            kind = 'danger'
+            overdue_day = abs(delta)
+            title = 'Overdue'
+            text = (
+                f"{customer.name} is overdue by {overdue_day} day"
+                f"{'s' if overdue_day != 1 else ''} (PKR {due_amt:,.2f})"
+            )
+        else:
+            # More than 1 day before due — quiet until the day before
+            continue
+
+        if customer.recovery_due_note:
+            text = f"{text} — {customer.recovery_due_note}"
+
+        notifications.append({
+            'kind': kind,
+            'title': title,
+            'text': text,
+            'customer_id': customer.id,
+            'customer_name': customer.name,
+            'due_date': due_day.isoformat(),
+            'amount': due_amt,
+            'delta': delta,
+            'note': customer.recovery_due_note or '',
+        })
+
+    if dirty:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    return notifications
 
 
 def _credit_row_still_owed(cs):
@@ -206,10 +321,10 @@ def build_recovery_list(min_amount=None, days_filter=None):
     """
     Recovery / collect list for print.
 
-    - min_amount empty → no amount cut-off (all customers, unless days filter).
+    - Always excludes zero / negative balances (only customers who still owe).
+    - min_amount empty → every customer with due > 0.
     - min_amount set → receivable (incl. opening) strictly greater than amount.
     - days_filter: 7 / 15 / 30 / over30 → pending overdue days threshold.
-      When a days filter is set, only customers with due > 0 are kept.
 
     Each row: name, address, phone, amount due, overdue/pending days from the
     oldest still-unpaid credit (opening, loan, sale, legacy).
@@ -228,10 +343,10 @@ def build_recovery_list(min_amount=None, days_filter=None):
     if days_key not in ('', '7', '15', '30', 'over30', 'more30', '>30'):
         days_key = ''
 
+    # Recovery list / print never includes settled (zero) or advance (negative) balances.
     if threshold is not None:
         query = query.filter(Customer.current_balance_due > threshold)
-    elif days_key:
-        # Aging list is only useful for people who still owe
+    else:
         query = query.filter(Customer.current_balance_due > 0)
 
     customers = query.order_by(
@@ -298,5 +413,8 @@ def build_recovery_list(min_amount=None, days_filter=None):
             'amount': due,
             'oldest_date': oldest,
             'days_overdue': days_overdue,
+            'due_date': customer.recovery_due_date,
+            'due_note': customer.recovery_due_note or '',
+            'notif_enabled': bool(customer.recovery_notif_enabled),
         })
     return rows, threshold, days_key

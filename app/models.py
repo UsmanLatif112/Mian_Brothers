@@ -379,6 +379,11 @@ class Customer(db.Model):
     previous_credit = db.Column(db.Numeric(12, 2), nullable=True)  # opening book credit (not period cash)
     credit_limit = db.Column(db.Numeric(12, 2), nullable=True)
     current_balance_due = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    # Recovery collection promise (receivable customers only)
+    recovery_due_date = db.Column(db.Date, nullable=True)
+    recovery_due_note = db.Column(db.String(255), nullable=True)
+    recovery_notif_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    recovery_due_updated_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships

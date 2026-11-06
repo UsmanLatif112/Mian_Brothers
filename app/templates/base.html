@@ -268,18 +268,37 @@
                 {% endif %}
                 {% block topbar_filters %}{% endblock %}
                 <div class="dropdown">
-                    <button class="topbar-icon-btn" type="button" id="notifMenu" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
+                    <button class="topbar-icon-btn {% if due_notifications %}has-notif{% endif %}" type="button" id="notifMenu" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
                         <i class="bi bi-bell"></i>
+                        {% if due_notifications %}
+                        <span class="topbar-notif-dot" aria-hidden="true"></span>
+                        {% endif %}
                     </button>
                     <div class="dropdown-menu dropdown-menu-end dropdown-menu-app topbar-dropdown shadow border-0 p-0" aria-labelledby="notifMenu">
                         <div class="topbar-dropdown-head">
                             <strong>Notifications</strong>
+                            {% if due_notifications %}
+                            <span class="badge badge-custom badge-staff">{{ due_notifications|length }}</span>
+                            {% endif %}
                         </div>
+                        {% if due_notifications %}
+                        <div class="topbar-notif-list">
+                            {% for n in due_notifications %}
+                            <a class="topbar-notif-item topbar-notif-{{ n.kind }}"
+                               href="{{ url_for('customers.ledger', customer_id=n.customer_id) }}">
+                                <span class="topbar-notif-badge">{{ n.title }}</span>
+                                <span class="topbar-notif-text">{{ n.text }}</span>
+                                <span class="topbar-notif-meta">Due {{ n.due_date }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% else %}
                         <div class="topbar-notif-empty">
                             <i class="bi bi-check2-circle"></i>
                             <p class="mb-0">You're all caught up</p>
                             <small class="text-muted-custom">Station alerts will show here.</small>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
 

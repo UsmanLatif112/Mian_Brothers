@@ -35,7 +35,7 @@
         <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#vendorPaymentModal" title="Record Payment">
             <i class="bi bi-wallet2 me-1"></i><span class="btn-label"> Record Payment</span>
         </button>
-        <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+        <button type="button" class="btn btn-outline-secondary" id="vendor-statement-print-btn" title="Print statement">
             <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
         </button>
     </div>
@@ -225,39 +225,73 @@
     </div>
 </div>
 
-<aside class="thermal-slip" aria-hidden="true">
-    <div class="thermal-slip-head">
-        <div class="thermal-brand">OctaneFlow</div>
-        <div class="thermal-sub">Vendor Statement</div>
-    </div>
-    <hr class="thermal-rule">
-    <div class="thermal-meta"><span>Vendor</span><span>{{ vendor.name }}</span></div>
-    {% if vendor.phone %}<div class="thermal-meta"><span>Phone</span><span>{{ vendor.phone }}</span></div>{% endif %}
-    <div class="thermal-meta"><span>Printed</span><span>{{ today }}</span></div>
-    <hr class="thermal-rule">
-    <div class="thermal-title">Purchase Invoice</div>
-    <div class="thermal-lines">
-        {% for entry in ledger_entries %}
-        <div class="thermal-line">
-            <div class="thermal-line-desc">{{ entry.date.strftime('%d/%m %H:%M') if entry.date else '—' }} · {{ entry.ref_id }}</div>
-            <div class="thermal-line-desc">{{ entry.desc }}</div>
-            <div class="thermal-row">
-                <span>{% if entry.payment_status == 'paid' or entry.type == 'payment' %}PAID{% elif entry.payment_status == 'unpaid' %}UNPAID{% elif entry.payment_status == 'opening' %}OPEN{% else %}—{% endif %} {{ (entry.debit if entry.debit > 0 else entry.credit) | num(2) }}</span>
-                <span>Bal {{ entry.running_balance | num(2) }}</span>
-            </div>
+{# A4 statement sheet (not thermal) #}
+<aside class="thermal-slip vendor-statement-sheet" id="vendorStatementSheet" aria-hidden="true">
+    <div class="vendor-statement-head">
+        <div class="vendor-statement-brand">{{ brand_name or 'OctaneFlow' }}</div>
+        <div class="vendor-statement-title">Vendor Statement</div>
+        <div class="vendor-statement-party">
+            <strong>{{ vendor.name }}</strong>
+            {% if vendor.phone %} · {{ vendor.phone }}{% endif %}
+            {% if vendor.address %} · {{ vendor.address }}{% endif %}
         </div>
-        {% else %}
-        <div class="thermal-line-desc">No entries</div>
-        {% endfor %}
+        <div class="vendor-statement-meta">
+            Printed {{ today }}
+            · Payable {{ '%.2f'|format(vendor.current_balance_payable or 0) }}
+            · {{ ledger_entries|length }} line{{ 's' if ledger_entries|length != 1 else '' }}
+        </div>
     </div>
-    <hr class="thermal-rule">
-    <div class="thermal-totals">
-        <div class="thermal-row"><span>Total purchase</span><span>{{ total_purchased | num(2) }}</span></div>
-        <div class="thermal-row"><span>Total pay</span><span>{{ total_paid | num(2) }}</span></div>
-        <div class="thermal-row"><span>Payable</span><span>{{ (vendor.current_balance_payable or 0) | num(2) }}</span></div>
-    </div>
-    <hr class="thermal-rule">
-    <div class="thermal-foot">Thank you · OctaneFlow</div>
+    <table class="vendor-statement-table">
+        <thead>
+            <tr>
+                <th class="col-date">Date</th>
+                <th class="col-ref">Reference</th>
+                <th class="col-desc">Description</th>
+                <th class="col-status">Status</th>
+                <th class="col-amt">Amount</th>
+                <th class="col-bal">Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in ledger_entries|reverse %}
+            {% set is_paid = entry.payment_status == 'paid' or entry.type == 'payment' %}
+            {% set is_unpaid = entry.payment_status == 'unpaid' %}
+            {% set amt = entry.debit if entry.debit > 0 else entry.credit %}
+            <tr>
+                <td class="col-date">{{ entry.date.strftime('%Y-%m-%d %H:%M') if entry.date else '' }}</td>
+                <td class="col-ref">{{ entry.ref_id }}</td>
+                <td class="col-desc">{{ entry.desc }}</td>
+                <td class="col-status">
+                    {% if is_paid %}Paid{% elif is_unpaid %}Unpaid{% elif entry.payment_status == 'opening' or entry.pay_type == 'opening' %}Opening{% else %}{% endif %}
+                </td>
+                <td class="col-amt">{% if amt > 0 %}{{ '%.2f'|format(amt) }}{% endif %}</td>
+                <td class="col-bal">{{ '%.2f'|format(entry.running_balance or 0) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">No transactions</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4">Total purchase</td>
+                <td class="col-amt">{{ '%.2f'|format(total_purchased or 0) }}</td>
+                <td></td>
+            </tr>
+            <tr>
+                <td colspan="4">Total pay</td>
+                <td class="col-amt">{{ '%.2f'|format(total_paid or 0) }}</td>
+                <td></td>
+            </tr>
+            <tr>
+                <td colspan="4">Payable</td>
+                <td class="col-amt">{{ '%.2f'|format(vendor.current_balance_payable or 0) }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+    <div class="vendor-statement-foot">Thank you · {{ brand_name or 'OctaneFlow' }}</div>
 </aside>
 {% endblock %}
 
@@ -406,6 +440,121 @@
         if (tillRadio) tillRadio.checked = funding !== 'account';
         if (accountRadio) accountRadio.checked = funding === 'account';
     });
+
+    const printBtn = document.getElementById('vendor-statement-print-btn');
+    if (printBtn) {
+        printBtn.addEventListener('click', function () {
+            document.body.classList.add('of-print-vendor-statement');
+            const cleanup = function () {
+                document.body.classList.remove('of-print-vendor-statement');
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+            window.print();
+            setTimeout(cleanup, 1000);
+        });
+    }
 })();
 </script>
+<style>
+.vendor-statement-head {
+    text-align: center;
+    margin-bottom: 12px;
+}
+.vendor-statement-brand {
+    font-size: 16px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.vendor-statement-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 2px;
+}
+.vendor-statement-party {
+    font-size: 12px;
+    margin-top: 6px;
+}
+.vendor-statement-meta {
+    font-size: 11px;
+    margin-top: 4px;
+}
+.vendor-statement-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 11px;
+}
+.vendor-statement-table th,
+.vendor-statement-table td {
+    border: 1px solid #000;
+    padding: 5px 6px;
+    vertical-align: top;
+    word-break: break-word;
+}
+.vendor-statement-table th {
+    font-weight: 700;
+    text-align: left;
+    background: #f3f3f3;
+}
+.vendor-statement-table .col-date { width: 14%; }
+.vendor-statement-table .col-ref { width: 12%; }
+.vendor-statement-table .col-desc { width: 36%; }
+.vendor-statement-table .col-status { width: 10%; text-align: center; }
+.vendor-statement-table .col-amt,
+.vendor-statement-table .col-bal {
+    width: 14%;
+    text-align: right;
+    white-space: nowrap;
+}
+.vendor-statement-table tfoot td {
+    font-weight: 700;
+}
+.vendor-statement-foot {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 11px;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 12mm;
+    }
+
+    html, body {
+        width: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body.of-print-vendor-statement * {
+        visibility: hidden !important;
+    }
+
+    body.of-print-vendor-statement .vendor-statement-sheet,
+    body.of-print-vendor-statement .vendor-statement-sheet * {
+        visibility: visible !important;
+    }
+
+    body.of-print-vendor-statement .vendor-statement-sheet {
+        display: block !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        color: #000 !important;
+        background: #fff !important;
+        z-index: 99999 !important;
+    }
+}
+</style>
 {% endblock %}

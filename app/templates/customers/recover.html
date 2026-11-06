@@ -4,7 +4,7 @@
 
 {% block topbar_filters %}
 <form method="GET" class="topbar-filters" id="recover-filter-form" data-allow-multi-submit="1" action="{{ url_for('customers.recover') }}">
-    <div class="topbar-recover-amount" title="Minimum receivable (leave empty for all)">
+    <div class="topbar-recover-amount" title="Minimum receivable (leave empty for due &gt; 0)">
         <span class="topbar-recover-prefix">PKR</span>
         <input type="number" step="0.01" min="0" name="min_amount" id="recover-min-amount"
                class="form-control form-control-custom topbar-recover-input"
@@ -40,6 +40,10 @@
             </div>
         </div>
         <div class="page-header-actions">
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal"
+                    data-bs-target="#setDueDateModal" title="Set customer due date">
+                <i class="bi bi-calendar-check me-1"></i><span class="btn-label"> Set Due Date</span>
+            </button>
             <button type="button" class="btn btn-outline-secondary" id="recover-print-btn" title="Print recovery list">
                 <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
             </button>
@@ -52,7 +56,7 @@
         <div class="ledger-kpi-label">Customers</div>
         <div class="ledger-kpi-value">{{ rows|length }}</div>
         <div class="ledger-kpi-meta">
-            {% if threshold is not none %}Due &gt; {{ threshold | money }}{% else %}All amounts{% endif %}
+            {% if threshold is not none %}Due &gt; {{ threshold | money }}{% else %}Due &gt; 0{% endif %}
             · {{ days_label }}
         </div>
     </article>
@@ -74,6 +78,7 @@
                     <th>Phone</th>
                     <th>Amount</th>
                     <th>Pending days</th>
+                    <th>Due date</th>
                     <th>Notes</th>
                 </tr>
             </thead>
@@ -110,12 +115,22 @@
                             <span class="text-muted-custom">—</span>
                             {% endif %}
                         </td>
-                        <td class="recover-notes-cell"></td>
+                        <td>
+                            {% if row.due_date %}
+                            <span class="fw-semibold">{{ row.due_date }}</span>
+                            {% if not row.notif_enabled %}
+                            <div class="small text-muted-custom">Alerts off</div>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted-custom">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="recover-notes-cell">{% if row.due_note %}{{ row.due_note }}{% endif %}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="7" class="empty-state text-center py-5">
+                        <td colspan="8" class="empty-state text-center py-5">
                             <div class="empty-state-icon"><i class="bi bi-people-fill"></i></div>
                             <p class="text-muted-custom mb-0">No customers match this recovery filter.</p>
                         </td>
@@ -133,7 +148,7 @@
         <div class="recover-print-title">Recovery List</div>
         <div class="recover-print-meta">
             Printed {{ today }}
-            · {% if threshold is not none %}Due &gt; {{ '%.2f'|format(threshold) }}{% else %}All amounts{% endif %}
+            · {% if threshold is not none %}Due &gt; {{ '%.2f'|format(threshold) }}{% else %}Due &gt; 0{% endif %}
             · {{ days_label }}
             · {{ rows|length }} customer{{ 's' if rows|length != 1 else '' }}
         </div>
@@ -147,6 +162,7 @@
                 <th class="col-phone">Phone</th>
                 <th class="col-amount">Amount</th>
                 <th class="col-days">Pending days</th>
+                <th class="col-due">Due date</th>
                 <th class="col-notes">Notes</th>
             </tr>
         </thead>
@@ -159,11 +175,12 @@
                 <td class="col-phone">{{ row.phone or '' }}</td>
                 <td class="col-amount">{{ '%.2f'|format(row.amount) }}</td>
                 <td class="col-days">{% if row.amount > 0 %}{{ row.days_overdue }}{% else %}{% endif %}</td>
-                <td class="col-notes"></td>
+                <td class="col-due">{% if row.due_date %}{{ row.due_date }}{% endif %}</td>
+                <td class="col-notes">{% if row.due_note %}{{ row.due_note }}{% endif %}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="7">No customers</td>
+                <td colspan="8">No customers</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -172,12 +189,71 @@
             <tr>
                 <td colspan="4">Total due</td>
                 <td class="col-amount">{{ '%.2f'|format(total_due) }}</td>
-                <td colspan="2"></td>
+                <td colspan="3"></td>
             </tr>
         </tfoot>
         {% endif %}
     </table>
 </aside>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="setDueDateModal" tabindex="-1" aria-labelledby="setDueDateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('customers.recover') }}{% if min_amount or days_filter %}?{% if min_amount %}min_amount={{ min_amount|urlencode }}{% endif %}{% if min_amount and days_filter %}&{% endif %}{% if days_filter %}days={{ days_filter|urlencode }}{% endif %}{% endif %}">
+                <input type="hidden" name="action" id="due_form_action" value="set_due_date">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold" id="setDueDateModalLabel">Set Due Date</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted-custom small mb-3">
+                        Only customers with receivable balance. Green alert 1 day before, yellow on due day,
+                        then 2 overdue alerts — after that alerts stop. Clears automatically when paid.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="due_customer_id">Customer</label>
+                        <select class="form-select form-control-custom js-search-customer" id="due_customer_id"
+                                name="customer_id" required data-placeholder="Search customer with balance...">
+                            <option value="">Search customer...</option>
+                            {% for c in due_customers %}
+                            <option value="{{ c.id }}"
+                                    data-due-date="{{ c.recovery_due_date or '' }}"
+                                    data-due-note="{{ c.recovery_due_note or '' }}">
+                                {{ c.name }}{% if c.phone %} · {{ c.phone }}{% endif %}
+                                (Due: {{ c.current_balance_due | money }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-custom" for="due_date">Due day</label>
+                        <input type="date" class="form-control form-control-custom" id="due_date"
+                               name="due_date" required value="{{ today }}">
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label form-label-custom" for="due_note">Note</label>
+                        <input type="text" class="form-control form-control-custom" id="due_note"
+                               name="note" maxlength="255" placeholder="Optional collection note">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="submit" class="btn btn-outline-secondary" id="clear-due-btn"
+                            formnovalidate
+                            onclick="(function(){ var s=document.getElementById('due_customer_id'); if(!s || !s.value){ alert('Select a customer first.'); return false; } document.getElementById('due_form_action').value='clear_due_date'; return confirm('Clear due date for selected customer?'); })();">
+                        Clear due
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom"
+                            onclick="document.getElementById('due_form_action').value='set_due_date';">
+                        Save due date
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -262,12 +338,13 @@
     background: #f3f3f3;
 }
 .recover-print-table .col-check { width: 22px; text-align: center; }
-.recover-print-table .col-name { width: 18%; }
-.recover-print-table .col-address { width: 22%; }
-.recover-print-table .col-phone { width: 12%; }
-.recover-print-table .col-amount { width: 12%; text-align: right; white-space: nowrap; }
-.recover-print-table .col-days { width: 10%; text-align: center; }
-.recover-print-table .col-notes { width: 22%; min-height: 22px; }
+.recover-print-table .col-name { width: 16%; }
+.recover-print-table .col-address { width: 18%; }
+.recover-print-table .col-phone { width: 11%; }
+.recover-print-table .col-amount { width: 11%; text-align: right; white-space: nowrap; }
+.recover-print-table .col-days { width: 9%; text-align: center; }
+.recover-print-table .col-due { width: 11%; text-align: center; white-space: nowrap; }
+.recover-print-table .col-notes { width: 18%; min-height: 22px; }
 .recover-check-box {
     display: inline-block;
     width: 12px;
@@ -326,17 +403,33 @@
 <script>
 (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
     const btn = document.getElementById('recover-print-btn');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-        document.body.classList.add('of-print-recover');
-        const cleanup = function () {
-            document.body.classList.remove('of-print-recover');
-            window.removeEventListener('afterprint', cleanup);
+    if (btn) {
+        btn.addEventListener('click', function () {
+            document.body.classList.add('of-print-recover');
+            const cleanup = function () {
+                document.body.classList.remove('of-print-recover');
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+            window.print();
+            setTimeout(cleanup, 1000);
+        });
+    }
+
+    const customerSel = document.getElementById('due_customer_id');
+    const dueInput = document.getElementById('due_date');
+    const noteInput = document.getElementById('due_note');
+    if (customerSel && dueInput && noteInput) {
+        const fillFromOption = function () {
+            const opt = customerSel.options[customerSel.selectedIndex];
+            if (!opt || !opt.value) return;
+            const existingDue = opt.getAttribute('data-due-date') || '';
+            const existingNote = opt.getAttribute('data-due-note') || '';
+            if (existingDue) dueInput.value = existingDue;
+            noteInput.value = existingNote;
         };
-        window.addEventListener('afterprint', cleanup);
-        window.print();
-        setTimeout(cleanup, 1000);
-    });
+        customerSel.addEventListener('change', fillFromOption);
+    }
 });
 </script>
 {% endblock %}
