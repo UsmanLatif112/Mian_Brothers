@@ -1,11 +1,13 @@
-{# Shared A4 statement print chrome — recover / customer ledger / vendor ledger #}
+{# Shared A4 statement print chrome — bank-statement style (bottom rules only) #}
 <style>
 .of-statement-sheet {
     display: none;
 }
 .of-statement-head {
     text-align: center;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1.5px solid #111;
 }
 .of-statement-logo {
     display: block;
@@ -51,18 +53,25 @@
     border-collapse: collapse;
     table-layout: fixed;
     font-size: 11px;
+    border: none;
 }
 .of-statement-table th,
 .of-statement-table td {
-    border: 1px solid #000;
-    padding: 5px 6px;
+    border: none;
+    border-bottom: 1px solid #bbb;
+    padding: 7px 4px;
     vertical-align: top;
     word-break: break-word;
+    background: transparent;
 }
-.of-statement-table th {
+.of-statement-table thead th {
     font-weight: 700;
     text-align: left;
-    background: #f3f3f3;
+    border-bottom: 1.5px solid #111;
+    padding-bottom: 8px;
+}
+.of-statement-table tbody tr:last-child td {
+    border-bottom: 1px solid #888;
 }
 .of-statement-table .col-date { width: 14%; }
 .of-statement-table .col-ref { width: 12%; }
@@ -93,17 +102,31 @@
 }
 .of-statement-table tfoot td {
     font-weight: 700;
+    border-bottom: none;
+    border-top: 1.5px solid #111;
+    padding-top: 8px;
+}
+.of-statement-table tfoot tr:first-child td {
+    border-top: 1.5px solid #111;
+}
+.of-statement-table tfoot tr:not(:first-child) td {
+    border-top: none;
+    border-bottom: 1px solid #ddd;
+}
+.of-statement-table tfoot tr:last-child td {
+    border-bottom: 1.5px solid #111;
+    padding-bottom: 8px;
 }
 .of-statement-foot {
     text-align: center;
-    margin-top: 12px;
+    margin-top: 14px;
     font-size: 11px;
 }
 
 @media print {
     @page {
         size: A4;
-        margin: 12mm;
+        margin: 14mm 16mm;
     }
 
     html, body {
@@ -127,10 +150,12 @@
         position: absolute !important;
         left: 0 !important;
         top: 0 !important;
-        width: 100% !important;
+        right: 0 !important;
+        width: auto !important;
         max-width: none !important;
-        margin: 0 !important;
+        margin: 0 4mm !important;
         padding: 0 !important;
+        box-sizing: border-box !important;
         font-family: Arial, Helvetica, sans-serif !important;
         font-size: 11px !important;
         line-height: 1.35 !important;
