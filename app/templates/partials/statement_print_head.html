@@ -1,0 +1,32 @@
+{# Shared statement header: logo + agency + title + optional party/meta #}
+{# Expects: statement_title, optional statement_party, statement_meta #}
+{% set _logo = brand_logo_url %}
+{% if current_agency and current_agency.logo %}
+  {% set _logo = url_for('uploaded_file', filename=current_agency.logo) %}
+{% endif %}
+<div class="of-statement-head">
+    <img class="of-statement-logo" src="{{ _logo }}" alt="">
+    <h1 class="of-statement-brand">{{ brand_name or 'OctaneFlow' }}</h1>
+    {% if current_agency and current_agency.address %}
+    <p class="of-statement-company-meta">{{ current_agency.address }}</p>
+    {% elif brand_address %}
+    <p class="of-statement-company-meta">{{ brand_address }}</p>
+    {% endif %}
+    {% if current_agency and current_agency.phone %}
+    <p class="of-statement-company-meta">{{ current_agency.phone }}</p>
+    {% elif brand_phone %}
+    <p class="of-statement-company-meta">{{ brand_phone }}</p>
+    {% endif %}
+    {% if current_agency and current_agency.email %}
+    <p class="of-statement-company-meta">{{ current_agency.email }}</p>
+    {% elif brand_email %}
+    <p class="of-statement-company-meta">{{ brand_email }}</p>
+    {% endif %}
+    <div class="of-statement-title">{{ statement_title }}</div>
+    {% if statement_party %}
+    <div class="of-statement-party">{{ statement_party|safe }}</div>
+    {% endif %}
+    {% if statement_meta %}
+    <div class="of-statement-meta">{{ statement_meta|safe }}</div>
+    {% endif %}
+</div>

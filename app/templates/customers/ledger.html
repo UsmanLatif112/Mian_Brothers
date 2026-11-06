@@ -220,24 +220,19 @@
     </div>
 </div>
 
-{# A4 statement sheet (not thermal) #}
-<aside class="thermal-slip customer-statement-sheet" id="customerStatementSheet" aria-hidden="true">
-    <div class="customer-statement-head">
-        <div class="customer-statement-brand">{{ brand_name or 'OctaneFlow' }}</div>
-        <div class="customer-statement-title">Customer Statement</div>
-        <div class="customer-statement-party">
-            <strong>{{ customer.name }}</strong>
-            {% if customer.phone %} · {{ customer.phone }}{% endif %}
-            {% if customer.address %} · {{ customer.address }}{% endif %}
-            {% if customer.old_book_no %} · Book {{ customer.old_book_no }}{% endif %}
-        </div>
-        <div class="customer-statement-meta">
-            Printed {{ today }}
-            · Receivable {{ '%.2f'|format(customer.current_balance_due or 0) }}
-            · {{ ledger_entries|length }} line{{ 's' if ledger_entries|length != 1 else '' }}
-        </div>
-    </div>
-    <table class="customer-statement-table">
+{# A4 customer statement — shared chrome with recover / vendor ledger #}
+<aside class="of-statement-sheet" id="customerStatementSheet" aria-hidden="true">
+    {% set statement_title = 'Customer Statement' %}
+    {% set statement_party %}
+        <strong>{{ customer.name }}</strong>{% if customer.phone %} · {{ customer.phone }}{% endif %}{% if customer.address %} · {{ customer.address }}{% endif %}{% if customer.old_book_no %} · Book {{ customer.old_book_no }}{% endif %}
+    {% endset %}
+    {% set statement_meta %}
+        Printed {{ today }}
+        · Receivable {{ '%.2f'|format(customer.current_balance_due or 0) }}
+        · {{ ledger_entries|length }} line{{ 's' if ledger_entries|length != 1 else '' }}
+    {% endset %}
+    {% include "partials/statement_print_head.html" %}
+    <table class="of-statement-table">
         <thead>
             <tr>
                 <th class="col-date">Date</th>
@@ -284,7 +279,7 @@
             </tr>
         </tfoot>
     </table>
-    <div class="customer-statement-foot">Thank you · {{ brand_name or 'OctaneFlow' }}</div>
+    <div class="of-statement-foot">Thank you · {{ brand_name or 'OctaneFlow' }}</div>
 </aside>
 {% endblock %}
 
@@ -580,117 +575,10 @@
     const printBtn = document.getElementById('customer-statement-print-btn');
     if (printBtn) {
         printBtn.addEventListener('click', function () {
-            document.body.classList.add('of-print-customer-statement');
-            const cleanup = function () {
-                document.body.classList.remove('of-print-customer-statement');
-                window.removeEventListener('afterprint', cleanup);
-            };
-            window.addEventListener('afterprint', cleanup);
-            window.print();
-            setTimeout(cleanup, 1000);
+            if (window.ofPrintStatement) window.ofPrintStatement();
         });
     }
 })();
 </script>
-<style>
-.customer-statement-head {
-    text-align: center;
-    margin-bottom: 12px;
-}
-.customer-statement-brand {
-    font-size: 16px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-}
-.customer-statement-title {
-    font-size: 14px;
-    font-weight: 700;
-    margin-top: 2px;
-}
-.customer-statement-party {
-    font-size: 12px;
-    margin-top: 6px;
-}
-.customer-statement-meta {
-    font-size: 11px;
-    margin-top: 4px;
-}
-.customer-statement-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    font-size: 11px;
-}
-.customer-statement-table th,
-.customer-statement-table td {
-    border: 1px solid #000;
-    padding: 5px 6px;
-    vertical-align: top;
-    word-break: break-word;
-}
-.customer-statement-table th {
-    font-weight: 700;
-    text-align: left;
-    background: #f3f3f3;
-}
-.customer-statement-table .col-date { width: 14%; }
-.customer-statement-table .col-ref { width: 12%; }
-.customer-statement-table .col-desc { width: 34%; }
-.customer-statement-table .col-dr,
-.customer-statement-table .col-cr,
-.customer-statement-table .col-bal {
-    width: 13%;
-    text-align: right;
-    white-space: nowrap;
-}
-.customer-statement-table tfoot td {
-    font-weight: 700;
-}
-.customer-statement-foot {
-    text-align: center;
-    margin-top: 10px;
-    font-size: 11px;
-}
-
-@media print {
-    @page {
-        size: A4;
-        margin: 12mm;
-    }
-
-    html, body {
-        width: auto !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #fff !important;
-    }
-
-    body.of-print-customer-statement * {
-        visibility: hidden !important;
-    }
-
-    body.of-print-customer-statement .customer-statement-sheet,
-    body.of-print-customer-statement .customer-statement-sheet * {
-        visibility: visible !important;
-    }
-
-    body.of-print-customer-statement .customer-statement-sheet {
-        display: block !important;
-        position: absolute !important;
-        left: 0 !important;
-        top: 0 !important;
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        font-family: Arial, Helvetica, sans-serif !important;
-        font-size: 11px !important;
-        line-height: 1.35 !important;
-        color: #000 !important;
-        background: #fff !important;
-        z-index: 99999 !important;
-    }
-}
-</style>
+{% include "partials/statement_print_styles.html" %}
 {% endblock %}

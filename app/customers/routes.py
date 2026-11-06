@@ -662,48 +662,60 @@ def recover():
     except Exception:
         pass
 
+    min_raw = (request.args.get('min_amount') or '').strip()
+    days_raw = (request.args.get('days') or '').strip()
+    due_modal_error = None
+    due_modal_open = False
+    due_form_customer_id = None
+    due_form_date = None
+    due_form_note = None
+
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
+        due_form_date = (request.form.get('due_date') or '').strip() or None
+        due_form_note = (request.form.get('note') or '').strip() or None
         try:
             cid = int(request.form.get('customer_id') or 0)
         except (TypeError, ValueError):
             cid = 0
+        due_form_customer_id = cid or None
         customer = Customer.query.get(cid) if cid else None
+
+        def _recover_redirect():
+            return redirect(url_for('customers.recover', **{
+                k: v for k, v in request.args.items() if k in ('min_amount', 'days')
+            }))
+
         if not customer:
-            flash('Select a customer.', 'danger')
-            return redirect(url_for('customers.recover', **request.args))
-        require_agency_access(customer)
-
-        if action == 'clear_due_date':
-            clear_recovery_due(customer)
-            db.session.commit()
-            flash(f'Due date cleared for {customer.name}.', 'success')
-            return redirect(url_for('customers.recover', **{
-                k: v for k, v in request.args.items() if k in ('min_amount', 'days')
-            }))
-
-        if action == 'set_due_date':
-            due_day = parse_form_date(request.form.get('due_date'))
-            note = (request.form.get('note') or '').strip() or None
-            _, err = set_recovery_due(customer, due_day, note)
-            if err:
-                flash(err, 'danger')
-            else:
+            due_modal_error = 'Select a customer first.'
+            due_modal_open = True
+        else:
+            require_agency_access(customer)
+            if action == 'clear_due_date':
+                clear_recovery_due(customer)
                 db.session.commit()
-                flash(
-                    f'Due date set for {customer.name}: {due_day.isoformat()}'
-                    + (f' — {note}' if note else ''),
-                    'success',
-                )
-            return redirect(url_for('customers.recover', **{
-                k: v for k, v in request.args.items() if k in ('min_amount', 'days')
-            }))
+                flash(f'Due date cleared for {customer.name}.', 'success')
+                return _recover_redirect()
 
-        flash('Unknown action.', 'danger')
-        return redirect(url_for('customers.recover'))
+            if action == 'set_due_date':
+                due_day = parse_form_date(request.form.get('due_date'))
+                note = due_form_note
+                _, err = set_recovery_due(customer, due_day, note)
+                if err:
+                    due_modal_error = err
+                    due_modal_open = True
+                else:
+                    db.session.commit()
+                    flash(
+                        f'Due date set for {customer.name}: {due_day.isoformat()}'
+                        + (f' — {note}' if note else ''),
+                        'success',
+                    )
+                    return _recover_redirect()
+            else:
+                due_modal_error = 'Unknown action.'
+                due_modal_open = True
 
-    min_raw = (request.args.get('min_amount') or '').strip()
-    days_raw = (request.args.get('days') or '').strip()
     rows, threshold, days_key = build_recovery_list(min_raw or None, days_raw or None)
     total_due = sum(r['amount'] for r in rows if r['amount'] > 0)
     days_label = dict(RECOVERY_DAYS_CHOICES).get(days_key, 'All days')
@@ -726,6 +738,11 @@ def recover():
         total_due=total_due,
         due_customers=due_customers,
         today=business_today().isoformat(),
+        due_modal_error=due_modal_error,
+        due_modal_open=due_modal_open,
+        due_form_customer_id=due_form_customer_id,
+        due_form_date=due_form_date,
+        due_form_note=due_form_note,
     )
 
 
