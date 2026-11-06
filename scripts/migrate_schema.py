@@ -22,6 +22,15 @@ def main():
     with app.app_context():
         print('Migrating schema (create_all + ensure_* + light seeds)...')
         run_schema_boot()
+        try:
+            from scripts.repair_expense_settle_labels import repair
+            cs_n, log_n, total = repair()
+            print(
+                f'Settle labels refreshed: {cs_n} customer, {log_n} vendor '
+                f'({total} expense settles).'
+            )
+        except Exception as e:
+            print(f'Settle label repair skipped: {e}')
         print('Migration finished.')
         print('Restart the Python app: mkdir -p tmp && touch tmp/restart.txt')
 
