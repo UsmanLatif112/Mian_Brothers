@@ -17,6 +17,7 @@ from app.customers.service import (
     register_customer,
     customer_option_label,
     build_recovery_list,
+    RECOVERY_DAYS_CHOICES,
 )
 from datetime import datetime
 
@@ -650,21 +651,23 @@ def ledger(customer_id):
 def recover():
     """
     Receivable recovery list for collection / print.
-    Optional min_amount: only customers with due strictly above that amount.
-    Empty amount → every customer (none missing).
+    Optional min_amount + overdue-days filter (7 / 15 / 30 / more than 30).
     """
     min_raw = (request.args.get('min_amount') or '').strip()
-    rows, threshold = build_recovery_list(min_raw or None)
+    days_raw = (request.args.get('days') or '').strip()
+    rows, threshold, days_key = build_recovery_list(min_raw or None, days_raw or None)
     total_due = sum(r['amount'] for r in rows if r['amount'] > 0)
-    auto_print = (request.args.get('auto_print') or '').strip() in ('1', 'true', 'yes')
+    days_label = dict(RECOVERY_DAYS_CHOICES).get(days_key, 'All days')
     return render_template(
         'customers/recover.html',
         rows=rows,
         min_amount=min_raw,
         threshold=threshold,
+        days_filter=days_key,
+        days_label=days_label,
+        days_choices=RECOVERY_DAYS_CHOICES,
         total_due=total_due,
         today=business_today().isoformat(),
-        auto_print=auto_print,
     )
 
 

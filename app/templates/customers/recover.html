@@ -1,46 +1,48 @@
 {% extends "base.html" %}
 
-{% block title %}Recover List — OctaneFlow{% endblock %}
+{% block title %}Recovery List — OctaneFlow{% endblock %}
 
 {% block content %}
-<header class="page-header mb-4">
+<header class="page-header mb-4 no-print">
     <div class="page-header-row">
         <div class="page-header-text d-flex align-items-center gap-3 min-w-0">
             <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers"><i class="bi bi-arrow-left"></i></a>
             <div class="min-w-0">
                 <p class="page-eyebrow mb-1">CRM</p>
-                <h1 class="page-title text-truncate">Recover List</h1>
+                <h1 class="page-title text-truncate">Recovery List</h1>
             </div>
         </div>
         <div class="page-header-actions d-flex flex-wrap align-items-center gap-2">
             <form method="GET" action="{{ url_for('customers.recover') }}" class="d-flex flex-wrap align-items-center gap-2" data-allow-multi-submit="1">
-                <div class="input-group" style="width: min(220px, 100%);">
+                <div class="input-group" style="width: min(200px, 100%);">
                     <span class="input-group-text">PKR</span>
                     <input type="number" step="0.01" min="0" class="form-control form-control-custom"
                            name="min_amount" value="{{ min_amount or '' }}"
-                           placeholder="Min due (optional)" aria-label="Minimum receivable">
+                           placeholder="Amount (all)" aria-label="Minimum receivable">
                 </div>
-                <button type="submit" class="btn btn-outline-secondary" title="Apply filter">
+                <select name="days" class="form-select form-control-custom topbar-filter-select" aria-label="Pending days" style="min-width: 10rem;">
+                    {% for value, label in days_choices %}
+                    <option value="{{ value }}" {% if days_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-outline-secondary" title="Apply filters">
                     <i class="bi bi-funnel me-1"></i><span class="btn-label"> Apply</span>
                 </button>
             </form>
-            <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
+            <button type="button" class="btn btn-outline-secondary" id="recover-print-btn" title="Print recovery list">
                 <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
             </button>
         </div>
     </div>
 </header>
 
-<section class="ledger-kpi-row mb-3" aria-label="Recover KPIs">
+<section class="ledger-kpi-row mb-3 no-print" aria-label="Recovery KPIs">
     <article class="ledger-kpi">
         <div class="ledger-kpi-label">Customers</div>
         <div class="ledger-kpi-value">{{ rows|length }}</div>
         <div class="ledger-kpi-meta">
-            {% if threshold is not none %}
-            Due &gt; {{ threshold | money }}
-            {% else %}
-            All customers
-            {% endif %}
+            {% if threshold is not none %}Due &gt; {{ threshold | money }}{% else %}All amounts{% endif %}
+            · {{ days_label }}
         </div>
     </article>
     <article class="ledger-kpi {% if total_due > 0 %}stat-warning{% endif %}">
@@ -50,24 +52,27 @@
     </article>
 </section>
 
-<div class="card card-premium list-panel">
+<div class="card card-premium list-panel no-print">
     <div class="table-responsive">
         <table class="table table-custom table-hover mb-0 list-table">
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>Customer Name</th>
+                    <th style="width: 2.5rem;"></th>
+                    <th>Name</th>
                     <th>Address</th>
                     <th>Phone</th>
-                    <th>Amount to pay</th>
+                    <th>Amount</th>
                     <th>Pending days</th>
+                    <th>Notes</th>
                 </tr>
             </thead>
             <tbody>
                 {% if rows %}
                     {% for row in rows %}
                     <tr>
-                        <td>{{ loop.index }}</td>
+                        <td>
+                            <input type="checkbox" class="form-check-input" aria-label="Mark {{ row.name }}">
+                        </td>
                         <td>
                             <a href="{{ url_for('customers.ledger', customer_id=row.id) }}"
                                class="fw-semibold text-decoration-none" style="color: var(--text-primary);">
@@ -88,22 +93,20 @@
                         <td>
                             {% if row.amount > 0 and row.days_overdue %}
                             <span class="fw-semibold">{{ row.days_overdue }} day{{ 's' if row.days_overdue != 1 else '' }}</span>
-                            {% if row.oldest_date %}
-                            <small class="d-block text-muted-custom" style="font-size: 0.75rem;">since {{ row.oldest_date }}</small>
-                            {% endif %}
                             {% elif row.amount > 0 %}
                             <span class="text-muted-custom">0 days</span>
                             {% else %}
                             <span class="text-muted-custom">—</span>
                             {% endif %}
                         </td>
+                        <td class="recover-notes-cell"></td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="6" class="empty-state text-center py-5">
+                        <td colspan="7" class="empty-state text-center py-5">
                             <div class="empty-state-icon"><i class="bi bi-people-fill"></i></div>
-                            <p class="text-muted-custom mb-0">No customers match this recover filter.</p>
+                            <p class="text-muted-custom mb-0">No customers match this recovery filter.</p>
                         </td>
                     </tr>
                 {% endif %}
@@ -112,51 +115,182 @@
     </div>
 </div>
 
-{# 80mm thermal invoice (same print path as ledger / sales) #}
-<aside class="thermal-slip" aria-hidden="true">
-    <div class="thermal-slip-head">
-        <div class="thermal-brand">{{ brand_name or 'OctaneFlow' }}</div>
-        <div class="thermal-sub">Recover List</div>
-    </div>
-    <hr class="thermal-rule">
-    <div class="thermal-meta"><span>Printed</span><span>{{ today }}</span></div>
-    <div class="thermal-meta">
-        <span>Filter</span>
-        <span>{% if threshold is not none %}Due &gt; {{ '%.2f'|format(threshold) }}{% else %}All customers{% endif %}</span>
-    </div>
-    <div class="thermal-meta"><span>Count</span><span>{{ rows|length }}</span></div>
-    <hr class="thermal-rule">
-    <div class="thermal-title">Collection Sheet</div>
-    <div class="thermal-lines">
-        {% for row in rows %}
-        <div class="thermal-line">
-            <div class="thermal-line-desc">{{ loop.index }}. {{ row.name }}</div>
-            {% if row.phone %}<div class="thermal-line-desc">Ph {{ row.phone }}</div>{% endif %}
-            {% if row.address %}<div class="thermal-line-desc">{{ row.address }}</div>{% endif %}
-            <div class="thermal-row">
-                <span>Due {{ '%.2f'|format(row.amount) }}</span>
-                <span>{% if row.amount > 0 %}{{ row.days_overdue }}d{% else %}—{% endif %}</span>
-            </div>
+{# A4 collection sheet for print (checkbox + blank notes for handwriting) #}
+<aside class="thermal-slip recover-print-sheet" id="recoverPrintSheet" aria-hidden="true">
+    <div class="recover-print-head">
+        <div class="recover-print-brand">{{ brand_name or 'OctaneFlow' }}</div>
+        <div class="recover-print-title">Recovery List</div>
+        <div class="recover-print-meta">
+            Printed {{ today }}
+            · {% if threshold is not none %}Due &gt; {{ '%.2f'|format(threshold) }}{% else %}All amounts{% endif %}
+            · {{ days_label }}
+            · {{ rows|length }} customer{{ 's' if rows|length != 1 else '' }}
         </div>
-        {% else %}
-        <div class="thermal-line-desc">No customers</div>
-        {% endfor %}
     </div>
-    <hr class="thermal-rule">
-    <div class="thermal-totals">
-        <div class="thermal-row"><span>Total due</span><span>{{ '%.2f'|format(total_due) }}</span></div>
-    </div>
-    <hr class="thermal-rule">
-    <div class="thermal-foot">Thank you · {{ brand_name or 'OctaneFlow' }}</div>
+    <table class="recover-print-table">
+        <thead>
+            <tr>
+                <th class="col-check"></th>
+                <th class="col-name">Name</th>
+                <th class="col-address">Address</th>
+                <th class="col-phone">Phone</th>
+                <th class="col-amount">Amount</th>
+                <th class="col-days">Pending days</th>
+                <th class="col-notes">Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td class="col-check"><span class="recover-check-box"></span></td>
+                <td class="col-name">{{ row.name }}</td>
+                <td class="col-address">{{ row.address or '' }}</td>
+                <td class="col-phone">{{ row.phone or '' }}</td>
+                <td class="col-amount">{{ '%.2f'|format(row.amount) }}</td>
+                <td class="col-days">{% if row.amount > 0 %}{{ row.days_overdue }}{% else %}{% endif %}</td>
+                <td class="col-notes"></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">No customers</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        {% if rows %}
+        <tfoot>
+            <tr>
+                <td colspan="4">Total due</td>
+                <td class="col-amount">{{ '%.2f'|format(total_due) }}</td>
+                <td colspan="2"></td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
 </aside>
 {% endblock %}
 
 {% block scripts %}
-{% if auto_print %}
+<style>
+.recover-notes-cell {
+    min-width: 8rem;
+    border-bottom: 1px dashed var(--border-color, #ccc);
+}
+.recover-print-sheet {
+    /* Screen: hidden via .thermal-slip; print overrides below */
+}
+.recover-print-head {
+    text-align: center;
+    margin-bottom: 10px;
+}
+.recover-print-brand {
+    font-size: 16px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.recover-print-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 2px;
+}
+.recover-print-meta {
+    font-size: 11px;
+    margin-top: 4px;
+}
+.recover-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 11px;
+}
+.recover-print-table th,
+.recover-print-table td {
+    border: 1px solid #000;
+    padding: 5px 6px;
+    vertical-align: top;
+    word-break: break-word;
+}
+.recover-print-table th {
+    font-weight: 700;
+    text-align: left;
+    background: #f3f3f3;
+}
+.recover-print-table .col-check { width: 22px; text-align: center; }
+.recover-print-table .col-name { width: 18%; }
+.recover-print-table .col-address { width: 22%; }
+.recover-print-table .col-phone { width: 12%; }
+.recover-print-table .col-amount { width: 12%; text-align: right; white-space: nowrap; }
+.recover-print-table .col-days { width: 10%; text-align: center; }
+.recover-print-table .col-notes { width: 22%; min-height: 22px; }
+.recover-check-box {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid #000;
+    vertical-align: middle;
+}
+.recover-print-table tfoot td {
+    font-weight: 700;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+
+    html, body {
+        width: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body.of-print-recover * {
+        visibility: hidden !important;
+    }
+
+    body.of-print-recover .recover-print-sheet,
+    body.of-print-recover .recover-print-sheet * {
+        visibility: visible !important;
+    }
+
+    body.of-print-recover .recover-print-sheet {
+        display: block !important;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+        font-size: 11px !important;
+        line-height: 1.35 !important;
+        color: #000 !important;
+        background: #fff !important;
+        z-index: 99999 !important;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+}
+</style>
 <script>
-    (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
-        setTimeout(function () { window.print(); }, 250);
+(function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
+    const btn = document.getElementById('recover-print-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        document.body.classList.add('of-print-recover');
+        const cleanup = function () {
+            document.body.classList.remove('of-print-recover');
+            window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        window.print();
+        setTimeout(cleanup, 1000);
     });
+});
 </script>
-{% endif %}
 {% endblock %}

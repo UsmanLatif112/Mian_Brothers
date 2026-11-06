@@ -176,13 +176,40 @@ def _as_date(value):
     return value
 
 
-def build_recovery_list(min_amount=None):
+RECOVERY_DAYS_CHOICES = (
+    ('', 'All days'),
+    ('7', '7+ days'),
+    ('15', '15+ days'),
+    ('30', '30+ days'),
+    ('over30', 'More than 30 days'),
+)
+
+
+def _matches_days_filter(days_overdue, days_filter):
+    """True when overdue days match the recovery aging filter."""
+    key = (days_filter or '').strip().lower()
+    if not key or key == 'all':
+        return True
+    days = int(days_overdue or 0)
+    if key == '7':
+        return days >= 7
+    if key == '15':
+        return days >= 15
+    if key == '30':
+        return days >= 30
+    if key in ('over30', 'more30', '>30'):
+        return days > 30
+    return True
+
+
+def build_recovery_list(min_amount=None, days_filter=None):
     """
     Recovery / collect list for print.
 
-    - min_amount is None / empty → every customer (none missing).
-    - otherwise → customers whose receivable (incl. opening) is strictly greater
-      than min_amount.
+    - min_amount empty → no amount cut-off (all customers, unless days filter).
+    - min_amount set → receivable (incl. opening) strictly greater than amount.
+    - days_filter: 7 / 15 / 30 / over30 → pending overdue days threshold.
+      When a days filter is set, only customers with due > 0 are kept.
 
     Each row: name, address, phone, amount due, overdue/pending days from the
     oldest still-unpaid credit (opening, loan, sale, legacy).
@@ -195,15 +222,24 @@ def build_recovery_list(min_amount=None):
     except (TypeError, ValueError):
         threshold = None
 
+    days_key = (days_filter or '').strip().lower()
+    if days_key in ('all',):
+        days_key = ''
+    if days_key not in ('', '7', '15', '30', 'over30', 'more30', '>30'):
+        days_key = ''
+
     if threshold is not None:
         query = query.filter(Customer.current_balance_due > threshold)
+    elif days_key:
+        # Aging list is only useful for people who still owe
+        query = query.filter(Customer.current_balance_due > 0)
 
     customers = query.order_by(
         Customer.current_balance_due.desc(),
         Customer.name.asc(),
     ).all()
     if not customers:
-        return [], threshold
+        return [], threshold, days_key
 
     ids = [c.id for c in customers]
     oldest_by_customer = {}
@@ -252,6 +288,8 @@ def build_recovery_list(min_amount=None):
             days_overdue = max((today - oldest).days, 0)
         else:
             days_overdue = 0
+        if not _matches_days_filter(days_overdue, days_key):
+            continue
         rows.append({
             'id': customer.id,
             'name': customer.name or '',
@@ -261,4 +299,4 @@ def build_recovery_list(min_amount=None):
             'oldest_date': oldest,
             'days_overdue': days_overdue,
         })
-    return rows, threshold
+    return rows, threshold, days_key
