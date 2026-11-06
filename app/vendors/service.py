@@ -16,6 +16,7 @@ OPENING_VENDOR_NAMES = frozenset({
     'opening stock',
     'previous stock',
     'previous / opening',
+    'open for pervious',  # common typo
 })
 
 
@@ -35,7 +36,14 @@ def payment_funding_source(payment, default='account'):
 def is_opening_vendor_name(name):
     """True for the special opening-stock vendor label(s)."""
     key = ' '.join(str(name or '').strip().lower().split())
-    return key in OPENING_VENDOR_NAMES
+    if not key:
+        return False
+    if key in OPENING_VENDOR_NAMES:
+        return True
+    # Fuzzy: "Open for previous", "Opening for previous stock", etc.
+    has_open = 'open' in key or key.startswith('opening')
+    has_prev = 'previous' in key or 'pervious' in key
+    return has_open and has_prev
 
 
 def is_expense_settle_purchase(log):

@@ -5,9 +5,11 @@ from types import SimpleNamespace
 
 from sqlalchemy import func
 
+from sqlalchemy import or_
+
 from app.models import (
     db, FuelType, Inventory, OtherItem, ItemPurchaseLog, StockEntry,
-    MeterReading, CreditSale,
+    MeterReading, CreditSale, StockBatch,
 )
 from app.tenancy import apply_agency_filter
 from app.vendors.service import is_opening_stock_purchase, is_opening_vendor_name
@@ -19,6 +21,13 @@ def _as_date(value):
     if isinstance(value, datetime):
         return value.date()
     return value
+
+
+def _dt_bounds(start, end):
+    """Inclusive date range → datetime bounds (index-friendly, no DATE())."""
+    start_dt = datetime.combine(start, datetime.min.time())
+    end_dt = datetime.combine(end, datetime.max.time().replace(microsecond=0))
+    return start_dt, end_dt
 
 
 def product_choices():
@@ -105,13 +114,15 @@ def _fuel_movements(fuel_type_id, start, end):
     sales_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
     credit_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0, 'credit': 0.0})
 
+    start_dt, end_dt = _dt_bounds(start, end)
+
     # Purchase logs (preferred) + stock entries fallback
     logs = apply_agency_filter(
         ItemPurchaseLog.query.filter(
             ItemPurchaseLog.fuel_type_id == fuel_type_id,
             ItemPurchaseLog.category == 'fuel',
-            func.date(ItemPurchaseLog.entry_date) >= start,
-            func.date(ItemPurchaseLog.entry_date) <= end,
+            ItemPurchaseLog.entry_date >= start_dt,
+            ItemPurchaseLog.entry_date <= end_dt,
         ),
         ItemPurchaseLog,
     ).all()
@@ -120,6 +131,7 @@ def _fuel_movements(fuel_type_id, start, end):
         day = _as_date(log.entry_date)
         qty = float(log.liters or 0)
         amt = qty * float(log.cost_price or 0)
+        # Every fuel: Open for previous → opening, other vendors → purchase
         bucket = opening_in_by_day if is_opening_stock_purchase(log) else purchases_by_day
         bucket[day]['qty'] += qty
         bucket[day]['amount'] += amt
@@ -128,8 +140,8 @@ def _fuel_movements(fuel_type_id, start, end):
     entries = apply_agency_filter(
         StockEntry.query.filter(
             StockEntry.fuel_type_id == fuel_type_id,
-            func.date(StockEntry.entry_date) >= start,
-            func.date(StockEntry.entry_date) <= end,
+            StockEntry.entry_date >= start_dt,
+            StockEntry.entry_date <= end_dt,
         ),
         StockEntry,
     ).all()
@@ -139,8 +151,13 @@ def _fuel_movements(fuel_type_id, start, end):
             continue  # already counted via purchase log
         qty = float(se.liters_added or 0)
         amt = qty * float(se.cost_per_liter or 0)
-        # StockEntry.supplier may be the opening vendor name
-        if is_opening_vendor_name(getattr(se, 'supplier', None)):
+        # Opening vendor via supplier text or linked vendor name
+        vendor_ref = getattr(se, 'vendor_ref', None)
+        is_opening = (
+            is_opening_vendor_name(getattr(se, 'supplier', None))
+            or (vendor_ref is not None and is_opening_vendor_name(getattr(vendor_ref, 'name', None)))
+        )
+        if is_opening:
             opening_in_by_day[day]['qty'] += qty
             opening_in_by_day[day]['amount'] += amt
         else:
@@ -185,6 +202,99 @@ def _fuel_movements(fuel_type_id, start, end):
     return purchases_by_day, opening_in_by_day, sales_by_day, credit_by_day
 
 
+def _purchase_log_qty(log, tracks_liters):
+    """Qty for an inventory log row in the unit the product tracks."""
+    if tracks_liters:
+        return float(log.liters or 0)
+    # Prefer piece qty; fall back to liters when older rows only stored liters
+    qty = float(log.quantity or 0)
+    if qty:
+        return qty
+    return float(log.liters or 0)
+
+
+def _item_purchase_logs(item, start, end):
+    """
+    All purchase / opening-stock logs for a shop or FT item.
+
+    Matches by FIFO batch link first, then by category + name/company aliases
+    (FT Mobile stores company as item_name on the log).
+    """
+    cat = item.category or 'other'
+    start_dt, end_dt = _dt_bounds(start, end)
+    seen = {}
+
+    # 1) Logs linked via stock batches → reliable even when names drift
+    try:
+        batch_log_ids = [
+            row[0]
+            for row in (
+                apply_agency_filter(
+                    db.session.query(StockBatch.purchase_log_id).filter(
+                        StockBatch.other_item_id == item.id,
+                        StockBatch.purchase_log_id.isnot(None),
+                    ),
+                    StockBatch,
+                ).all()
+            )
+            if row[0]
+        ]
+    except Exception:
+        batch_log_ids = []
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    if batch_log_ids:
+        for log in apply_agency_filter(
+            ItemPurchaseLog.query.filter(
+                ItemPurchaseLog.id.in_(batch_log_ids),
+                ItemPurchaseLog.entry_date >= start_dt,
+                ItemPurchaseLog.entry_date <= end_dt,
+            ),
+            ItemPurchaseLog,
+        ).all():
+            seen[log.id] = log
+
+    # 2) Name / company match (covers logs not yet batched + legacy FT naming)
+    name_keys = {k for k in (item.name, item.company) if (k or '').strip()}
+    filters = [
+        ItemPurchaseLog.category == cat,
+        ItemPurchaseLog.entry_date >= start_dt,
+        ItemPurchaseLog.entry_date <= end_dt,
+    ]
+    if name_keys:
+        filters.append(
+            or_(
+                ItemPurchaseLog.item_name.in_(list(name_keys)),
+                ItemPurchaseLog.company.in_(list(name_keys)),
+            )
+        )
+    else:
+        filters.append(ItemPurchaseLog.item_name == item.name)
+
+    q = apply_agency_filter(ItemPurchaseLog.query.filter(*filters), ItemPurchaseLog)
+    # When both company + type are set on the item, keep tight match; otherwise
+    # allow company-only / name-only aliases used by FT Mobile and older rows.
+    if item.company is not None and item.item_type is not None and cat != 'ft_mobile':
+        q = q.filter(
+            or_(
+                ItemPurchaseLog.company == item.company,
+                ItemPurchaseLog.company.is_(None),
+            )
+        )
+        q = q.filter(
+            or_(
+                ItemPurchaseLog.item_type == item.item_type,
+                ItemPurchaseLog.item_type.is_(None),
+            )
+        )
+    for log in q.all():
+        seen[log.id] = log
+
+    return list(seen.values())
+
+
 def _item_movements(item, start, end):
     """Purchases / opening-stock / sales / credit by day for a shop or FT item."""
     purchases_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0})
@@ -193,26 +303,13 @@ def _item_movements(item, start, end):
     credit_by_day = defaultdict(lambda: {'qty': 0.0, 'amount': 0.0, 'credit': 0.0})
     tracks_l = item.tracks_liters()
 
-    logs = apply_agency_filter(
-        ItemPurchaseLog.query.filter(
-            ItemPurchaseLog.category == (item.category or 'other'),
-            ItemPurchaseLog.item_name == item.name,
-            func.date(ItemPurchaseLog.entry_date) >= start,
-            func.date(ItemPurchaseLog.entry_date) <= end,
-        ),
-        ItemPurchaseLog,
-    )
-    if item.company is not None:
-        logs = logs.filter(ItemPurchaseLog.company == item.company)
-    if item.item_type is not None:
-        logs = logs.filter(ItemPurchaseLog.item_type == item.item_type)
-    for log in logs.all():
+    for log in _item_purchase_logs(item, start, end):
         day = _as_date(log.entry_date)
-        if tracks_l:
-            qty = float(log.liters or 0)
-        else:
-            qty = float(log.quantity or 0)
+        qty = _purchase_log_qty(log, tracks_l)
+        if abs(qty) < 1e-12:
+            continue
         amt = qty * float(log.cost_price or 0)
+        # Every product: Open for previous → opening, other vendors → purchase
         bucket = opening_in_by_day if is_opening_stock_purchase(log) else purchases_by_day
         bucket[day]['qty'] += qty
         bucket[day]['amount'] += amt
@@ -249,8 +346,9 @@ def _movements_through(product, start, end):
 
 
 def _qty_after(product, from_day):
-    """Net stock change from from_day (inclusive) through far future → used to back into opening."""
-    far = from_day + timedelta(days=36500)
+    """Net stock change from from_day (inclusive) through today → used to back into opening."""
+    from app.utils import business_today, calendar_today
+    far = max(business_today(), calendar_today(), from_day)
     purchases, opening_in, sales, _ = _movements_through(product, from_day, far)
     stock_in = (
         sum(v['qty'] for v in purchases.values())

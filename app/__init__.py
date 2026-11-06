@@ -271,17 +271,17 @@ def run_schema_boot():
     DDL + light seed pass — only via scripts/migrate_schema.py.
     Do not call from create_app() (Passenger multi-worker locks MySQL).
     """
-        db.create_all()
+    db.create_all()
     ensure_agency_schema()
-        ensure_inventory_schema()
-        ensure_sales_schema()
-        ensure_credit_sales_schema()
-        ensure_journal_schema()
-        ensure_customers_schema()
-        ensure_vendors_schema()
-        ensure_expenses_schema()
-        ensure_till_schema()
-        ensure_item_price_log_schema()
+    ensure_inventory_schema()
+    ensure_sales_schema()
+    ensure_credit_sales_schema()
+    ensure_journal_schema()
+    ensure_customers_schema()
+    ensure_vendors_schema()
+    ensure_expenses_schema()
+    ensure_till_schema()
+    ensure_item_price_log_schema()
     try:
         from app.inventory.categories import ensure_other_item_stock_unit_column
         ensure_other_item_stock_unit_column()
@@ -306,7 +306,7 @@ def run_schema_boot():
             db.session.rollback()
         except Exception:
             pass
-        ensure_meter_sale_rate_schema()
+    ensure_meter_sale_rate_schema()
     ensure_fuel_price_effective_at_schema()
     ensure_stock_batch_schema()
     ensure_dip_chart_schema()

@@ -1207,19 +1207,34 @@ def stock_log():
     from app.inventory.stock_log import product_choices, resolve_product, build_stock_log
 
     args = request.args.to_dict()
+    # Inventory Log always defaults to All time (never Today).
     if not (args.get('period') or '').strip():
         args['period'] = 'all'
     period, start, end = parse_period(args, default_period='all')
+    if period not in dict(PERIOD_CHOICES):
+        period = 'all'
+        _, start, end = parse_period({'period': 'all'}, default_period='all')
 
     choices = product_choices()
     product_key = (request.args.get('product') or '').strip()
     if not product_key and choices:
-        product_key = choices[0]['key']
+        # Default product: Diesel, else first fuel, else first choice
+        diesel = next(
+            (c for c in choices if c.get('kind') == 'fuel' and (c.get('label') or '').strip().lower() == 'diesel'),
+            None,
+        )
+        first_fuel = next((c for c in choices if c.get('kind') == 'fuel'), None)
+        product_key = (diesel or first_fuel or choices[0])['key']
     product = resolve_product(product_key) if product_key else None
 
     rows, totals = build_stock_log(product, start, end) if product else ([], {})
     page = request.args.get('page', 1)
     page_rows, pagination = paginate(rows, page, PER_PAGE)
+
+    # Put "All time" first in this page's dropdown so the default is obvious.
+    period_choices = tuple(
+        sorted(PERIOD_CHOICES, key=lambda x: 0 if x[0] == 'all' else 1)
+    )
 
     return render_template(
         'inventory/stock_log.html',
@@ -1233,7 +1248,7 @@ def stock_log():
         period=period,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
-        period_choices=PERIOD_CHOICES,
+        period_choices=period_choices,
     )
 
 
