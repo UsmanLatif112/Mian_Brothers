@@ -2,8 +2,35 @@
 
 {% block title %}Recovery List — OctaneFlow{% endblock %}
 
+{% block topbar_filters %}
+<form method="GET" class="topbar-filters" id="recover-filter-form" data-allow-multi-submit="1" action="{{ url_for('customers.recover') }}">
+    <div class="topbar-recover-amount" title="Minimum receivable (leave empty for all)">
+        <span class="topbar-recover-prefix">PKR</span>
+        <input type="number" step="0.01" min="0" name="min_amount" id="recover-min-amount"
+               class="form-control form-control-custom topbar-recover-input"
+               value="{{ min_amount or '' }}" placeholder="Amount" aria-label="Minimum receivable">
+    </div>
+    <select name="days" id="recover-days" class="form-select form-control-custom topbar-filter-select" aria-label="Pending days">
+        {% for value, label in days_choices %}
+        <option value="{{ value }}" {% if days_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary-custom topbar-filter-apply" title="Apply">
+        <i class="bi bi-check-lg"></i>
+    </button>
+</form>
+<script>
+(function () {
+    const form = document.getElementById('recover-filter-form');
+    const days = document.getElementById('recover-days');
+    if (!form || !days) return;
+    days.addEventListener('change', function () { form.submit(); });
+})();
+</script>
+{% endblock %}
+
 {% block content %}
-<header class="page-header mb-4 no-print recover-page-header">
+<header class="page-header mb-4 no-print">
     <div class="page-header-row">
         <div class="page-header-text d-flex align-items-center gap-3 min-w-0">
             <a href="{{ url_for('customers.index') }}" class="btn-back" title="Back to Customers"><i class="bi bi-arrow-left"></i></a>
@@ -13,25 +40,9 @@
             </div>
         </div>
         <div class="page-header-actions">
-            <form method="GET" action="{{ url_for('customers.recover') }}" class="recover-toolbar" data-allow-multi-submit="1">
-                <div class="input-group recover-toolbar-amount">
-                    <span class="input-group-text">PKR</span>
-                    <input type="number" step="0.01" min="0" class="form-control form-control-custom"
-                           name="min_amount" value="{{ min_amount or '' }}"
-                           placeholder="Amount (all)" aria-label="Minimum receivable">
-                </div>
-                <select name="days" class="form-select form-control-custom recover-toolbar-days" aria-label="Pending days">
-                    {% for value, label in days_choices %}
-                    <option value="{{ value }}" {% if days_filter == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-outline-secondary recover-toolbar-btn" title="Apply filters">
-                    <i class="bi bi-funnel"></i><span class="btn-label"> Apply</span>
-                </button>
-                <button type="button" class="btn btn-outline-secondary recover-toolbar-btn" id="recover-print-btn" title="Print recovery list">
-                    <i class="bi bi-printer"></i><span class="btn-label"> Print</span>
-                </button>
-            </form>
+            <button type="button" class="btn btn-outline-secondary" id="recover-print-btn" title="Print recovery list">
+                <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
+            </button>
         </div>
     </div>
 </header>
@@ -171,76 +182,42 @@
 
 {% block scripts %}
 <style>
-/* One toolbar row: amount + days + Apply + Print — same height */
-.recover-page-header .page-header-row {
-    align-items: center;
-}
-.recover-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-}
-.recover-toolbar-amount {
-    width: 11.5rem;
-    flex: 0 0 auto;
-    height: 2.5rem;
-}
-.recover-toolbar-amount > .input-group-text,
-.recover-toolbar-amount > .form-control {
-    height: 100%;
-}
-.recover-toolbar-days,
-.recover-toolbar .ts-wrapper.recover-toolbar-days,
-.recover-toolbar .ts-wrapper.of-select {
-    width: 11rem;
-    min-width: 11rem;
-    flex: 0 0 auto;
-    height: 2.5rem !important;
-    margin: 0;
-}
-.recover-toolbar select.recover-toolbar-days {
-    height: 2.5rem;
-    min-height: 2.5rem;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-.recover-toolbar .ts-wrapper {
-    height: 2.5rem !important;
-}
-.recover-toolbar .ts-wrapper .ts-control {
-    height: 2.5rem !important;
-    min-height: 2.5rem !important;
-    display: flex !important;
-    align-items: center;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-}
-.recover-toolbar-btn {
-    height: 2.5rem;
-    min-height: 2.5rem;
+/* Topbar amount chip — matches period / working-date filter height */
+.topbar-recover-amount {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    padding: 0 0.9rem;
-    white-space: nowrap;
-    flex: 0 0 auto;
+    gap: 0.3rem;
+    height: 36px;
+    padding: 0 0.35rem 0 0.55rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
 }
-@media (max-width: 767.98px) {
-    .recover-toolbar {
-        width: 100%;
-    }
-    .recover-toolbar-amount,
-    .recover-toolbar-days,
-    .recover-toolbar .ts-wrapper {
-        width: 100%;
-        min-width: 0;
-        flex: 1 1 100%;
-    }
-    .recover-toolbar-btn {
-        flex: 1 1 auto;
-    }
+.topbar-recover-prefix {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+}
+.topbar-recover-input {
+    width: 6.75rem !important;
+    min-width: 0;
+    height: 32px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: 0.78rem !important;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+.topbar-recover-input:focus {
+    outline: none;
+    box-shadow: none !important;
+}
+.topbar-filters .ts-wrapper.of-select-filter {
+    min-width: 8.5rem;
 }
 
 .recover-notes-cell {
