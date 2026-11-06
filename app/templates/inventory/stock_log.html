@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Log — OctaneFlow{% endblock %}
+
+{% block topbar_filters %}
+<form method="GET" class="topbar-filters" id="stock-log-filter-form" data-allow-multi-submit="1" action="{{ url_for('inventory.stock_log') }}">
+    <select name="product" id="stock-log-product" class="form-select form-control-custom topbar-filter-select" aria-label="Product" style="min-width: 11rem;">
+        {% if not product_choices %}
+        <option value="">No products</option>
+        {% endif %}
+        {% for c in product_choices %}
+        <option value="{{ c.key }}" {% if product_key == c.key %}selected{% endif %}>{{ c.label }}</option>
+        {% endfor %}
+    </select>
+    <select name="period" id="stock-log-period" class="form-select form-control-custom topbar-filter-select" aria-label="Period">
+        {% for value, label in period_choices %}
+        <option value="{{ value }}" {% if period == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <div class="topbar-filter-dates custom-dates {% if period != 'custom' %}d-none{% endif %}">
+        <input type="date" name="start_date" class="form-control form-control-custom topbar-filter-date" value="{{ start_date }}" aria-label="From date">
+        <span class="topbar-date-sep">–</span>
+        <input type="date" name="end_date" class="form-control form-control-custom topbar-filter-date" value="{{ end_date }}" aria-label="To date">
+        <button type="submit" class="btn btn-primary-custom topbar-filter-apply" title="Apply"><i class="bi bi-check-lg"></i></button>
+    </div>
+</form>
+<script>
+(function () {
+    const form = document.getElementById('stock-log-filter-form');
+    if (!form) return;
+    const period = document.getElementById('stock-log-period');
+    const product = document.getElementById('stock-log-product');
+    const customWrap = form.querySelector('.custom-dates');
+    const syncCustom = () => {
+        if (!customWrap || !period) return;
+        customWrap.classList.toggle('d-none', period.value !== 'custom');
+    };
+    if (period) {
+        period.addEventListener('change', () => {
+            syncCustom();
+            if (period.value !== 'custom') form.submit();
+        });
+    }
+    if (product) product.addEventListener('change', () => form.submit());
+    syncCustom();
+})();
+</script>
+{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Stock</p>
+            <h1 class="page-title">Inventory Log</h1>
+            <p class="text-muted-custom mb-0 mt-1" style="font-size: 0.95rem;">
+                Daily purchase / sale / stock statement
+                {% if product %}· <strong>{{ product.name }}</strong> ({{ product.unit }}){% endif %}
+            </p>
+        </div>
+        <div class="page-header-actions">
+            <a href="{{ url_for('inventory.index') }}" class="btn btn-outline-secondary" title="Back to Inventory">
+                <i class="bi bi-arrow-left me-1"></i><span class="btn-label"> Back</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+{% if product and totals %}
+<div class="row g-3 mb-4 row-cols-2 row-cols-md-3 row-cols-xl-5 dashboard-stats">
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Opening</span>
+                <div class="metric-value fw-bold mb-0">{{ totals.opening | num(2) }} <small class="fs-6 fw-normal text-muted-custom">{{ product.unit }}</small></div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Purchased</span>
+                <div class="metric-value fw-bold mb-0">{{ totals.purchase_qty | num(2) }} <small class="fs-6 fw-normal text-muted-custom">{{ product.unit }}</small></div>
+                <small class="text-muted-custom">{{ totals.purchase_amount | money }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card credit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Sold</span>
+                <div class="metric-value fw-bold mb-0">{{ totals.sale_qty | num(2) }} <small class="fs-6 fw-normal text-muted-custom">{{ product.unit }}</small></div>
+                <small class="text-muted-custom">{{ totals.sale_amount | money }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Closing</span>
+                <div class="metric-value fw-bold mb-0">{{ totals.closing | num(2) }} <small class="fs-6 fw-normal text-muted-custom">{{ product.unit }}</small></div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Credit Sale</span>
+                <div class="metric-value fw-bold mb-0 text-warning">{{ totals.credit_amount | money }}</div>
+                <small class="text-muted-custom">Unpaid from this stock</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card card-premium list-panel">
+    <div class="card-header-premium">
+        <h5 class="mb-0 fw-bold">Stock Statement</h5>
+        <small class="text-muted-custom">
+            {% if product %}{{ product.name }} · {{ start_date }} → {{ end_date }}{% else %}Select a product{% endif %}
+        </small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-custom table-hover mb-0 list-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Date</th>
+                    <th class="text-end">Opening</th>
+                    <th class="text-end">Purchase</th>
+                    <th class="text-end">Sale</th>
+                    <th class="text-end">Stock</th>
+                    <th class="text-end">Purchase Amt</th>
+                    <th class="text-end">Sale Amt</th>
+                    <th class="text-end">Credit Sale</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if rows %}
+                    {% for row in rows %}
+                    <tr>
+                        <td class="fw-semibold"><span class="of-clip-cell" data-of-tip="{{ row.name }}">{{ row.name }}</span></td>
+                        <td class="text-nowrap">{{ row.date }}</td>
+                        <td class="text-end text-nowrap">{{ row.stock_opening | num(2) }} {{ row.unit }}</td>
+                        <td class="text-end text-nowrap {% if row.purchase_qty %}text-success{% endif %}">
+                            {% if row.purchase_qty %}{{ row.purchase_qty | num(2) }} {{ row.unit }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap {% if row.sale_qty %}text-danger{% endif %}">
+                            {% if row.sale_qty %}{{ row.sale_qty | num(2) }} {{ row.unit }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap fw-semibold">{{ row.stock | num(2) }} {{ row.unit }}</td>
+                        <td class="text-end text-nowrap">
+                            {% if row.purchase_amount %}{{ row.purchase_amount | money }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap">
+                            {% if row.sale_amount %}{{ row.sale_amount | money }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap {% if row.credit_amount %}text-warning{% endif %}">
+                            {% if row.credit_amount %}{{ row.credit_amount | money }}{% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted-custom py-4">
+                            {% if not product %}Select petrol, diesel, or a shop product to view the log.{% else %}No stock movements in this period.{% endif %}
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+            {% if rows and totals %}
+            <tfoot>
+                <tr class="fw-semibold">
+                    <td colspan="2">Period total</td>
+                    <td class="text-end text-nowrap">{{ totals.opening | num(2) }} {{ product.unit }}</td>
+                    <td class="text-end text-nowrap text-success">{{ totals.purchase_qty | num(2) }} {{ product.unit }}</td>
+                    <td class="text-end text-nowrap text-danger">{{ totals.sale_qty | num(2) }} {{ product.unit }}</td>
+                    <td class="text-end text-nowrap">{{ totals.closing | num(2) }} {{ product.unit }}</td>
+                    <td class="text-end text-nowrap">{{ totals.purchase_amount | money }}</td>
+                    <td class="text-end text-nowrap">{{ totals.sale_amount | money }}</td>
+                    <td class="text-end text-nowrap text-warning">{{ totals.credit_amount | money }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+    {% if pagination and pagination.pages > 1 %}
+    <div class="p-3 border-top" style="border-color: var(--border-color) !important;">
+        {% with pagination=pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'product': product_key} %}
+        {% include "partials/pagination.html" %}
+        {% endwith %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

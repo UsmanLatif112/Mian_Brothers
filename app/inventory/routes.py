@@ -1199,6 +1199,44 @@ def api_delete_category(category_id):
     return jsonify({'ok': True})
 
 
+@inventory_bp.route('/log')
+@login_required
+def stock_log():
+    """Daily inventory statement — product + period filter."""
+    from app.utils import parse_period, PERIOD_CHOICES, paginate
+    from app.inventory.stock_log import product_choices, resolve_product, build_stock_log
+
+    args = request.args.to_dict()
+    if not (args.get('period') or '').strip():
+        args['period'] = 'today'
+    period, start, end = parse_period(args, default_period='today')
+
+    choices = product_choices()
+    product_key = (request.args.get('product') or '').strip()
+    if not product_key and choices:
+        product_key = choices[0]['key']
+    product = resolve_product(product_key) if product_key else None
+
+    rows, totals = build_stock_log(product, start, end) if product else ([], {})
+    page = request.args.get('page', 1)
+    page_rows, pagination = paginate(rows, page, PER_PAGE)
+
+    return render_template(
+        'inventory/stock_log.html',
+        product_choices=choices,
+        product_key=product_key,
+        product=product,
+        rows=page_rows,
+        all_rows=rows,
+        totals=totals,
+        pagination=pagination,
+        period=period,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        period_choices=PERIOD_CHOICES,
+    )
+
+
 @inventory_bp.route('/batches')
 @login_required
 def batches():
