@@ -100,7 +100,11 @@ def upsert_expense_vendor_payable(expense, vendor, settled_date, settle_note=Non
     from app.utils import expense_settle_remark
 
     amount = float(expense.amount or 0)
-    item_name = (expense_settle_remark(expense.name, settle_note) or 'Settle')[:100]
+    item_name = (
+        expense_settle_remark(
+            expense.name, settle_note, getattr(expense, 'description', None)
+        ) or 'Settle'
+    )[:100]
     entry_dt = datetime.combine(settled_date, time.min) if settled_date else datetime.utcnow()
     touched = set()
     old_vendor_id = getattr(expense, 'settle_vendor_id', None)

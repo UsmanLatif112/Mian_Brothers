@@ -391,7 +391,9 @@ def _sync_expense_credit_sale(expense, customer, settled_date, settle_note, curr
     from app.utils import expense_settle_remark
 
     amount = float(expense.amount or 0)
-    remark = expense_settle_remark(expense.name, settle_note)
+    remark = expense_settle_remark(
+        expense.name, settle_note, getattr(expense, 'description', None)
+    )[:255]
     touched = set()
     old_customer_id = expense.settle_customer_id
     cs = None

@@ -35,9 +35,16 @@ def business_today():
     return calendar_today()
 
 
-def expense_settle_remark(name, settle_note=None):
-    """Customer-ledger remark for expense settled to customer credit (not a cash loan)."""
-    remark = f'Settle — {(name or "").strip() or "expense"}'
+def expense_settle_remark(name, settle_note=None, description=None):
+    """
+    Ledger label for expense settled to customer credit or vendor payable.
+    Includes expense name + description for clear visibility.
+    """
+    title = (name or '').strip() or 'expense'
+    remark = f'Settle — {title}'
+    desc = (description or '').strip()
+    if desc and desc.lower() != title.lower():
+        remark = f'{remark} — {desc}'
     note = (settle_note or '').strip()
     if note:
         remark = f'{remark} — {note}'

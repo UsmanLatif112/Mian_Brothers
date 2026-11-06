@@ -92,7 +92,9 @@ def index():
                     return redirect(url_for('expenses.index', **_filter_args()))
                 require_agency_access(customer)
                 amount = float(expense.amount or 0)
-                remark = expense_settle_remark(expense.name, settle_note)
+                remark = expense_settle_remark(
+                    expense.name, settle_note, getattr(expense, 'description', None)
+                )[:255]
                 credit_sale = stamp_agency(CreditSale(
                     customer_id=customer.id,
                     sale_date=settled_date,
