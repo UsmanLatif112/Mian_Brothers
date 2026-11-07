@@ -56,7 +56,7 @@
     </div>
 </header>
 
-<section class="kpi-grid kpi-grid-main" aria-label="Period statistics">
+<section class="kpi-grid kpi-grid-main" aria-label="Period statistics and till cash">
     <div class="kpi-card kpi-total">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></span>
@@ -137,11 +137,9 @@
         <div class="kpi-value {% if total_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ total_profit | money }}</div>
         <div class="kpi-meta">Gross − net expense</div>
     </div>
-</section>
 
 {% set paid_to_vendor = stats.vendor_payments_total or 0 %}
 {% set taken_after_vendor = (stats.cash_taken_total or 0) - paid_to_vendor %}
-<section class="kpi-grid kpi-grid-main mt-3" aria-label="Till cash">
     <div class="kpi-card kpi-cash">
         <div class="kpi-card-top">
             <span class="kpi-icon"><i class="bi bi-cash-stack"></i></span>
