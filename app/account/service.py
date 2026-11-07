@@ -73,12 +73,11 @@ def day_account_figures(day, models_ns):
     pending = computed_pending
     if till:
         stored_remaining = float(till.remaining_balance or 0)
-        # Prefer saved “after cash taken” (may differ from cash − taken, e.g. 5005 vs 5000)
+        # Saved “after cash taken” can differ slightly (e.g. 5005 vs 5000) and
+        # becomes the next day’s opening. Do not copy it back onto cash in hand:
+        # that stored figure can predate expenses, so cash in hand would show
+        # the higher amount with expenses left out.
         pending = stored_remaining
-        # If live activity under-reports, rebuild cash from stored remaining + taken
-        reconstructed = stored_remaining + taken
-        if reconstructed > cash_in_hand:
-            cash_in_hand = reconstructed
 
     return {
         'previous_balance': previous,

@@ -491,33 +491,71 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 @media (max-width: 991.98px) {
-    .app-topbar {
-        flex-wrap: wrap;
+    /* One row: menu, search, bell, account. Filters share the next row. */
+    body.has-app-shell .app-topbar {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        column-gap: 0.4rem;
+        row-gap: 0.4rem;
         height: auto;
-        min-height: var(--topbar-height);
-        row-gap: 0.35rem;
+        min-height: 0;
+        flex-wrap: unset;
+        padding: 0.45rem 0.7rem;
+        padding-top: max(0.45rem, env(safe-area-inset-top, 0px));
     }
 
-    .topbar-left {
-        flex: 1 1 auto;
+    body.has-app-shell .topbar-left,
+    body.has-app-shell .topbar-right {
+        display: contents;
+    }
+
+    body.has-app-shell .app-topbar #sidebarOpen {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    body.has-app-shell .app-topbar .topbar-search {
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+        max-width: none;
         min-width: 0;
     }
 
-    .topbar-right {
-        width: 100%;
-        justify-content: flex-start;
-        order: 3;
-        padding-top: 0.15rem;
-        gap: 0.35rem;
+    body.has-app-shell .app-topbar .topbar-search-input {
+        height: 40px;
     }
 
-    .topbar-filters {
-        flex: 1 1 100%;
-        margin-right: 0;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.4rem;
+    body.has-app-shell .app-topbar .dropdown:has(#notifMenu) {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    body.has-app-shell .app-topbar .dropdown:has(#userMenu) {
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    body.has-app-shell .app-topbar .working-date-chip,
+    body.has-app-shell .app-topbar .topbar-filters {
+        grid-column: 1 / -1;
+    }
+
+    body.has-app-shell .app-topbar .working-date-chip {
+        justify-self: start;
+    }
+
+    body.has-app-shell .app-topbar .topbar-filters {
         width: 100%;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+        gap: 0.4rem;
+    }
+
+    .topbar-filters > * {
+        min-width: 0;
     }
 
     .topbar-filters .topbar-filter-select,
@@ -540,8 +578,8 @@ body.sidebar-open .sidebar-backdrop {
     }
 
     .topbar-filters .topbar-working {
-        grid-column: 1 / -1;
         width: 100%;
+        min-width: 0;
         justify-content: flex-start;
     }
 
@@ -552,10 +590,6 @@ body.sidebar-open .sidebar-backdrop {
 }
 
 @media (max-width: 575.98px) {
-    .topbar-filters {
-        grid-template-columns: 1fr;
-    }
-
     .topbar-search {
         max-width: none;
     }

@@ -38,6 +38,47 @@ def media_url(filename, fallback='img/logo.png'):
     return url_for('static', filename=fallback)
 
 
+def _png_size(path):
+    """Width and height from a PNG header, or None."""
+    try:
+        with open(path, 'rb') as handle:
+            head = handle.read(24)
+    except OSError:
+        return None
+    if len(head) < 24 or head[:8] != b'\x89PNG\r\n\x1a\n':
+        return None
+    width = int.from_bytes(head[16:20], 'big')
+    height = int.from_bytes(head[20:24], 'big')
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def resolve_home_icon():
+    """App name and PNG path used for the home-screen / bookmark icon.
+
+    iOS ignores the icon (and shows a page screenshot) when the declared
+    size does not match the file, or when the file is not a PNG.
+    """
+    static_logo = os.path.join(_BASE_DIR, 'app', 'static', 'img', 'logo.png')
+    name = 'OctaneFlow'
+    path = static_logo
+    try:
+        if current_user.is_authenticated and getattr(current_user, 'agency_id', None):
+            from app.models import Agency
+            agency = Agency.query.get(current_user.agency_id)
+            if agency and 'octane' not in (agency.name or '').lower():
+                name = agency.name or name
+                logo_name = os.path.basename(agency.logo or '')
+                candidate = os.path.join(UPLOAD_DIR, logo_name) if logo_name else ''
+                if candidate and _png_size(candidate):
+                    path = candidate
+    except Exception:
+        pass
+    size = _png_size(path) or (1024, 1024)
+    return name, path, size
+
+
 def create_app():
     app = Flask(__name__)
     
@@ -128,6 +169,13 @@ def create_app():
             logo_url = url_for('static', filename='img/logo.png')
         else:
             logo_url = media_url(brand_logo, 'img/logo.png')
+        icon_path = os.path.join(_BASE_DIR, 'app', 'static', 'img', 'logo.png')
+        if not use_platform_logo and brand_logo:
+            candidate = os.path.join(UPLOAD_DIR, os.path.basename(brand_logo))
+            if _png_size(candidate):
+                icon_path = candidate
+        icon_wh = _png_size(icon_path) or (1024, 1024)
+        brand_icon_sizes = '%sx%s' % (icon_wh[0], icon_wh[1])
         from app.tenancy import (
             is_super_admin, is_agency_admin, is_agency_manager, can_access_module, OPS_MODULES,
         )
@@ -146,6 +194,7 @@ def create_app():
             'brand_tag': brand_tag,
             'brand_logo_url': logo_url,
             'brand_favicon_url': logo_url,
+            'brand_icon_sizes': brand_icon_sizes,
             'brand_address': brand_address,
             'brand_phone': brand_phone,
             'brand_email': brand_email,
@@ -166,6 +215,46 @@ def create_app():
     @app.route('/media/uploads/<path:filename>')
     def uploaded_file(filename):
         return send_from_directory(UPLOAD_DIR, filename)
+
+    @app.route('/apple-touch-icon.png')
+    @app.route('/apple-touch-icon-precomposed.png')
+    def home_screen_icon():
+        """Square app logo for Add to Home Screen and bookmarks."""
+        _name, path, _size = resolve_home_icon()
+        directory, filename = os.path.split(path)
+        response = send_from_directory(directory, filename, mimetype='image/png', max_age=86400)
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+        return response
+
+    @app.route('/manifest.webmanifest')
+    def web_manifest():
+        """Home-screen manifest. Icon size must match the PNG exactly."""
+        import json
+        from flask import Response
+        name, _path, size = resolve_home_icon()
+        short = name.strip() or 'OctaneFlow'
+        if len(short) > 12:
+            short = short[:12].rstrip()
+        payload = {
+            'name': name,
+            'short_name': short,
+            'start_url': '/',
+            'scope': '/',
+            'display': 'standalone',
+            'background_color': '#eef3f8',
+            'theme_color': '#0d9488',
+            'icons': [{
+                'src': url_for('home_screen_icon', _external=True),
+                'sizes': '%sx%s' % (size[0], size[1]),
+                'type': 'image/png',
+                'purpose': 'any',
+            }],
+        }
+        return Response(
+            json.dumps(payload),
+            mimetype='application/manifest+json',
+            headers={'Cache-Control': 'no-cache'},
+        )
     
     # Register Blueprints
     from app.auth.routes import auth_bp
@@ -234,7 +323,10 @@ def create_app():
         if not authenticated:
             return None
         endpoint = req.endpoint or ''
-        if endpoint.startswith('static') or endpoint in ('auth.login', 'auth.logout', 'uploaded_file', 'root'):
+        if endpoint.startswith('static') or endpoint in (
+            'auth.login', 'auth.logout', 'uploaded_file', 'root',
+            'home_screen_icon', 'web_manifest',
+        ):
             return None
         # Auth users/team + backup + dip calculator are role-gated separately
         if endpoint.startswith('auth.') or endpoint.startswith('backup.') or endpoint.startswith('dip.'):
