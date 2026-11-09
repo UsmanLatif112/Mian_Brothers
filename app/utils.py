@@ -51,6 +51,15 @@ def expense_settle_remark(name, settle_note=None, description=None):
     return remark
 
 
+def is_salary_payment_note(note):
+    """A payment saved as Salary (before the salary entry type).
+
+    It reduces what the customer owes. It is not cash received and does not
+    belong on the cash journal.
+    """
+    return (note or '').strip().lower() == 'salary'
+
+
 def is_expense_settle_remark(remarks):
     """True when CreditSale remarks mark an expense→customer credit settle."""
     r = (remarks or '').strip().lower()
@@ -629,6 +638,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         ),
         Payment,
     ).all()
+    # Salary notes are ledger credits only (same as entry_type salary).
+    payments = [p for p in payments if not is_salary_payment_note(getattr(p, 'note', None))]
     payments_total = sum(float(p.amount_paid or 0) for p in payments)
 
     # Purchases in period (cost × liters/qty); skip opening stock + expense settles.
@@ -1266,6 +1277,8 @@ def build_period_cash_entries(stats):
     for pay in payments:
         # Already rolled into the sale Paid/Other columns
         if pay.id in absorbed_payment_ids:
+            continue
+        if is_salary_payment_note(getattr(pay, 'note', None)):
             continue
         pay_dt = pay.payment_date
         sale_date = pay_dt.date() if hasattr(pay_dt, 'date') else pay_dt

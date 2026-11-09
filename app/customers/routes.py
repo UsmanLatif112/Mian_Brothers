@@ -7,6 +7,7 @@ from app.tenancy import (
 )
 from app.utils import (
     paginate, parse_form_date, datetime_from_date, business_today, is_expense_settle_remark,
+    is_salary_payment_note,
 )
 from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale, edit_payment, delete_payment,
@@ -587,17 +588,22 @@ def ledger(customer_id):
     for pay in payments:
         pay_date = pay.payment_date
         sale_date_str = pay_date.date().isoformat() if hasattr(pay_date, 'date') else str(pay_date)[:10]
+        salary_pay = is_salary_payment_note(pay.note)
         ledger_entries.append({
             'date': pay.payment_date,
             'type': 'payment',
-            'desc': f"Cleared credit via {pay.method} {f'({pay.note})' if pay.note else ''}",
+            'desc': (
+                'Salary'
+                if salary_pay
+                else f"Cleared credit via {pay.method} {f'({pay.note})' if pay.note else ''}"
+            ),
             'debit': 0.0,
             'credit': float(pay.amount_paid),
-            'ref_id': f"Payment #{pay.id}",
-            'pay_type': 'payment',
+            'ref_id': f"{'Salary' if salary_pay else 'Payment'} #{pay.id}",
+            'pay_type': 'salary' if salary_pay else 'payment',
             'source_type': 'payment',
             'source_id': pay.id,
-            'entry_kind': 'payment',
+            'entry_kind': 'salary' if salary_pay else 'payment',
             'can_edit': True,
             'sale_date': sale_date_str,
             'amount': float(pay.amount_paid or 0),
