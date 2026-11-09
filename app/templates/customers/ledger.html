@@ -20,6 +20,7 @@
         <option value="payment" {% if entry_filter == 'payment' %}selected{% endif %}>Payments</option>
         <option value="advance" {% if entry_filter == 'advance' %}selected{% endif %}>Advances</option>
         <option value="loan" {% if entry_filter == 'loan' %}selected{% endif %}>Loans</option>
+        <option value="salary" {% if entry_filter == 'salary' %}selected{% endif %}>Salary</option>
         <option value="settle" {% if entry_filter == 'settle' %}selected{% endif %}>Settles</option>
         <option value="opening" {% if entry_filter == 'opening' %}selected{% endif %}>Opening</option>
     </select>
@@ -305,6 +306,7 @@
                             <option value="payment" selected>Payment / Credit Clear</option>
                             <option value="advance">Advance (customer prepaid)</option>
                             <option value="loan">Loan (cash given to customer)</option>
+                            <option value="salary">Salary (employee)</option>
                         </select>
                     </div>
 
@@ -313,6 +315,17 @@
                         <div class="input-group">
                             <span class="input-group-text">PKR</span>
                             <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="ledger_amount_input" placeholder="Enter amount" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 p-3 rounded d-none" id="ledger_balance_preview" data-balance="{{ '%.2f'|format(customer.current_balance_due or 0) }}" style="background: rgba(2,132,199,0.07);">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted-custom">Existing balance</span>
+                            <strong id="ledger_existing_label"></strong>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted-custom">Remaining after this amount</span>
+                            <strong id="ledger_remaining_label"></strong>
                         </div>
                     </div>
 
@@ -442,6 +455,24 @@
         const amountEl = document.getElementById('ledger_amount');
         const methodWrap = modalEl.querySelector('.ledger-method-wrap');
         const submitBtn = document.getElementById('ledger_submit_btn');
+        const preview = document.getElementById('ledger_balance_preview');
+        const existingLabel = document.getElementById('ledger_existing_label');
+        const remainingLabel = document.getElementById('ledger_remaining_label');
+        const existingBalance = preview ? Number(preview.getAttribute('data-balance') || 0) : 0;
+        const money = (n) => (window.ofMoney ? window.ofMoney(Math.abs(n)) : `PKR ${Math.abs(Number(n) || 0).toFixed(2)}`);
+        const paintSide = (el, amount) => {
+            if (!el) return;
+            if (amount > 0.004) {
+                el.textContent = `${money(amount)} receivable`;
+                el.className = 'text-warning';
+            } else if (amount < -0.004) {
+                el.textContent = `${money(amount)} payable`;
+                el.className = 'text-success';
+            } else {
+                el.textContent = 'Settled';
+                el.className = '';
+            }
+        };
 
         const applyType = (type) => {
             if (type === 'payment') {
@@ -454,6 +485,11 @@
                 entryKindEl.value = 'advance';
                 if (methodWrap) methodWrap.style.display = 'none';
                 if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save Advance';
+            } else if (type === 'salary') {
+                actionEl.value = 'advance_loan';
+                entryKindEl.value = 'salary';
+                if (methodWrap) methodWrap.style.display = 'none';
+                if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-cash-coin me-1"></i> Save Salary';
             } else {
                 actionEl.value = 'advance_loan';
                 entryKindEl.value = 'loan';
@@ -468,6 +504,14 @@
             } else {
                 amountEl.value = val;
                 amountPaidEl.value = '';
+            }
+
+            const showPreview = type === 'payment' || type === 'salary';
+            if (preview) preview.classList.toggle('d-none', !showPreview);
+            if (showPreview) {
+                const paid = Math.max(0, Number(val) || 0);
+                paintSide(existingLabel, existingBalance);
+                paintSide(remainingLabel, existingBalance - paid);
             }
         };
 

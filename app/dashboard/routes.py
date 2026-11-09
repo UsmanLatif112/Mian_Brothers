@@ -218,7 +218,7 @@ def _build_meter_trend(start, end):
     ).all()
     for e in entries:
         et = (e.entry_type or 'sale').lower()
-        if et in ('advance', 'loan', 'opening'):
+        if et in ('advance', 'loan', 'opening', 'salary'):
             continue
 
         d = as_date(e.sale_date)
@@ -618,7 +618,7 @@ def _dashboard_insights(start, end, stock_summary, other_items):
         CreditSale,
     ).all():
         et = (e.entry_type or 'sale').lower()
-        if et in ('advance', 'loan', 'opening'):
+        if et in ('advance', 'loan', 'opening', 'salary'):
             continue
         sale_val = float(e.amount or 0)
         qty = float(e.liters or 0)

@@ -486,6 +486,10 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         credit_liters = 0.0 if amt <= 0 else liters * (credit / amt)
         et = (e.entry_type or 'sale').lower()
 
+        if et == 'salary':
+            # Employee salary on a customer ledger. Reduces what they owe
+            # (or creates payable) and does not move cash in hand.
+            continue
         if et == 'advance':
             advances += amt
             continue
@@ -1172,8 +1176,8 @@ def build_period_cash_entries(stats):
         remarks = (getattr(e, 'remarks', None) or '').strip()
         item_name = e.item_name if hasattr(e, 'item_name') else ''
 
-        # Customer opening account rows are not cash activity.
-        if et == 'opening':
+        # Opening balances and salary are ledger-only — not till cash.
+        if et in ('opening', 'salary'):
             continue
 
         # Skip advance rows already shown as sale overpayment

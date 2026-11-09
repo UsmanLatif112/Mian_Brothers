@@ -125,7 +125,7 @@ def recalculate_customer_balance(customer):
     for cs in credit_sales:
         et = (cs.entry_type or 'sale').lower()
         amt = float(cs.amount or 0)
-        if et == 'advance':
+        if et in ('advance', 'salary'):
             balance -= amt
         elif et in ('loan', 'opening'):
             balance += amt
@@ -266,7 +266,7 @@ def build_recovery_due_notifications(today=None):
 def _credit_row_still_owed(cs):
     """Unpaid receivable left on a CreditSale row (opening / loan / sale)."""
     et = (cs.entry_type or 'sale').lower()
-    if et == 'advance':
+    if et in ('advance', 'salary'):
         return 0.0
     amt = float(cs.amount or 0)
     paid = float(cs.amount_paid or 0)

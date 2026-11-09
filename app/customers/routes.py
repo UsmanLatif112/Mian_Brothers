@@ -340,8 +340,8 @@ def ledger(customer_id):
             note = (request.form.get('note') or '').strip() or None
             entry_date = parse_form_date(request.form.get('entry_date'))
 
-            if kind not in ('advance', 'loan'):
-                flash('Please select Advance or Loan.', 'danger')
+            if kind not in ('advance', 'loan', 'salary'):
+                flash('Please select Advance, Loan, or Salary.', 'danger')
                 return redirect(url_for('customers.ledger', customer_id=customer.id))
 
             try:
@@ -352,7 +352,7 @@ def ledger(customer_id):
                 flash(f'Invalid amount: {e}', 'danger')
                 return redirect(url_for('customers.ledger', customer_id=customer.id))
 
-            if kind == 'advance':
+            if kind in ('advance', 'salary'):
                 cs = CreditSale(
                     customer_id=customer.id,
                     sale_date=entry_date,
@@ -360,7 +360,7 @@ def ledger(customer_id):
                     rate=0,
                     amount=amt_val,
                     amount_paid=amt_val,
-                    entry_type='advance',
+                    entry_type=kind,
                     payment_status='paid',
                     remarks=note,
                     recorded_by=current_user.id,
@@ -370,10 +370,16 @@ def ledger(customer_id):
                 db.session.flush()
                 recalculate_customer_balance(customer)
                 db.session.commit()
+                bal = float(customer.current_balance_due)
+                if bal < -0.004:
+                    bal_note = f' Payable PKR {abs(bal):,.2f}.'
+                elif bal > 0.004:
+                    bal_note = f' Receivable PKR {bal:,.2f}.'
+                else:
+                    bal_note = ' Account settled.'
+                label = 'Salary' if kind == 'salary' else 'Advance'
                 flash(
-                    f"Advance of PKR {amt_val:,.2f} saved for {customer.name}. "
-                    f"Balance: PKR {float(customer.current_balance_due):,.2f}"
-                    f"{' (advance / prepaid)' if float(customer.current_balance_due) < 0 else ''}.",
+                    f"{label} of PKR {amt_val:,.2f} saved for {customer.name}.{bal_note}",
                     'success'
                 )
             else:
@@ -486,6 +492,17 @@ def ledger(customer_id):
                 'credit': float(p.amount or 0),
                 'ref_id': f"Advance #{p.id}",
                 'pay_type': 'advance',
+            })
+        elif et == 'salary':
+            ledger_entries.append({
+                **base,
+                'date': datetime.combine(p.sale_date, datetime.min.time()) if p.sale_date else p.created_at,
+                'type': 'payment',
+                'desc': f"Salary {f'({p.remarks})' if p.remarks else ''}".strip(),
+                'debit': 0.0,
+                'credit': float(p.amount or 0),
+                'ref_id': f"Salary #{p.id}",
+                'pay_type': 'salary',
             })
         elif et == 'loan':
             if is_expense_settle_remark(p.remarks):
@@ -606,17 +623,20 @@ def ledger(customer_id):
     ledger_entries.reverse()
 
     total_sales = sum(float(e.get('debit') or 0) for e in ledger_entries)
-    total_received = sum(float(e.get('credit') or 0) for e in ledger_entries)
+    total_received = sum(
+        float(e.get('credit') or 0) for e in ledger_entries
+        if (e.get('pay_type') or '').lower() != 'salary'
+    )
 
     entry_filter = (request.args.get('filter') or 'all').strip().lower()
-    allowed = {'all', 'sale', 'payment', 'advance', 'loan', 'settle', 'opening'}
+    allowed = {'all', 'sale', 'payment', 'advance', 'loan', 'salary', 'settle', 'opening'}
     if entry_filter not in allowed:
         entry_filter = 'all'
     search_q = (request.args.get('search') or '').strip().lower()
 
     def _customer_entry_kind(e):
         kind = (e.get('entry_kind') or e.get('pay_type') or '').lower()
-        if kind in ('advance', 'loan', 'settle', 'opening'):
+        if kind in ('advance', 'loan', 'salary', 'settle', 'opening'):
             return kind
         if (e.get('type') or '').lower() == 'payment' or kind == 'payment':
             return 'payment'

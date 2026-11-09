@@ -310,6 +310,17 @@
                         </div>
                     </div>
 
+                    <div class="mb-3 p-3 rounded" id="vendor_balance_preview" data-balance="{{ '%.2f'|format(vendor.current_balance_payable or 0) }}" style="background: rgba(2,132,199,0.07);">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-muted-custom">Existing balance</span>
+                            <strong id="vendor_existing_label"></strong>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted-custom">Remaining after this payment</span>
+                            <strong id="vendor_remaining_label"></strong>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label for="payment_entry_date" class="form-label form-label-custom">Payment Date</label>
                         <input type="date" class="form-control form-control-custom" id="payment_entry_date" name="entry_date" value="{{ today }}">
@@ -420,6 +431,35 @@
 </div>
 <script>
 (function () {
+    const payPreview = document.getElementById('vendor_balance_preview');
+    const payInput = document.getElementById('amount_paid');
+    const existingLabel = document.getElementById('vendor_existing_label');
+    const remainingLabel = document.getElementById('vendor_remaining_label');
+    if (payPreview && payInput) {
+        const owed = Number(payPreview.getAttribute('data-balance') || 0);
+        const money = (n) => (window.ofMoney ? window.ofMoney(Math.abs(n)) : `PKR ${Math.abs(Number(n) || 0).toFixed(2)}`);
+        const paint = (el, amount) => {
+            if (!el) return;
+            if (amount > 0.004) {
+                el.textContent = `${money(amount)} payable`;
+                el.className = 'text-warning';
+            } else if (amount < -0.004) {
+                el.textContent = `${money(amount)} advance`;
+                el.className = 'text-success';
+            } else {
+                el.textContent = 'Settled';
+                el.className = '';
+            }
+        };
+        const refresh = () => {
+            const paid = Math.max(0, Number(payInput.value) || 0);
+            paint(existingLabel, owed);
+            paint(remainingLabel, owed - paid);
+        };
+        payInput.addEventListener('input', refresh);
+        refresh();
+    }
+
     const modal = document.getElementById('editVendorPaymentModal');
     if (!modal) return;
     modal.addEventListener('show.bs.modal', (event) => {

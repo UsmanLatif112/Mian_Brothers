@@ -178,7 +178,7 @@ def edit_credit_sale(cs, form):
     entry_date = parse_form_date(form.get('entry_date') or form.get('sale_date'), cs.sale_date)
     note = (form.get('remarks') or form.get('note') or '').strip() or None
 
-    if et in ('advance', 'loan', 'opening'):
+    if et in ('advance', 'loan', 'opening', 'salary'):
         try:
             amt = float(form.get('amount'))
             if amt <= 0:
@@ -189,7 +189,7 @@ def edit_credit_sale(cs, form):
         cs.sale_date = entry_date
         cs.amount = amt
         cs.remarks = note
-        if et == 'advance':
+        if et in ('advance', 'salary'):
             cs.amount_paid = amt
             cs.payment_status = 'paid'
         elif et == 'loan':

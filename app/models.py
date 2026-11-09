@@ -202,7 +202,7 @@ class CreditSale(db.Model):
     discount = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # PKR off list total (other items)
     amount_paid = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash applied to this sale
     overpayment = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)  # cash above sale total → customer account
-    entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan | opening
+    entry_type = db.Column(db.String(20), nullable=False, default='sale')  # sale | advance | loan | opening | salary
     payment_status = db.Column(db.String(20), nullable=False, default='unpaid')  # paid / unpaid / partial
     remarks = db.Column(db.String(255), nullable=True)
     cogs_total = db.Column(db.Numeric(12, 2), nullable=True)  # FIFO batch cost snapshot
@@ -217,6 +217,8 @@ class CreditSale(db.Model):
 
     @property
     def item_name(self):
+        if self.entry_type == 'salary':
+            return 'Salary'
         if self.entry_type == 'advance':
             return 'Customer Advance'
         if self.entry_type == 'loan':
