@@ -388,20 +388,30 @@
             cancelBtn.classList.toggle('d-none', alertOnly);
         }
 
-        // Stack above any open Bootstrap / nested modal (e.g. Meter Sale)
-        let maxZ = 1055;
-        document.querySelectorAll('.modal.show, .modal.of-nested-open, .of-nested-create-backdrop').forEach((m) => {
+        // Stack above any open Bootstrap modal. The parent modal's focus trap
+        // steals mousedown focus and the click on OK / close never fires.
+        const paused = [];
+        document.querySelectorAll('.modal.show').forEach((m) => {
             if (m === el) return;
-            const z = parseInt(window.getComputedStyle(m).zIndex, 10);
-            if (!Number.isNaN(z) && z > maxZ) maxZ = z;
+            const inst = window.bootstrap && window.bootstrap.Modal
+                ? window.bootstrap.Modal.getInstance(m)
+                : null;
+            if (inst && inst._focustrap) {
+                inst._focustrap.deactivate();
+                paused.push(inst);
+            }
         });
-        el.style.zIndex = String(maxZ + 20);
+        el._ofPausedTraps = paused;
+        if (el.parentNode !== document.body || el.nextElementSibling) {
+            document.body.appendChild(el);
+        }
         el.classList.add('of-confirm-stacked');
+        document.body.classList.add('of-confirm-open');
         const onShown = () => {
             el.removeEventListener('shown.bs.modal', onShown);
             const backs = document.querySelectorAll('.modal-backdrop');
             const back = backs[backs.length - 1];
-            if (back) back.style.zIndex = String(maxZ + 10);
+            if (back) back.classList.add('of-confirm-backdrop');
         };
         el.addEventListener('shown.bs.modal', onShown);
 
@@ -469,6 +479,15 @@
         el.addEventListener('hidden.bs.modal', () => {
             el.classList.remove('of-confirm-stacked');
             el.style.zIndex = '';
+            document.body.classList.remove('of-confirm-open');
+            document.querySelectorAll('.modal-backdrop.of-confirm-backdrop').forEach((back) => {
+                back.classList.remove('of-confirm-backdrop');
+            });
+            const paused = el._ofPausedTraps || [];
+            el._ofPausedTraps = [];
+            paused.forEach((inst) => {
+                if (inst && inst._isShown && inst._focustrap) inst._focustrap.activate();
+            });
             if (!resolvePromise) return;
             settle(mode === 'prompt' ? null : false);
         });

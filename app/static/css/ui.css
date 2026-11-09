@@ -1223,9 +1223,24 @@ select.form-control-custom:disabled {
     pointer-events: auto;
 }
 
-/* Confirm / prompt above Meter Sale (and other open modals) */
+/* Confirm / prompt above Meter Sale, Settle Expense, and Tom Select menus */
 #ofConfirmModal.of-confirm-stacked {
-    z-index: 1110 !important;
+    z-index: 20050 !important;
+    pointer-events: auto !important;
+}
+
+#ofConfirmModal.of-confirm-stacked .modal-dialog,
+#ofConfirmModal.of-confirm-stacked .modal-content {
+    pointer-events: auto !important;
+}
+
+.modal-backdrop.of-confirm-backdrop {
+    z-index: 20040 !important;
+}
+
+/* Parent dialog stays visible but must not eat clicks meant for the notice */
+body.of-confirm-open .modal.show:not(#ofConfirmModal) {
+    pointer-events: none !important;
 }
 
 .modal.of-quick-create-modal.of-nested-open .modal-dialog {
