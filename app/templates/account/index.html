@@ -276,7 +276,7 @@
                     <div class="mb-3 p-3 rounded" style="background: rgba(2,132,199,0.07);">
                         <div class="d-flex justify-content-between small mb-2"><span class="text-muted-custom">Cash in hand</span><strong id="edit_live_cash">—</strong></div>
                         <label class="form-label form-label-custom" for="edit_remaining_after">Previous Balance After Cash Taken (PKR)</label>
-                        <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_remaining_after" name="remaining_after" value="">
+                        <input type="number" step="0.01" class="form-control form-control-custom" id="edit_remaining_after" name="remaining_after" value="">
                         <small class="text-muted-custom">e.g. take 295,000 → 5,000; set 5,005 here → next day previous becomes 5,005 (amount unchanged).</small>
                     </div>
                     <div class="mb-1">
@@ -326,7 +326,9 @@
             const pending = cash - state.otherTaken - amount;
             if (liveCash) liveCash.textContent = money(cash);
             state.maxAvailable = cash - state.otherTaken;
-            if (amountEl) amountEl.max = Math.max(0, state.maxAvailable).toFixed(2);
+            // Edit: do not cap the amount box. A lower previous would make the
+            // browser block Update before the new previous can be saved.
+            if (amountEl && !excludeIdEl) amountEl.max = Math.max(0, state.maxAvailable).toFixed(2);
             // Amount Taken never changes from previous/after edits — only after syncs from amount
             if (syncAfter && afterEl && !state.afterManual && document.activeElement !== afterEl) {
                 afterEl.value = pending.toFixed(2);
@@ -350,10 +352,10 @@
                 if (prevEl && document.activeElement !== prevEl) {
                     prevEl.value = state.bakedPrev.toFixed(2);
                 }
-                // Keep a saved after-balance override (e.g. 5005) when editing
-                if (afterEl && data.saved_remaining != null && excludeId) {
+                // Show a saved after-balance (e.g. 5005) but do not lock it.
+                // Changing previous or amount taken must recalculate it.
+                if (afterEl && data.saved_remaining != null && excludeId && document.activeElement !== afterEl) {
                     afterEl.value = num(data.saved_remaining).toFixed(2);
-                    state.afterManual = true;
                     paint({ syncAfter: false });
                 } else {
                     paint({ syncAfter: true });
@@ -365,7 +367,10 @@
 
         if (dateEl) dateEl.addEventListener('change', load);
         // Opening previous: refresh cash + after-balance only — never touch Amount Taken
-        if (prevEl) prevEl.addEventListener('input', () => paint({ syncAfter: !state.afterManual }));
+        if (prevEl) prevEl.addEventListener('input', () => {
+            state.afterManual = false;
+            paint({ syncAfter: true });
+        });
         // Amount Taken: drive after-balance (unless user already typed after manually)
         if (amountEl) {
             amountEl.addEventListener('input', () => {
@@ -388,7 +393,9 @@
                     window.ofAlert({ message: 'Enter an amount greater than zero.' });
                     return;
                 }
-                if (amount > state.maxAvailable + 0.01) {
+                const editing = !!(excludeIdEl && excludeIdEl.value);
+                const prevChanged = editing && prevEl && Math.abs(num(prevEl.value) - state.bakedPrev) > 0.01;
+                if (!prevChanged && amount > state.maxAvailable + 0.01) {
                     e.preventDefault();
                     window.ofAlert({
                         message: `Amount cannot exceed available cash (${(window.ofNum || String)(state.maxAvailable, 2)}).`,

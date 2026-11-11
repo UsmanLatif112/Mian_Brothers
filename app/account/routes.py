@@ -217,10 +217,17 @@ def index():
                 flash(str(e), 'danger')
                 return redirect(url_for('account.index', **_filter_args()))
 
-            available, _ = _available_to_take(
+            available, day_stats = _available_to_take(
                 taken_date, exclude_row=row, previous_override=previous_override,
             )
-            if amount > available + 0.01:
+            system_prev = float(day_stats.get('previous_balance') or 0)
+            prev_changed = (
+                previous_override is not None
+                and abs(float(previous_override) - system_prev) > 0.01
+            )
+            # A corrected opening is saved even when the taken amount is then
+            # larger than the rebuilt cash. Raising only the amount still checks.
+            if amount > available + 0.01 and not prev_changed:
                 flash(
                     f'Amount PKR {amount:,.2f} exceeds available cash PKR {available:,.2f}.',
                     'danger',
