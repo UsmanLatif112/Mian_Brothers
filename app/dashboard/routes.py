@@ -525,6 +525,8 @@ def index():
             if qty > 0:
                 total_stock_value += qty * cost
     total_stock_value = round(total_stock_value, 2)
+    from app.services.stock_batches import inventory_loss_summary
+    loss_summary = inventory_loss_summary()
 
     insights = _dashboard_insights(start, end, stock_summary, other_items)
 
@@ -536,6 +538,7 @@ def index():
         total_cogs=total_cogs,
         total_expenses_profit=total_expenses_profit,
         total_stock_value=total_stock_value,
+        inventory_loss=loss_summary,
         stock_summary=stock_summary,
         dry_message=dry_message,
         petrol_stock=petrol_stock,

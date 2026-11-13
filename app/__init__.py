@@ -409,8 +409,19 @@ def run_schema_boot():
     ensure_meter_sale_rate_schema()
     ensure_fuel_price_effective_at_schema()
     ensure_stock_batch_schema()
+    ensure_inventory_loss_schema()
     ensure_dip_chart_schema()
     # Wider liter columns: scripts/migrate_liter_precision.py (optional, one-time)
+
+
+def ensure_inventory_loss_schema():
+    """Create inventory_losses for manual petrol/diesel tank edits."""
+    from app.models import InventoryLoss  # noqa: F401 — register model
+
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f'inventory_losses create_all skipped: {e}')
 
 
 def ensure_dip_chart_schema():

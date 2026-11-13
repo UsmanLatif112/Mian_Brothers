@@ -141,6 +141,75 @@ def sync_item_batches_to_stock(item):
     db.session.flush()
 
 
+def inventory_loss_summary():
+    """All-time manual tank adjustments. Positive liters and amount are losses."""
+    from sqlalchemy.orm import joinedload
+    from app.models import InventoryLoss
+
+    rows = apply_agency_filter(
+        InventoryLoss.query.options(joinedload(InventoryLoss.fuel_type)),
+        InventoryLoss,
+    ).all()
+    petrol = diesel = other = amount = 0.0
+    for row in rows:
+        name = (row.fuel_type.name if row.fuel_type else '').lower()
+        liters = float(row.loss_liters or 0)
+        amount += float(row.amount or 0)
+        if 'petrol' in name:
+            petrol += liters
+        elif 'diesel' in name:
+            diesel += liters
+        else:
+            other += liters
+    return {
+        'amount': round(amount, 2),
+        'petrol_liters': petrol,
+        'diesel_liters': diesel,
+        'other_liters': other,
+    }
+
+
+def quote_fuel_adjustment_cost(fuel_type_id, before_liters, after_liters, fallback_cost=0.0):
+    """Cost a manual tank edit from the batches it will change. Does not write.
+
+    Newest batches are used first, matching sync_fuel_batches_to_stock.
+    Positive loss_liters and amount mean stock left the tank.
+    A gain is a negative loss. Liters with no batch use fallback_cost.
+    """
+    before = float(before_liters or 0)
+    after = float(after_liters or 0)
+    loss_liters = before - after
+    if abs(loss_liters) < 1e-9:
+        return 0.0, 0.0, 0.0
+
+    batches = list_batches_for_fuel(fuel_type_id, include_empty=True)
+    open_batches = [b for b in batches if float(b.qty_remaining or 0) > 1e-12]
+    fallback = float(fallback_cost or 0)
+
+    if loss_liters > 0:
+        left = loss_liters
+        cost_total = 0.0
+        for batch in reversed(open_batches):
+            if left <= 1e-12:
+                break
+            rem = float(batch.qty_remaining or 0)
+            take = min(rem, left)
+            cost_total += take * float(batch.unit_cost or 0)
+            left -= take
+        if left > 1e-9:
+            cost_total += left * fallback
+        unit_cost = cost_total / loss_liters if loss_liters else 0.0
+        return loss_liters, unit_cost, round(cost_total, 2)
+
+    gain = -loss_liters
+    newest = open_batches[-1] if open_batches else (batches[-1] if batches else None)
+    unit_cost = float(newest.unit_cost or 0) if newest else 0.0
+    if unit_cost <= 0:
+        unit_cost = fallback
+    amount = round(loss_liters * unit_cost, 2)
+    return loss_liters, unit_cost, amount
+
+
 def sync_fuel_batches_to_stock(fuel_type_id, target_liters):
     """Align fuel FIFO layers after a manual tank stock edit."""
     if not fuel_type_id:

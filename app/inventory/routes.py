@@ -4,7 +4,7 @@ from app.inventory import inventory_bp
 from app.models import (
     db, FuelType, FuelPrice, Inventory, StockEntry, OtherItem, ItemPurchaseLog, ItemPriceLog,
     Sale, Machine, MeterReading, CreditSale, DailyFuelStock, Vendor,
-    ShopCategory, ShopCategoryOption,
+    ShopCategory, ShopCategoryOption, InventoryLoss,
 )
 from app.tenancy import apply_agency_filter, require_agency_access, stamp_agency
 from app.utils import paginate, parse_form_date, datetime_from_date, fuel_rate_for, business_today
@@ -30,6 +30,7 @@ from app.services.stock_batches import (
     delete_batch_for_purchase_log,
     sync_item_batches_to_stock,
     sync_fuel_batches_to_stock,
+    quote_fuel_adjustment_cost,
 )
 from app.inventory.categories import (
     list_active_categories, category_payload, unique_category_key, slugify_category,
@@ -776,11 +777,47 @@ def edit_fuel(fuel_type_id):
 
     fuel.name = name
     inventory = _inventory_for_fuel(fuel.id, create=True)
+    before_liters = float(inventory.current_stock_liters or 0)
+    loss_note = ''
+    if abs(before_liters - stock_val) > 0.0001:
+        last_buy = (
+            apply_agency_filter(
+                ItemPurchaseLog.query.filter_by(category='fuel', fuel_type_id=fuel.id),
+                ItemPurchaseLog,
+            )
+            .order_by(ItemPurchaseLog.entry_date.desc(), ItemPurchaseLog.id.desc())
+            .first()
+        )
+        fallback = float(last_buy.cost_price or 0) if last_buy else 0.0
+        loss_liters, unit_cost, amount = quote_fuel_adjustment_cost(
+            fuel.id, before_liters, stock_val, fallback_cost=fallback,
+        )
+        if abs(loss_liters) > 0.0001:
+            db.session.add(stamp_agency(InventoryLoss(
+                fuel_type_id=fuel.id,
+                entry_date=business_today(),
+                liters_before=before_liters,
+                liters_after=stock_val,
+                loss_liters=loss_liters,
+                unit_cost=unit_cost,
+                amount=amount,
+                recorded_by=current_user.id,
+            )))
+            if loss_liters > 0:
+                loss_note = (
+                    f' Inventory loss {loss_liters:,.2f} L'
+                    f' at PKR {unit_cost:,.2f}/L (PKR {amount:,.2f}).'
+                )
+            else:
+                loss_note = (
+                    f' Inventory loss reduced by {abs(loss_liters):,.2f} L'
+                    f' at PKR {unit_cost:,.2f}/L (PKR {abs(amount):,.2f}).'
+                )
     inventory.current_stock_liters = stock_val
     inventory.reorder_threshold = threshold_val
     sync_fuel_batches_to_stock(fuel.id, stock_val)
     db.session.commit()
-    flash(f'Updated {fuel.name} stock.', 'success')
+    flash(f'Updated {fuel.name} stock.{loss_note}', 'success')
     return redirect(url_for('inventory.index'))
 
 
@@ -1197,6 +1234,29 @@ def api_delete_category(category_id):
     db.session.delete(cat)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@inventory_bp.route('/loss')
+@login_required
+def inventory_loss():
+    """Every manual petrol/diesel tank adjustment, newest first."""
+    from sqlalchemy.orm import joinedload
+    from app.services.stock_batches import inventory_loss_summary
+
+    rows = (
+        apply_agency_filter(
+            InventoryLoss.query.options(joinedload(InventoryLoss.fuel_type)),
+            InventoryLoss,
+        )
+        .order_by(InventoryLoss.entry_date.desc(), InventoryLoss.id.desc())
+        .all()
+    )
+    summary = inventory_loss_summary()
+    return render_template(
+        'inventory/loss.html',
+        rows=rows,
+        summary=summary,
+    )
 
 
 @inventory_bp.route('/log')

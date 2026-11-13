@@ -654,6 +654,29 @@ class StockBatchConsumption(db.Model):
         return f"<StockBatchConsumption {self.source_type}:{self.source_id} qty={self.qty_consumed}>"
 
 
+class InventoryLoss(db.Model):
+    """Manual petrol/diesel tank edit. Positive liters and amount are a loss."""
+    __tablename__ = 'inventory_losses'
+
+    id = db.Column(db.Integer, primary_key=True)
+    agency_id = db.Column(db.Integer, db.ForeignKey('agencies.id'), nullable=True, index=True)
+    fuel_type_id = db.Column(db.Integer, db.ForeignKey('fuel_types.id'), nullable=False, index=True)
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+    liters_before = db.Column(db.Numeric(12, 3), nullable=False, default=0)
+    liters_after = db.Column(db.Numeric(12, 3), nullable=False, default=0)
+    loss_liters = db.Column(db.Numeric(12, 3), nullable=False, default=0)  # before − after
+    unit_cost = db.Column(db.Numeric(12, 4), nullable=False, default=0)
+    amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # loss_liters × unit cost
+    recorded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    fuel_type = db.relationship('FuelType', foreign_keys=[fuel_type_id])
+    recorder = db.relationship('User', foreign_keys=[recorded_by])
+
+    def __repr__(self):
+        return f"<InventoryLoss {self.entry_date} fuel={self.fuel_type_id} L={self.loss_liters}>"
+
+
 class DipChart(db.Model):
     """Tank dip stick chart: dip reading → liters for petrol or diesel."""
     __tablename__ = 'dip_charts'

@@ -184,6 +184,15 @@
         <div class="kpi-value">{{ total_stock_value | money }}</div>
         <div class="kpi-meta">Fuel + shop at cost</div>
     </div>
+
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top">
+            <span class="kpi-icon"><i class="bi bi-droplet-half"></i></span>
+            <span class="kpi-label">Inventory Loss</span>
+        </div>
+        <div class="kpi-value {% if (inventory_loss.amount or 0) > 0 %}text-danger{% elif (inventory_loss.amount or 0) < 0 %}text-success{% endif %}">{{ inventory_loss.amount | money }}</div>
+        <div class="kpi-meta">Petrol {{ inventory_loss.petrol_liters | num(2) }} L · Diesel {{ inventory_loss.diesel_liters | num(2) }} L · an increase reduces this</div>
+    </div>
 </section>
 
 <section class="chart-line-panel mt-4">

@@ -18,6 +18,9 @@
             <h1 class="page-title">Inventory Control</h1>
         </div>
         <div class="page-header-actions">
+            <a href="{{ url_for('inventory.inventory_loss') }}" class="btn btn-outline-secondary" title="Inventory loss">
+                <i class="bi bi-droplet-half me-1"></i><span class="btn-label"> Inventory Loss</span>
+            </a>
             <a href="{{ url_for('inventory.stock_log', period='all') }}" class="btn btn-outline-secondary" title="Inventory log">
                 <i class="bi bi-journal-text me-1"></i><span class="btn-label"> Inventory Log</span>
             </a>

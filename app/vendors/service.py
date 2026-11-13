@@ -484,11 +484,27 @@ def sync_auto_payment_for_log(log, payment_status=None, payment_date=None, fundi
     )))
 
 
+def _settled_without_payment(log):
+    """True when the purchase line is already Paid and no payment row offsets it.
+
+    The payable total adds every purchase and subtracts payment rows. A purchase
+    marked Paid with no payment would stay in the payable forever.
+    """
+    if purchase_log_payment_status(log) != 'paid':
+        return False
+    for pay in find_auto_payments_for_log(log):
+        if payment_counts_toward_cash(pay):
+            return False
+    return True
+
+
 def recalculate_vendor_balance(vendor):
     """Rebuild payable balance from opening + purchases − payments."""
     total_purchases = 0.0
     for log in ItemPurchaseLog.query.filter_by(vendor_id=vendor.id).all():
         if is_opening_stock_purchase(log):
+            continue
+        if _settled_without_payment(log):
             continue
         total_purchases += purchase_log_total(log)
 

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Loss — OctaneFlow{% endblock %}
+
+{% block content %}
+<header class="page-header mb-4">
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <p class="page-eyebrow">Stock</p>
+            <h1 class="page-title">Inventory Loss</h1>
+            <p class="text-muted-custom mb-0 mt-1" style="font-size: 0.95rem;">
+                Manual petrol and diesel tank edits, costed from purchase batches
+            </p>
+        </div>
+        <div class="page-header-actions">
+            <a href="{{ url_for('inventory.index') }}" class="btn btn-outline-secondary" title="Back to Inventory">
+                <i class="bi bi-arrow-left me-1"></i><span class="btn-label"> Back</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<div class="row g-3 mb-4 row-cols-1 row-cols-md-3">
+    <div class="col">
+        <div class="card card-premium metric-card stock h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Petrol liters</span>
+                <div class="metric-value fw-bold mb-0">{{ summary.petrol_liters | num(2) }} <small class="fs-6 fw-normal text-muted-custom">L</small></div>
+                <small class="text-muted-custom">Raising the tank reduces this total.</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card profit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Diesel liters</span>
+                <div class="metric-value fw-bold mb-0">{{ summary.diesel_liters | num(2) }} <small class="fs-6 fw-normal text-muted-custom">L</small></div>
+                <small class="text-muted-custom">Raising the tank reduces this total.</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card card-premium metric-card credit h-100">
+            <div class="card-body card-body-premium">
+                <span class="metric-label text-muted-custom text-uppercase">Inventory loss</span>
+                <div class="metric-value fw-bold mb-0 {% if summary.amount > 0 %}text-danger{% elif summary.amount < 0 %}text-success{% endif %}">{{ summary.amount | money }}</div>
+                <small class="text-muted-custom">At batch cost. Purchases and vendor balances stay unchanged.</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-premium list-panel">
+    <div class="card-header-premium">
+        <h5 class="mb-0 fw-bold">All adjustments</h5>
+        <small class="text-muted-custom">One line each time petrol or diesel liters are edited</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-custom table-hover mb-0 list-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Fuel</th>
+                    <th class="text-end">Liters before</th>
+                    <th class="text-end">Liters after</th>
+                    <th class="text-end">Loss / gain</th>
+                    <th class="text-end">Cost / L</th>
+                    <th class="text-end">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if rows %}
+                    {% for row in rows %}
+                    {% set liters = row.loss_liters | float %}
+                    <tr>
+                        <td>{{ row.entry_date }}</td>
+                        <td class="fw-semibold">{{ row.fuel_type.name if row.fuel_type else 'Fuel' }}</td>
+                        <td class="text-end">{{ row.liters_before | num(2) }} L</td>
+                        <td class="text-end">{{ row.liters_after | num(2) }} L</td>
+                        <td class="text-end {% if liters > 0 %}text-danger{% elif liters < 0 %}text-success{% endif %}">
+                            {% if liters > 0 %}Loss {{ liters | num(2) }} L{% elif liters < 0 %}Reduce loss {{ (-liters) | num(2) }} L{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end">{{ row.unit_cost | money }}</td>
+                        <td class="text-end fw-semibold {% if (row.amount | float) > 0 %}text-danger{% elif (row.amount | float) < 0 %}text-success{% endif %}">{{ row.amount | money }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted-custom py-4">No inventory loss yet. Edit petrol or diesel liters to record one.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
