@@ -29,6 +29,19 @@ def _today():
     return business_today()
 
 
+def _models_ns():
+    return SimpleNamespace(
+        MeterReading=MeterReading,
+        FuelType=FuelType,
+        FuelPrice=FuelPrice,
+        CreditSale=CreditSale,
+        Expense=Expense,
+        Payment=Payment,
+        DailyCashCount=DailyCashCount,
+        Customer=Customer,
+    )
+
+
 def _fuel_rate(fuel_type_id, as_of_date=None):
     rate = fuel_rate_for(fuel_type_id, FuelPrice, as_of_date=as_of_date)
     return rate if rate > 0 else None
@@ -940,18 +953,8 @@ def index():
         .all()
     )
 
-    models_ns = SimpleNamespace(
-        MeterReading=MeterReading,
-        FuelType=FuelType,
-        FuelPrice=FuelPrice,
-        CreditSale=CreditSale,
-        Expense=Expense,
-        Payment=Payment,
-        DailyCashCount=DailyCashCount,
-        Customer=Customer,
-    )
     stats = compute_period_stats(
-        start, end, models_ns,
+        start, end, _models_ns(),
         include_opening_credit=False,
     )
 
