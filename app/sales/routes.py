@@ -108,6 +108,9 @@ def _filter_args():
     search = (request.args.get('search') or request.form.get('search') or '').strip()
     if search:
         args['search'] = search
+    fuel = (request.args.get('fuel') or request.form.get('fuel') or '').strip().lower()
+    if fuel in ('petrol', 'diesel'):
+        args['fuel'] = fuel
     meter_period = (request.args.get('meter_period') or request.form.get('meter_period') or '').strip()
     if meter_period:
         args['meter_period'] = meter_period
@@ -191,7 +194,83 @@ def _refresh_till_chain(days):
 
 
 def _sales_redirect():
+    if (request.form.get('next') or '').strip() == 'meters':
+        return _meters_redirect()
     return redirect(url_for('sales.index', **_filter_args()))
+
+
+def _meters_redirect():
+    args = _filter_args()
+    keep = {k: args[k] for k in ('period', 'start_date', 'end_date', 'search', 'fuel') if args.get(k)}
+    return redirect(url_for('sales.meters', **keep))
+
+
+def _meter_fuel_key(row):
+    name = ''
+    if getattr(row, 'fuel_type', None):
+        name = (row.fuel_type.name or '').lower()
+    if 'diesel' in name:
+        return 'diesel'
+    if 'petrol' in name or 'gasoline' in name:
+        return 'petrol'
+    return 'other'
+
+
+def _meter_machine_name(row):
+    if getattr(row, 'machine', None) and row.machine.name:
+        return row.machine.name
+    return row.dispenser_nozzle_id or 'Meter'
+
+
+def _load_meter_rows(start, end, search_q='', fuel=''):
+    from sqlalchemy.orm import joinedload
+    rows = apply_agency_filter(
+        MeterReading.query.options(
+            joinedload(MeterReading.fuel_type),
+            joinedload(MeterReading.machine),
+        ).filter(
+            MeterReading.reading_date >= start,
+            MeterReading.reading_date <= end,
+            MeterReading.closing_reading.isnot(None),
+        ),
+        MeterReading,
+    ).all()
+    fuel_key = (fuel or '').strip().lower()
+    if fuel_key in ('petrol', 'diesel'):
+        rows = [row for row in rows if _meter_fuel_key(row) == fuel_key]
+    needle = (search_q or '').strip().lower()
+    if needle:
+        def _match(row):
+            blob = ' '.join([
+                str(getattr(row, 'reading_date', '') or ''),
+                row.fuel_type.name if getattr(row, 'fuel_type', None) else '',
+                _meter_machine_name(row),
+                str(getattr(row, 'opening_reading', '') or ''),
+                str(getattr(row, 'closing_reading', '') or ''),
+                str(getattr(row, 'sale_rate', '') or ''),
+            ]).lower()
+            return needle in blob
+        rows = [row for row in rows if _match(row)]
+
+    buckets = {}
+    for row in rows:
+        key = (row.reading_date, row.machine_id or row.dispenser_nozzle_id or row.id)
+        buckets.setdefault(key, []).append(row)
+    for items in buckets.values():
+        items.sort(key=lambda row: row.id or 0)
+        count = len(items)
+        for index, row in enumerate(items, 1):
+            row.segment_no = index
+            row.segment_count = count
+
+    rows.sort(key=lambda row: (
+        -(row.reading_date.toordinal() if row.reading_date else 0),
+        _meter_fuel_key(row),
+        _meter_machine_name(row).lower(),
+        row.segment_no or 1,
+        row.id or 0,
+    ))
+    return rows
 
 
 @sales_bp.route('/', methods=['GET', 'POST'])
@@ -912,41 +991,6 @@ def index():
 
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
 
-    meter_args = {
-        'period': (request.args.get('meter_period') or 'all').strip().lower() or 'all',
-        'start_date': (request.args.get('meter_start') or '').strip(),
-        'end_date': (request.args.get('meter_end') or '').strip(),
-    }
-    meter_period, meter_start, meter_end = parse_period(meter_args, default_period='all')
-    from sqlalchemy.orm import joinedload
-    meter_rows = apply_agency_filter(
-        MeterReading.query.options(
-            joinedload(MeterReading.fuel_type),
-            joinedload(MeterReading.machine),
-        ).filter(
-            MeterReading.reading_date >= meter_start,
-            MeterReading.reading_date <= meter_end,
-            MeterReading.closing_reading.isnot(None),
-        ),
-        MeterReading,
-    ).order_by(MeterReading.reading_date.desc(), MeterReading.id.desc()).all()
-    if search_q:
-        def _meter_match(r):
-            fuel = r.fuel_type.name if getattr(r, 'fuel_type', None) else ''
-            machine = ''
-            if getattr(r, 'machine', None):
-                machine = r.machine.name or ''
-            machine = machine or (getattr(r, 'dispenser_nozzle_id', None) or '')
-            blob = ' '.join([
-                str(getattr(r, 'reading_date', '') or ''),
-                fuel,
-                machine,
-                str(getattr(r, 'opening_reading', '') or ''),
-                str(getattr(r, 'closing_reading', '') or ''),
-                str(getattr(r, 'sale_rate', '') or ''),
-            ]).lower()
-            return search_q in blob
-        meter_rows = [r for r in meter_rows if _meter_match(r)]
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
     price_bands = build_sales_price_bands(stats)
     from app.charts_data import sales_listing_series
@@ -962,7 +1006,6 @@ def index():
         stats=stats,
         price_bands=price_bands,
         period_entries=period_entries,
-        meter_rows=meter_rows,
         entries_pagination=entries_pagination,
         sale_overs=sale_overs,
         chart_series=sales_listing_series(stats),
@@ -974,9 +1017,45 @@ def index():
         day_cash=day_cash,
         entry_type=entry_type,
         search=search_q,
-        meter_period=meter_period,
-        meter_start=meter_start.isoformat(),
-        meter_end=meter_end.isoformat(),
+    )
+
+
+@sales_bp.route('/meters', methods=['GET', 'POST'])
+@login_required
+def meters():
+    """Full meter-reading log. Period defaults to all time; Today is the working date."""
+    if request.method == 'POST':
+        return index()
+
+    args = request.args.to_dict()
+    if not (args.get('period') or '').strip():
+        args['period'] = 'all'
+    period, start, end = parse_period(args, default_period='all')
+    search_q = (request.args.get('search') or '').strip()
+    fuel = (request.args.get('fuel') or 'all').strip().lower()
+    if fuel not in ('all', 'petrol', 'diesel'):
+        fuel = 'all'
+    rows = _load_meter_rows(start, end, search_q, '' if fuel == 'all' else fuel)
+    total_liters = 0.0
+    total_sale = 0.0
+    for row in rows:
+        liters = float(row.liters_sold or 0)
+        rate = float(row.sale_rate or 0)
+        total_liters += liters
+        total_sale += liters * rate
+    page_rows, meter_pagination = paginate(rows, request.args.get('page', 1), 50)
+    return render_template(
+        'sales/meters.html',
+        meter_rows=page_rows,
+        meter_pagination=meter_pagination,
+        total_liters=total_liters,
+        total_sale=total_sale,
+        period=period,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        period_choices=PERIOD_CHOICES,
+        search=search_q,
+        fuel=fuel,
     )
 
 

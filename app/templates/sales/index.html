@@ -6,14 +6,13 @@
 <form class="topbar-search" action="{{ url_for('sales.index') }}" method="GET" role="search" data-search-mode="page">
     <i class="bi bi-search topbar-search-icon" aria-hidden="true"></i>
     <input type="search" class="topbar-search-input" name="search"
-           placeholder="Search date, petrol, diesel, meter…" value="{{ search or '' }}" autocomplete="off" aria-label="Search sales">
+           placeholder="Search customer, item, date…" value="{{ search or '' }}" autocomplete="off" aria-label="Search sales">
     <input type="hidden" name="period" value="{{ period }}">
     {% if period == 'custom' %}
     <input type="hidden" name="start_date" value="{{ start_date }}">
     <input type="hidden" name="end_date" value="{{ end_date }}">
     {% endif %}
     <input type="hidden" name="entry_type" value="{{ entry_type or 'all' }}">
-    <input type="hidden" name="meter_period" value="{{ meter_period or 'all' }}">
 </form>
 {% endblock %}
 
@@ -26,7 +25,6 @@
     <input type="hidden" name="end_date" value="{{ end_date }}">
     {% endif %}
     {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
-    <input type="hidden" name="meter_period" value="{{ meter_period or 'all' }}">
     <select name="entry_type" class="form-select form-control-custom topbar-filter-select" aria-label="Entry type" onchange="this.form.submit()">
         <option value="all" {% if entry_type == 'all' %}selected{% endif %}>All types</option>
         <option value="sale" {% if entry_type == 'sale' %}selected{% endif %}>Sales</option>
@@ -48,6 +46,9 @@
             <button type="button" class="btn btn-outline-secondary" onclick="window.print()" title="Thermal invoice">
                 <i class="bi bi-printer me-1"></i><span class="btn-label"> Print</span>
             </button>
+            <a href="{{ url_for('sales.meters') }}" class="btn btn-outline-secondary" title="Meter readings">
+                <i class="bi bi-journal-text me-1"></i><span class="btn-label"> Meter Readings</span>
+            </a>
             <button type="button" class="btn btn-primary-custom" data-bs-toggle="modal" data-bs-target="#meterSaleModal" title="Meter Sale">
                 <i class="bi bi-speedometer2 me-1"></i><span class="btn-label"> Meter Sale</span>
             </button>
@@ -173,86 +174,6 @@
     </div>
 </section>
 {% endif %}
-
-<section class="mb-4" aria-label="Meter log">
-    <div class="card card-premium list-panel">
-        <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-                <h5 class="mb-0 fw-bold">Meter log</h5>
-                <small class="text-muted-custom">Defaults to all time. Today uses the working date. Search a date, petrol, or diesel.</small>
-            </div>
-            <form method="GET" action="{{ url_for('sales.index') }}" class="d-flex align-items-center gap-2" data-allow-multi-submit="1">
-                <input type="hidden" name="period" value="{{ period }}">
-                {% if period == 'custom' %}
-                <input type="hidden" name="start_date" value="{{ start_date }}">
-                <input type="hidden" name="end_date" value="{{ end_date }}">
-                {% endif %}
-                {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
-                <input type="hidden" name="entry_type" value="{{ entry_type or 'all' }}">
-                <select name="meter_period" class="form-select form-control-custom" aria-label="Meter log period" onchange="this.form.submit()">
-                    {% for value, label in period_choices %}
-                    <option value="{{ value }}" {% if meter_period == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </form>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-custom table-hover mb-0 list-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Fuel</th>
-                        <th>Machine</th>
-                        <th class="text-end">Opening</th>
-                        <th class="text-end">Closing</th>
-                        <th class="text-end">Liters</th>
-                        <th class="text-end">Rate</th>
-                        <th class="text-end">Sale</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if meter_rows %}
-                        {% for row in meter_rows %}
-                        {% set liters = (row.liters_sold or 0)|float %}
-                        {% set rate = (row.sale_rate or 0)|float %}
-                        <tr>
-                            <td class="text-nowrap">{{ row.reading_date }}</td>
-                            <td class="fw-semibold">{{ row.fuel_type.name if row.fuel_type else 'Fuel' }}</td>
-                            <td>{{ row.machine.name if row.machine else (row.dispenser_nozzle_id or '—') }}</td>
-                            <td class="text-end">{{ row.opening_reading | num(2) }}</td>
-                            <td class="text-end">{{ row.closing_reading | num(2) }}</td>
-                            <td class="text-end">{{ liters | num(2) }} L</td>
-                            <td class="text-end">{{ rate | money }}</td>
-                            <td class="text-end fw-semibold">{{ (liters * rate) | money }}</td>
-                            <td class="text-end">
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-secondary border-0 edit-meter-btn"
-                                        title="Edit meter sale"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#editMeterModal"
-                                        data-id="{{ row.id }}"
-                                        data-date="{{ row.reading_date }}"
-                                        data-fuel="{{ row.fuel_type.name if row.fuel_type else 'Fuel' }}"
-                                        data-machine="{{ row.machine.name if row.machine else (row.dispenser_nozzle_id or '') }}"
-                                        data-opening="{{ '%.2f'|format(row.opening_reading|float) }}"
-                                        data-closing="{{ '%.2f'|format((row.closing_reading or 0)|float) }}"
-                                        data-rate="{{ '%.2f'|format(rate) }}">
-                                    <i class="bi bi-pencil-square"></i>
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="9" class="text-center text-muted-custom py-4">No meter sales in this period.</td>
-                        </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
 
 <!-- Period ledger -->
 <div class="row g-4">
@@ -417,54 +338,6 @@
 {% endblock %}
 
 {% block modals %}
-{# 1. Meter Sale #}
-<div class="modal fade" id="editMeterModal" tabindex="-1" aria-labelledby="editMeterModalLabel" aria-hidden="true" data-bs-focus="false">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="POST" action="{{ url_for('sales.index') }}">
-                <input type="hidden" name="action" value="edit_meter_sale">
-                <input type="hidden" name="reading_id" id="edit_meter_id" value="">
-                <input type="hidden" name="period" value="{{ period }}">
-                <input type="hidden" name="meter_period" value="{{ meter_period or 'all' }}">
-                {% if period == 'custom' %}
-                <input type="hidden" name="start_date" value="{{ start_date }}">
-                <input type="hidden" name="end_date" value="{{ end_date }}">
-                {% endif %}
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold" id="editMeterModalLabel">Edit meter sale</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body pt-3">
-                    <p class="text-muted-custom mb-3" id="edit_meter_label">Petrol / Diesel</p>
-                    <div class="mb-3">
-                        <label class="form-label form-label-custom" for="edit_meter_date">Sale date</label>
-                        <input type="date" class="form-control form-control-custom" id="edit_meter_date" name="entry_date" required>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-6">
-                            <label class="form-label form-label-custom" for="edit_meter_open">Opening</label>
-                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_meter_open" name="opening_reading" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label form-label-custom" for="edit_meter_close">Closing</label>
-                            <input type="number" step="0.01" min="0" class="form-control form-control-custom" id="edit_meter_close" name="closing_reading" required>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <label class="form-label form-label-custom" for="edit_meter_rate">Sale rate (PKR / L)</label>
-                        <input type="number" step="0.01" min="0.01" class="form-control form-control-custom" id="edit_meter_rate" name="sale_rate" required>
-                    </div>
-                    <small class="text-muted-custom d-block mt-2">Saving recalculates this sale and the fuel tank.</small>
-                </div>
-                <div class="modal-footer border-0 pt-0 pb-3 gap-2">
-                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary-custom px-4">Update</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <div class="modal fade" id="meterSaleModal" tabindex="-1" aria-labelledby="meterSaleModalLabel" aria-hidden="true" data-bs-focus="false">
     <div class="modal-dialog modal-lg modal-dialog-centered sale-form-modal">
         <div class="modal-content">
@@ -828,22 +701,6 @@
 {% block scripts %}
 <script>
 (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
-    const editMeterModal = document.getElementById('editMeterModal');
-    if (editMeterModal) {
-        editMeterModal.addEventListener('show.bs.modal', (ev) => {
-            const btn = ev.relatedTarget;
-            if (!btn || !btn.classList.contains('edit-meter-btn')) return;
-            document.getElementById('edit_meter_id').value = btn.getAttribute('data-id') || '';
-            document.getElementById('edit_meter_date').value = btn.getAttribute('data-date') || '';
-            document.getElementById('edit_meter_open').value = btn.getAttribute('data-opening') || '';
-            document.getElementById('edit_meter_close').value = btn.getAttribute('data-closing') || '';
-            document.getElementById('edit_meter_rate').value = btn.getAttribute('data-rate') || '';
-            const fuel = btn.getAttribute('data-fuel') || 'Fuel';
-            const machine = btn.getAttribute('data-machine') || '';
-            document.getElementById('edit_meter_label').textContent = machine ? `${fuel} · ${machine}` : fuel;
-        });
-    }
-
     const fuelSelect = document.getElementById('fuel_type_id');
     const summaryBox = document.getElementById('meter-summary');
     const submitBtn = document.getElementById('meter-submit');
