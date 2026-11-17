@@ -15,7 +15,7 @@ from app.services.entries import (
     EntryError, edit_credit_sale, delete_credit_sale,
 )
 from app.services.stock_batches import (
-    consume_fifo, BatchStockError, SOURCE_METER, SOURCE_CREDIT,
+    consume_fifo, reverse_consumptions, BatchStockError, SOURCE_METER, SOURCE_CREDIT,
 )
 from app.customers.service import recalculate_customer_balance
 from datetime import datetime
@@ -108,7 +108,86 @@ def _filter_args():
     search = (request.args.get('search') or request.form.get('search') or '').strip()
     if search:
         args['search'] = search
+    meter_period = (request.args.get('meter_period') or request.form.get('meter_period') or '').strip()
+    if meter_period:
+        args['meter_period'] = meter_period
+    meter_start = (request.args.get('meter_start') or request.form.get('meter_start') or '').strip()
+    meter_end = (request.args.get('meter_end') or request.form.get('meter_end') or '').strip()
+    if meter_start:
+        args['meter_start'] = meter_start
+    if meter_end:
+        args['meter_end'] = meter_end
     return args
+
+
+def _linked_meter_chain(reading, new_opening, new_closing):
+    """This reading plus later segments that opened on the previous closing."""
+    old_close = float(reading.closing_reading or 0)
+    chain = [(reading, float(new_opening), float(new_closing))]
+    if not reading.machine_id:
+        return chain
+    later = (
+        MeterReading.query.filter(
+            MeterReading.machine_id == reading.machine_id,
+            MeterReading.id != reading.id,
+            MeterReading.closing_reading.isnot(None),
+        )
+        .order_by(MeterReading.reading_date.asc(), MeterReading.id.asc())
+        .all()
+    )
+    origin = (reading.reading_date, reading.id)
+    expected = old_close
+    prev_close = float(new_closing)
+    for nxt in later:
+        if (nxt.reading_date, nxt.id) <= origin:
+            continue
+        if abs(float(nxt.opening_reading or 0) - expected) > 0.01:
+            break
+        nxt_close = float(nxt.closing_reading or 0)
+        if nxt_close + 0.0001 < prev_close:
+            break
+        chain.append((nxt, prev_close, nxt_close))
+        expected = nxt_close
+        prev_close = nxt_close
+    return chain
+
+
+def _refresh_till_chain(days):
+    """Rebuild saved till figures for the edited days and carry the new remaining forward."""
+    if not days:
+        return
+    from datetime import timedelta
+    from app.account.service import cash_taken_total, upsert_till_balance
+    from app.models import DailyTillBalance
+
+    models = _models_ns()
+    day = min(days)
+    last = max(days)
+    for _ in range(400):
+        till = apply_agency_filter(
+            DailyTillBalance.query.filter_by(balance_date=day),
+            DailyTillBalance,
+        ).first()
+        nxt_day = day + timedelta(days=1)
+        nxt = apply_agency_filter(
+            DailyTillBalance.query.filter_by(balance_date=nxt_day),
+            DailyTillBalance,
+        ).first()
+        if till is not None:
+            old_rem = float(till.remaining_balance or 0)
+            stats = compute_period_stats(day, day, models)
+            cash = float(stats.get('cash_in_hand') or 0)
+            upsert_till_balance(day, cash, current_user.id)
+            db.session.flush()
+            new_rem = cash - cash_taken_total(day)
+            if nxt is not None and abs(float(nxt.previous_balance or 0) - old_rem) <= 0.05:
+                nxt.previous_balance = new_rem
+                db.session.flush()
+                day = nxt_day
+                continue
+        if day >= last:
+            break
+        day = nxt_day
 
 
 def _sales_redirect():
@@ -344,6 +423,110 @@ def index():
                 db.session.rollback()
                 flash(str(e), 'danger')
 
+            return _sales_redirect()
+
+        # ---------- Edit one meter segment ----------
+        if action == 'edit_meter_sale':
+            try:
+                reading_id = int(request.form.get('reading_id') or 0)
+            except (TypeError, ValueError):
+                reading_id = 0
+            reading = MeterReading.query.get(reading_id) if reading_id else None
+            if not reading:
+                flash('Meter sale not found.', 'danger')
+                return _sales_redirect()
+            require_agency_access(reading)
+
+            sale_day = parse_form_date(request.form.get('entry_date'), reading.reading_date)
+            try:
+                opening = float(request.form.get('opening_reading') or 0)
+                closing = float(request.form.get('closing_reading') or 0)
+                rate_raw = (request.form.get('sale_rate') or '').strip()
+                rate = float(rate_raw) if rate_raw else float(reading.sale_rate or 0)
+                if opening < 0 or closing < 0:
+                    raise ValueError('Readings cannot be negative.')
+                if closing < opening:
+                    raise ValueError('Closing reading cannot be less than the opening reading.')
+                if rate <= 0:
+                    raise ValueError('Sale rate must be greater than zero.')
+            except (TypeError, ValueError) as e:
+                flash(str(e) if str(e) else 'Invalid meter reading.', 'danger')
+                return _sales_redirect()
+
+            liters = closing - opening
+            if liters <= 0:
+                flash('Liters sold must be greater than zero.', 'danger')
+                return _sales_redirect()
+
+            inventory = apply_agency_filter(
+                Inventory.query.filter_by(fuel_type_id=reading.fuel_type_id),
+                Inventory,
+            ).first()
+            if not inventory:
+                flash('No inventory record for this fuel.', 'danger')
+                return _sales_redirect()
+
+            old_date = reading.reading_date
+            chain = _linked_meter_chain(reading, opening, closing)
+            stock_delta = 0.0
+            for row, new_open, new_close in chain:
+                stock_delta += (new_close - new_open) - float(row.liters_sold or 0)
+            available = float(inventory.current_stock_liters or 0)
+            if stock_delta > available + 0.0001:
+                flash(
+                    f'Insufficient stock. Available {available:.2f} L, '
+                    f'extra liters {stock_delta:.2f} L.',
+                    'danger',
+                )
+                return _sales_redirect()
+
+            touched_days = {old_date, sale_day}
+            try:
+                for index, (row, new_open, new_close) in enumerate(chain):
+                    old_liters = float(row.liters_sold or 0)
+                    new_liters = new_close - new_open
+                    touched_days.add(row.reading_date)
+                    row.opening_reading = new_open
+                    row.closing_reading = new_close
+                    row.liters_sold = new_liters
+                    row.closed_by = current_user.id
+                    row.closed_at = datetime.utcnow()
+                    if index == 0:
+                        row.sale_rate = rate
+                        row.reading_date = sale_day
+                        touched_days.add(sale_day)
+                    if abs(new_liters - old_liters) > 0.0001:
+                        db.session.flush()
+                        if new_liters <= 0.0001:
+                            reverse_consumptions(SOURCE_METER, row.id)
+                            row.cogs_total = 0
+                        else:
+                            row.cogs_total = consume_fifo(
+                                qty=new_liters,
+                                source_type=SOURCE_METER,
+                                source_id=row.id,
+                                fuel_type_id=row.fuel_type_id,
+                                allow_short=True,
+                            )
+                if abs(stock_delta) > 0.0001:
+                    inventory.current_stock_liters = available - stock_delta
+                db.session.flush()
+                _refresh_till_chain(touched_days)
+                db.session.commit()
+            except BatchStockError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+                return _sales_redirect()
+
+            fuel_name = reading.fuel_type.name if reading.fuel_type else 'Fuel'
+            linked = len(chain) - 1
+            linked_note = f' {linked} later meter reading{"s" if linked != 1 else ""} moved with it.' if linked else ''
+            flash(
+                f'{fuel_name} meter sale updated for {sale_day}: {liters:.2f} L '
+                f'@ PKR {rate:,.2f} (PKR {liters * rate:,.2f}). '
+                f'Stock adjusted by {stock_delta:.2f} L.{linked_note}',
+                'success',
+            )
             return _sales_redirect()
 
         # ---------- Item sale (paid / unpaid) ----------
@@ -728,6 +911,42 @@ def index():
         editable_entries = [e for e in editable_entries if _sale_match(e)]
 
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
+
+    meter_args = {
+        'period': (request.args.get('meter_period') or 'all').strip().lower() or 'all',
+        'start_date': (request.args.get('meter_start') or '').strip(),
+        'end_date': (request.args.get('meter_end') or '').strip(),
+    }
+    meter_period, meter_start, meter_end = parse_period(meter_args, default_period='all')
+    from sqlalchemy.orm import joinedload
+    meter_rows = apply_agency_filter(
+        MeterReading.query.options(
+            joinedload(MeterReading.fuel_type),
+            joinedload(MeterReading.machine),
+        ).filter(
+            MeterReading.reading_date >= meter_start,
+            MeterReading.reading_date <= meter_end,
+            MeterReading.closing_reading.isnot(None),
+        ),
+        MeterReading,
+    ).order_by(MeterReading.reading_date.desc(), MeterReading.id.desc()).all()
+    if search_q:
+        def _meter_match(r):
+            fuel = r.fuel_type.name if getattr(r, 'fuel_type', None) else ''
+            machine = ''
+            if getattr(r, 'machine', None):
+                machine = r.machine.name or ''
+            machine = machine or (getattr(r, 'dispenser_nozzle_id', None) or '')
+            blob = ' '.join([
+                str(getattr(r, 'reading_date', '') or ''),
+                fuel,
+                machine,
+                str(getattr(r, 'opening_reading', '') or ''),
+                str(getattr(r, 'closing_reading', '') or ''),
+                str(getattr(r, 'sale_rate', '') or ''),
+            ]).lower()
+            return search_q in blob
+        meter_rows = [r for r in meter_rows if _meter_match(r)]
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
     price_bands = build_sales_price_bands(stats)
     from app.charts_data import sales_listing_series
@@ -743,6 +962,7 @@ def index():
         stats=stats,
         price_bands=price_bands,
         period_entries=period_entries,
+        meter_rows=meter_rows,
         entries_pagination=entries_pagination,
         sale_overs=sale_overs,
         chart_series=sales_listing_series(stats),
@@ -754,6 +974,9 @@ def index():
         day_cash=day_cash,
         entry_type=entry_type,
         search=search_q,
+        meter_period=meter_period,
+        meter_start=meter_start.isoformat(),
+        meter_end=meter_end.isoformat(),
     )
 
 

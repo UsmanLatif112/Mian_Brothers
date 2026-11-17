@@ -1,6 +1,7 @@
 {# Compact period filter for topbar-right — expects period, start_date, end_date, period_choices #}
 <form method="GET" class="topbar-filters" id="period-filter-form" data-allow-multi-submit="1">
     {% if search is defined and search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+    {% if meter_period is defined and meter_period %}<input type="hidden" name="meter_period" value="{{ meter_period }}">{% endif %}
     {% if entry_type is defined and entry_type and entry_type != 'all' %}<input type="hidden" name="entry_type" value="{{ entry_type }}">{% endif %}
     {% if show_working_date %}
     <div class="topbar-working {% if working_date_active %}is-active{% endif %}"
