@@ -1147,8 +1147,9 @@ def build_period_cash_entries(stats):
     if prev_row:
         rows.append(prev_row)
 
-    # Pump / meter cash sales (main fuel IN — not stored as CreditSale rows)
+    # Meter value by day and fuel. Credit fuel is removed before the cash-sale line.
     rate_as_of = build_fuel_rate_lookup(FuelPrice, include_shared=True)
+    meter_buckets = {}
     for r in stats.get('meter_rows') or []:
         liters = float(getattr(r, 'liters_sold', 0) or 0)
         if liters <= 0:
@@ -1161,26 +1162,26 @@ def build_period_cash_entries(stats):
         if amt <= 0:
             continue
         ft = getattr(r, 'fuel_type', None)
-        fuel_name = (ft.name if ft else 'Fuel').strip()
-        rows.append(SimpleNamespace(
-            id=getattr(r, 'id', 0),
-            sale_date=getattr(r, 'reading_date', None),
-            entry_type='sale',
-            customer=None,
-            item_name=f'Pump · {fuel_name} {liters:,.2f} L @ PKR {rate:,.2f}/L',
-            liters=liters,
-            amount=amt,
-            discount=0,
-            amount_paid=amt,
-            overpayment=0,
-            credit_amount=0,
-            other_amount=0,
-            other_kind='none',
-            payment_status='paid',
-            cash_direction='in',
-            is_fuel=True,
-            other_item=None,
-        ))
+        fuel_name = (ft.name if ft else 'Fuel').strip() or 'Fuel'
+        fuel_key = fuel_name.lower()
+        if 'diesel' in fuel_key:
+            cash_type = 'diesel_cash'
+        elif 'petrol' in fuel_key or 'gasoline' in fuel_key:
+            cash_type = 'petrol_cash'
+        else:
+            cash_type = 'other_cash'
+        day = getattr(r, 'reading_date', None)
+        if isinstance(day, datetime):
+            day = day.date()
+        bucket = meter_buckets.setdefault((day, fuel_name.lower()), {
+            'name': fuel_name,
+            'cash_type': cash_type,
+            'liters': 0.0,
+            'amount': 0.0,
+        })
+        bucket['liters'] += liters
+        bucket['amount'] += amt
+    credit_taken = {}
 
     for e in entries:
         et = (getattr(e, 'entry_type', None) or 'sale').lower()
@@ -1254,6 +1255,122 @@ def build_period_cash_entries(stats):
             item_name = f'{item_name} · Paid' if item_name else 'Paid'
             status = 'paid'
 
+        fuel_sale = (
+            display_type == 'sale'
+            and getattr(e, 'fuel_type_id', None)
+            and not getattr(e, 'other_item_id', None)
+        )
+        if fuel_sale:
+            sale_liters = float(getattr(e, 'liters', 0) or 0)
+            sale_rate = float(getattr(e, 'rate', 0) or 0)
+            credit_liters = 0.0 if amt <= 0 else sale_liters * (credit / amt)
+            credit_gross = credit_liters * sale_rate
+            fuel_name = (e.fuel_type.name if getattr(e, 'fuel_type', None) else 'Fuel').strip() or 'Fuel'
+            day = e.sale_date
+            if isinstance(day, datetime):
+                day = day.date()
+            taken = credit_taken.setdefault((day, fuel_name.lower()), {'gross': 0.0, 'liters': 0.0})
+            taken['gross'] += credit_gross
+            taken['liters'] += credit_liters
+            fuel_key = fuel_name.lower()
+            if 'diesel' in fuel_key:
+                credit_type = 'diesel_credit'
+            elif 'petrol' in fuel_key or 'gasoline' in fuel_key:
+                credit_type = 'petrol_credit'
+            else:
+                credit_type = 'other_credit'
+            if credit > 0.01:
+                rows.append(SimpleNamespace(
+                    id=e.id,
+                    sale_date=e.sale_date,
+                    entry_type=credit_type,
+                    customer=getattr(e, 'customer', None),
+                    item_name=item_name,
+                    liters=credit_liters,
+                    amount=credit,
+                    discount=float(getattr(e, 'discount', 0) or 0),
+                    amount_paid=0,
+                    overpayment=0,
+                    credit_amount=credit,
+                    other_amount=credit,
+                    other_kind='due',
+                    payment_status=status,
+                    cash_direction='credit',
+                    is_fuel=True,
+                    other_item=None,
+                ))
+            if over > 0.01:
+                rows.append(SimpleNamespace(
+                    id=e.id,
+                    sale_date=e.sale_date,
+                    entry_type='overpay',
+                    customer=getattr(e, 'customer', None),
+                    item_name=f'{item_name} · Overpay' if item_name else 'Overpay',
+                    liters=0,
+                    amount=over,
+                    discount=0,
+                    amount_paid=over,
+                    overpayment=over,
+                    credit_amount=0,
+                    other_amount=over,
+                    other_kind='over',
+                    payment_status='overpay',
+                    cash_direction='in',
+                    is_fuel=True,
+                    other_item=None,
+                ))
+            continue
+
+        if display_type == 'sale':
+            if paid_display > 0.01:
+                rows.append(SimpleNamespace(
+                    id=e.id,
+                    sale_date=e.sale_date,
+                    entry_type='other_cash',
+                    customer=getattr(e, 'customer', None),
+                    item_name=item_name,
+                    liters=float(getattr(e, 'liters', 0) or 0),
+                    amount=paid_display,
+                    discount=float(getattr(e, 'discount', 0) or 0),
+                    amount_paid=paid_display,
+                    overpayment=over,
+                    credit_amount=0,
+                    other_amount=0,
+                    other_kind='none',
+                    payment_status='paid',
+                    cash_direction='in',
+                    is_fuel=False,
+                    other_item=getattr(e, 'other_item', None),
+                ))
+            if credit > 0.01:
+                rows.append(SimpleNamespace(
+                    id=e.id,
+                    sale_date=e.sale_date,
+                    entry_type='other_credit',
+                    customer=getattr(e, 'customer', None),
+                    item_name=item_name,
+                    liters=float(getattr(e, 'liters', 0) or 0),
+                    amount=credit,
+                    discount=float(getattr(e, 'discount', 0) or 0),
+                    amount_paid=0,
+                    overpayment=0,
+                    credit_amount=credit,
+                    other_amount=credit,
+                    other_kind='due',
+                    payment_status=status,
+                    cash_direction='credit',
+                    is_fuel=False,
+                    other_item=getattr(e, 'other_item', None),
+                ))
+            continue
+        else:
+            show_amount = amt
+            row_paid = paid_display
+            row_direction = (
+                'in' if display_type in ('advance', 'overpay') or paid_display > 0
+                else ('out' if et == 'loan' else 'none')
+            )
+
         rows.append(SimpleNamespace(
             id=e.id,
             sale_date=e.sale_date,
@@ -1261,17 +1378,43 @@ def build_period_cash_entries(stats):
             customer=getattr(e, 'customer', None),
             item_name=item_name,
             liters=float(getattr(e, 'liters', 0) or 0),
-            amount=amt,
+            amount=show_amount,
             discount=float(getattr(e, 'discount', 0) or 0),
-            amount_paid=paid_display,
+            amount_paid=row_paid,
             overpayment=over,
             credit_amount=credit,
             other_amount=other_amt,
             other_kind='over' if over > 0 else ('due' if credit > 0 else 'none'),
             payment_status=status,
-            cash_direction='in' if display_type in ('sale', 'advance', 'overpay') or et in ('advance',) or paid_display > 0 else ('out' if et == 'loan' else 'none'),
+            cash_direction=row_direction,
             is_fuel=bool(getattr(e, 'is_fuel', False) or getattr(e, 'fuel_type_id', None)),
             other_item=getattr(e, 'other_item', None),
+        ))
+
+    for key, bucket in meter_buckets.items():
+        taken = credit_taken.get(key) or {}
+        cash_amt = max(bucket['amount'] - float(taken.get('gross') or 0), 0.0)
+        cash_liters = max(bucket['liters'] - float(taken.get('liters') or 0), 0.0)
+        if cash_amt <= 0.01:
+            continue
+        rows.append(SimpleNamespace(
+            id=0,
+            sale_date=key[0],
+            entry_type=bucket.get('cash_type') or 'other_cash',
+            customer=None,
+            item_name=f"Cash sale · {bucket['name']} {cash_liters:,.2f} L",
+            liters=cash_liters,
+            amount=cash_amt,
+            discount=0,
+            amount_paid=cash_amt,
+            overpayment=0,
+            credit_amount=0,
+            other_amount=0,
+            other_kind='none',
+            payment_status='paid',
+            cash_direction='in',
+            is_fuel=True,
+            other_item=None,
         ))
 
     for pay in payments:

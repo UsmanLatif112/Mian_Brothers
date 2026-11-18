@@ -174,9 +174,10 @@ def journal_listing_series(rows):
         if not d:
             continue
         amt = float(getattr(row, 'amount', 0) or 0)
-        if getattr(row, 'cash_direction', '') == 'in':
+        direction = getattr(row, 'cash_direction', '')
+        if direction == 'in':
             ins[d] += amt
-        else:
+        elif direction == 'out':
             outs[d] += amt
     dates = sorted(set(ins) | set(outs))
     if not dates:

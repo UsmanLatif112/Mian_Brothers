@@ -8,46 +8,50 @@ from types import SimpleNamespace
 #   IN  — sale (paid/unpaid), customer settle/payment, customer advance, expense settle
 # Excluded — openings
 JOURNAL_DIRECTION = {
-    'sale': 'in',
+    'diesel_cash': 'in',
+    'petrol_cash': 'in',
+    'diesel_credit': 'credit',
+    'petrol_credit': 'credit',
+    'other_credit': 'credit',
+    'other_cash': 'in',
     'payment': 'in',
     'advance': 'in',
     'overpay': 'in',
-    'settle': 'in',
     'loan': 'out',
     'expense': 'out',
     'purchase': 'out',
-    'vendor_pay': 'out',
-    'vendor_advance': 'out',
-    'cash_taken': 'out',
 }
 
 JOURNAL_TYPE_LABELS = {
-    'sale': 'Sale',
-    'payment': 'Customer settle',
-    'advance': 'Customer advance',
-    'overpay': 'Overpayment',
-    'settle': 'Expense settle',
-    'loan': 'Customer loan',
+    'diesel_cash': 'Total diesel cash sale',
+    'petrol_cash': 'Total petrol cash sale',
+    'diesel_credit': 'Diesel credit sale',
+    'petrol_credit': 'Petrol credit sale',
+    'other_credit': 'Other credit sale',
+    'other_cash': 'Other cash sale',
+    'payment': 'Payment received',
+    'advance': 'Payment received',
+    'overpay': 'Payment received',
+    'loan': 'Payment to customer',
     'expense': 'Expense',
     'purchase': 'Inventory purchase',
-    'vendor_pay': 'Vendor payment',
-    'vendor_advance': 'Vendor advance',
-    'cash_taken': 'Cash taken',
 }
 
 TYPE_FILTER_CHOICES = (
     ('all', 'All types'),
-    ('sale', 'Sale'),
-    ('payment', 'Customer settle'),
-    ('advance', 'Customer advance'),
-    ('loan', 'Customer loan'),
-    ('purchase', 'Inventory purchase'),
-    ('vendor_pay', 'Vendor payment'),
-    ('vendor_advance', 'Vendor advance'),
+    ('diesel_cash', 'Diesel cash sale'),
+    ('petrol_cash', 'Petrol cash sale'),
+    ('diesel_credit', 'Diesel credit sales'),
+    ('petrol_credit', 'Petrol credit sales'),
+    ('other_credit', 'Other credit sale'),
+    ('other_cash', 'Other cash sales'),
     ('expense', 'Expense'),
-    ('settle', 'Expense settle'),
-    ('cash_taken', 'Cash taken'),
+    ('purchase', 'Inventory purchase'),
+    ('loan', 'Payment to customer'),
+    ('payment', 'Payment received'),
 )
+
+FUEL_CASH_TOTALS = ('diesel_cash', 'petrol_cash')
 
 DIRECTION_FILTER_CHOICES = (
     ('all', 'All flows'),
@@ -62,10 +66,11 @@ def _row_cash_amount(row):
     direction = JOURNAL_DIRECTION.get(et)
     if not direction:
         return 0.0
-    if et in ('payment', 'advance', 'overpay', 'settle'):
+    if et in ('diesel_credit', 'petrol_credit', 'other_credit'):
+        return 0.0
+    if et in ('payment', 'advance', 'overpay', 'diesel_cash', 'petrol_cash', 'other_cash'):
         amt = float(getattr(row, 'amount_paid', 0) or getattr(row, 'amount', 0) or 0)
-    elif et in ('sale', 'purchase'):
-        # Sale (paid/unpaid) → full amount IN; purchase (paid/unpaid) → full amount OUT
+    elif et == 'purchase':
         amt = float(getattr(row, 'amount', 0) or getattr(row, 'amount_paid', 0) or 0)
     else:
         amt = float(getattr(row, 'amount', 0) or getattr(row, 'amount_paid', 0) or 0)
@@ -84,6 +89,7 @@ def build_cash_flow_rows(stats, direction='all', entry_type='all'):
     raw = build_period_cash_entries(stats)
 
     rows = []
+    chart_rows = []
     total_in = 0.0
     total_out = 0.0
     by_type = {k: 0.0 for k in JOURNAL_DIRECTION}
@@ -95,14 +101,30 @@ def build_cash_flow_rows(stats, direction='all', entry_type='all'):
         cash_dir = JOURNAL_DIRECTION[et]
         if direction in ('in', 'out') and cash_dir != direction:
             continue
-        if entry_type != 'all' and et != entry_type:
+        if entry_type == 'payment' and et not in ('payment', 'advance', 'overpay'):
+            continue
+        if entry_type not in ('all', 'payment') and et != entry_type:
+            continue
+
+        if et in FUEL_CASH_TOTALS:
+            chart_rows.append(SimpleNamespace(
+                sale_date=getattr(row, 'sale_date', None),
+                cash_direction='in',
+                amount=float(getattr(row, 'amount', 0) or 0),
+            ))
             continue
 
         signed = _row_cash_amount(row)
         abs_amt = abs(signed)
-        if abs_amt <= 0:
+        display_amt = float(getattr(row, 'amount', 0) or 0)
+        if abs_amt <= 0 and display_amt <= 0:
             continue
-        if cash_dir == 'in':
+        if abs_amt <= 0:
+            if direction in ('in', 'out'):
+                continue
+            cash_dir = 'credit'
+            abs_amt = display_amt
+        elif cash_dir == 'in':
             total_in += abs_amt
         else:
             total_out += abs_amt
@@ -127,6 +149,42 @@ def build_cash_flow_rows(stats, direction='all', entry_type='all'):
             amount=abs_amt,
             payment_status=getattr(row, 'payment_status', '') or '',
         ))
+        if cash_dir in ('in', 'out'):
+            chart_rows.append(SimpleNamespace(
+                sale_date=getattr(row, 'sale_date', None),
+                cash_direction=cash_dir,
+                amount=abs_amt,
+            ))
+
+    summary = []
+    total_specs = (
+        ('diesel_cash', 'diesel_cash', 'diesel_cash_liters', 'Total diesel cash sale'),
+        ('petrol_cash', 'petrol_cash', 'petrol_cash_liters', 'Total petrol cash sale'),
+    )
+    period_end = stats.get('end_date')
+    for key, amount_key, liter_key, label in total_specs:
+        if entry_type not in ('all', key):
+            continue
+        if direction == 'out':
+            continue
+        amount = float(stats.get(amount_key) or 0)
+        liters = float(stats.get(liter_key) or 0)
+        if amount <= 0.01:
+            continue
+        summary.append(SimpleNamespace(
+            id=None,
+            sale_date=period_end,
+            entry_type=key,
+            type_label=label,
+            cash_direction='in',
+            party='—',
+            item_name=f'{label} · {liters:,.2f} L',
+            amount=amount,
+            payment_status='paid',
+        ))
+        total_in += amount
+        by_type[key] = by_type.get(key, 0.0) + amount
+    rows = summary + rows
 
     return {
         'rows': rows,
@@ -135,4 +193,5 @@ def build_cash_flow_rows(stats, direction='all', entry_type='all'):
         'net': total_in - total_out,
         'by_type': by_type,
         'count': len(rows),
+        'chart_rows': chart_rows,
     }

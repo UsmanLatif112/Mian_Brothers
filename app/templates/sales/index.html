@@ -413,9 +413,7 @@
                                     </div>
                                     <small class="text-muted-custom d-block mt-2">
                                         Sold: <strong class="sold-line" data-machine="{{ machine.id }}">0.00</strong> L
-                                        {% if reading and reading.closing_reading is not none %}
-                                        <span class="ms-1">· Next segment after price change (opening = last close)</span>
-                                        {% endif %}
+                                        <span class="ms-1 meter-open-note">· Opening is the previous closing. Enter the closing only.</span>
                                     </small>
                                 </div>
                             </div>
@@ -720,7 +718,45 @@
         });
         if (summaryBox) summaryBox.classList.toggle('d-none', !fuelId);
         if (submitBtn) submitBtn.disabled = !fuelId;
+        document.querySelectorAll('.meter-open').forEach((input) => {
+            const active = !input.disabled;
+            input.readOnly = active && input.dataset.locked === '1';
+        });
         recalcTotals();
+    };
+
+    let openingsRequest = 0;
+    const loadMeterOpenings = async () => {
+        const dateEl = document.getElementById('meter_entry_date');
+        if (!dateEl || !dateEl.value) return;
+        const seq = ++openingsRequest;
+        try {
+            const res = await fetch(`{{ url_for('sales.meter_openings') }}?date=${encodeURIComponent(dateEl.value)}`, {
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await res.json();
+            if (seq !== openingsRequest || !data || !data.ok) return;
+            (data.machines || []).forEach((machine) => {
+                const openInput = document.querySelector(`.meter-open[data-machine="${machine.id}"]`);
+                const closeInput = document.querySelector(`.meter-close[data-machine="${machine.id}"]`);
+                if (!openInput) return;
+                if (machine.opening === null || machine.opening === undefined) {
+                    openInput.value = '';
+                    openInput.dataset.locked = '0';
+                } else {
+                    openInput.value = Number(machine.opening).toFixed(3);
+                    openInput.dataset.locked = '1';
+                }
+                if (closeInput && document.activeElement !== closeInput) {
+                    closeInput.value = (machine.closing === null || machine.closing === undefined)
+                        ? ''
+                        : Number(machine.closing).toFixed(3);
+                }
+            });
+            syncMeterBlocks();
+        } catch (err) {
+            /* leave the readings already on the form */
+        }
     };
 
     const recalcTotals = () => {
@@ -752,6 +788,10 @@
         fuelSelect.addEventListener('change', syncMeterBlocks);
         if (fuelSelect.tomselect) fuelSelect.tomselect.on('change', syncMeterBlocks);
     }
+    const meterDate = document.getElementById('meter_entry_date');
+    if (meterDate) meterDate.addEventListener('change', loadMeterOpenings);
+    const meterModal = document.getElementById('meterSaleModal');
+    if (meterModal) meterModal.addEventListener('show.bs.modal', loadMeterOpenings);
     document.querySelectorAll('.meter-open, .meter-close').forEach(el => {
         el.addEventListener('input', recalcTotals);
     });
@@ -823,6 +863,7 @@
                 </div>
                 <small class="text-muted-custom d-block mt-2">
                     Sold: <strong class="sold-line" data-machine="${machineId}">0.00</strong> L
+                    <span class="ms-1 meter-open-note">· Opening is the previous closing. Enter the closing only.</span>
                 </small>
             </div>`;
         col.querySelector('.machine-name').textContent = machineName;
@@ -925,6 +966,7 @@
                     data.id,
                     data.name || data.text || name
                 );
+                loadMeterOpenings();
                 closeAddMachineModal();
                 if (window.ofToast) window.ofToast(`Machine “${data.name || name}” added`, 'success');
             } catch (err) {

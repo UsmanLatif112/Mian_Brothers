@@ -100,6 +100,11 @@ def index():
         entry_type=entry_type,
         direction_choices=DIRECTION_FILTER_CHOICES,
         type_choices=TYPE_FILTER_CHOICES,
-        chart_series=journal_listing_series(rows),
+        chart_series=journal_listing_series(flow.get('chart_rows') or rows),
+        sale_cash=(
+            float(stats.get('petrol_cash') or 0)
+            + float(stats.get('diesel_cash') or 0)
+            + float(stats.get('other_cash') or 0)
+        ),
         search=search_q,
     )

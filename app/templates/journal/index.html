@@ -78,13 +78,21 @@
     {% endif %}
 
     <section class="journal-kpi-grid mb-4" aria-label="Journal totals">
+        <article class="journal-kpi journal-kpi-sale">
+            <div class="journal-kpi-top">
+                <span class="journal-kpi-icon"><i class="bi bi-cash-stack"></i></span>
+                <span class="journal-kpi-label">Cash from sales</span>
+            </div>
+            <div class="journal-kpi-value">{{ sale_cash | money }}</div>
+            <div class="journal-kpi-meta">Diesel, petrol, and other cash. No previous balance and no expenses.</div>
+        </article>
         <article class="journal-kpi journal-kpi-in">
             <div class="journal-kpi-top">
                 <span class="journal-kpi-icon"><i class="bi bi-arrow-down-left"></i></span>
                 <span class="journal-kpi-label">Cash In</span>
             </div>
             <div class="journal-kpi-value">{{ total_in | money }}</div>
-            <div class="journal-kpi-meta">Sales · customer settle/advance · expense settle</div>
+            <div class="journal-kpi-meta">Fuel cash · other cash · payments received</div>
         </article>
         <article class="journal-kpi journal-kpi-out">
             <div class="journal-kpi-top">
@@ -92,7 +100,7 @@
                 <span class="journal-kpi-label">Cash Out</span>
             </div>
             <div class="journal-kpi-value">{{ total_out | money }}</div>
-            <div class="journal-kpi-meta">Purchases · vendor pay/advance · loans · expenses</div>
+            <div class="journal-kpi-meta">Expenses · inventory · payments to customers</div>
         </article>
         <article class="journal-kpi journal-kpi-net {% if net >= 0 %}is-positive{% else %}is-negative{% endif %}">
             <div class="journal-kpi-top">
@@ -105,20 +113,20 @@
     </section>
 
     <section class="journal-breakdown mb-4" aria-label="By type">
+        {% set received = (by_type.get('payment', 0) or 0) + (by_type.get('advance', 0) or 0) + (by_type.get('overpay', 0) or 0) %}
         {% set chips = [
-            ('sale', 'Sale'),
-            ('payment', 'Cust. settle'),
-            ('advance', 'Cust. advance'),
-            ('loan', 'Cust. loan'),
-            ('purchase', 'Purchase'),
-            ('vendor_pay', 'Vendor pay'),
-            ('vendor_advance', 'Vendor adv.'),
-            ('expense', 'Expense'),
-            ('settle', 'Exp. settle'),
-            ('cash_taken', 'Taken'),
+            ('diesel_cash', 'Diesel cash', by_type.get('diesel_cash', 0)),
+            ('petrol_cash', 'Petrol cash', by_type.get('petrol_cash', 0)),
+            ('diesel_credit', 'Diesel credit', by_type.get('diesel_credit', 0)),
+            ('petrol_credit', 'Petrol credit', by_type.get('petrol_credit', 0)),
+            ('other_credit', 'Other credit', by_type.get('other_credit', 0)),
+            ('other_cash', 'Other cash', by_type.get('other_cash', 0)),
+            ('expense', 'Expense', by_type.get('expense', 0)),
+            ('purchase', 'Inventory', by_type.get('purchase', 0)),
+            ('loan', 'Paid to customer', by_type.get('loan', 0)),
+            ('payment', 'Received', received),
         ] %}
-        {% for key, label in chips %}
-        {% set amt = by_type.get(key, 0) %}
+        {% for key, label, amt in chips %}
         {% if amt %}
         <div class="journal-chip journal-chip-{{ key }}">
             <span>{{ label }}</span>
@@ -158,6 +166,8 @@
                                 <span class="journal-flow journal-flow-{{ row.cash_direction }}">
                                     {% if row.cash_direction == 'in' %}
                                     <i class="bi bi-arrow-down-left"></i> In
+                                    {% elif row.cash_direction == 'credit' %}
+                                    Credit
                                     {% else %}
                                     <i class="bi bi-arrow-up-right"></i> Out
                                     {% endif %}
@@ -202,6 +212,8 @@
                         <span class="journal-flow journal-flow-{{ row.cash_direction }}">
                             {% if row.cash_direction == 'in' %}
                             <i class="bi bi-arrow-down-left"></i> In
+                            {% elif row.cash_direction == 'credit' %}
+                            Credit
                             {% else %}
                             <i class="bi bi-arrow-up-right"></i> Out
                             {% endif %}
@@ -247,7 +259,7 @@
             <div class="thermal-line-desc">{{ row.sale_date }} · {{ row.type_label }}</div>
             <div class="thermal-line-desc">{{ row.party }} · {{ row.item_name }}</div>
             <div class="thermal-row">
-                <span>{% if row.cash_direction == 'out' %}OUT{% else %}IN{% endif %}</span>
+                <span>{% if row.cash_direction == 'out' %}OUT{% elif row.cash_direction == 'credit' %}CREDIT{% else %}IN{% endif %}</span>
                 <span>{% if row.cash_direction == 'out' %}−{% endif %}{{ row.amount | num(2) }}</span>
             </div>
         </div>

@@ -1062,6 +1062,55 @@ def meters():
     )
 
 
+@sales_bp.route('/api/meter-openings', methods=['GET'])
+@login_required
+def meter_openings():
+    """Opening for a sale date is that day's saved opening, or the previous closing."""
+    sale_day = parse_form_date(request.args.get('date'), _today())
+    machines = (
+        apply_agency_filter(Machine.query.filter_by(is_active=True), Machine)
+        .order_by(Machine.name.asc())
+        .all()
+    )
+    payload = []
+    for machine in machines:
+        same_day = (
+            apply_agency_filter(
+                MeterReading.query.filter_by(machine_id=machine.id, reading_date=sale_day),
+                MeterReading,
+            )
+            .order_by(MeterReading.id.desc())
+            .first()
+        )
+        prior = (
+            apply_agency_filter(
+                MeterReading.query.filter(
+                    MeterReading.machine_id == machine.id,
+                    MeterReading.reading_date < sale_day,
+                    MeterReading.closing_reading.isnot(None),
+                ),
+                MeterReading,
+            )
+            .order_by(MeterReading.reading_date.desc(), MeterReading.id.desc())
+            .first()
+        )
+        opening = None
+        closing = None
+        if same_day is not None:
+            opening = float(same_day.opening_reading or 0)
+            if same_day.closing_reading is not None:
+                closing = float(same_day.closing_reading)
+        elif prior is not None and prior.closing_reading is not None:
+            opening = float(prior.closing_reading)
+        payload.append({
+            'id': machine.id,
+            'opening': opening,
+            'closing': closing,
+            'locked': opening is not None,
+        })
+    return jsonify({'ok': True, 'date': sale_day.isoformat(), 'machines': payload})
+
+
 # ---------- Quick-add APIs (dropdown "Add new") ----------
 
 @sales_bp.route('/api/quick/customer', methods=['POST'])
