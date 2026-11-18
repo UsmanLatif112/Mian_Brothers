@@ -393,7 +393,7 @@
                                                        class="form-control form-control-custom meter-open"
                                                        name="opening_{{ machine.id }}"
                                                        data-machine="{{ machine.id }}"
-                                                       value="{{ '%.3f'|format(open_val) if open_val is not none else '' }}"
+                                                       value="{% if open_val is not none %}{{ ('%.3f'|format(open_val|float)).rstrip('0').rstrip('.') }}{% endif %}"
                                                        disabled>
                                                 <span class="input-group-text">L</span>
                                             </div>
@@ -405,7 +405,7 @@
                                                        class="form-control form-control-custom meter-close"
                                                        name="closing_{{ machine.id }}"
                                                        data-machine="{{ machine.id }}"
-                                                       value="{{ '%.3f'|format(close_val) if close_val is not none else '' }}"
+                                                       value="{% if close_val is not none %}{{ ('%.3f'|format(close_val|float)).rstrip('0').rstrip('.') }}{% endif %}"
                                                        disabled>
                                                 <span class="input-group-text">L</span>
                                             </div>
@@ -725,6 +725,13 @@
         recalcTotals();
     };
 
+    const meterReadingText = (value) => {
+        if (value === null || value === undefined || value === '') return '';
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '';
+        return String(Number(n.toFixed(3)));
+    };
+
     let openingsRequest = 0;
     const loadMeterOpenings = async () => {
         const dateEl = document.getElementById('meter_entry_date');
@@ -744,13 +751,13 @@
                     openInput.value = '';
                     openInput.dataset.locked = '0';
                 } else {
-                    openInput.value = Number(machine.opening).toFixed(3);
+                    openInput.value = meterReadingText(machine.opening);
                     openInput.dataset.locked = '1';
                 }
                 if (closeInput && document.activeElement !== closeInput) {
                     closeInput.value = (machine.closing === null || machine.closing === undefined)
                         ? ''
-                        : Number(machine.closing).toFixed(3);
+                        : meterReadingText(machine.closing);
                 }
             });
             syncMeterBlocks();
