@@ -1322,8 +1322,9 @@ def build_period_cash_entries(stats):
             continue
 
         if display_type == 'sale':
+            shop_item = getattr(e, 'other_item', None)
             shop_qty = float(getattr(e, 'liters', 0) or 0)
-            shop_unit = 'L' if (other_item and other_item.tracks_liters()) else 'pcs'
+            shop_unit = 'L' if (shop_item and shop_item.tracks_liters()) else 'pcs'
             shop_qty_txt = f'{shop_qty:,.2f} {shop_unit}' if shop_unit == 'L' else f'{int(round(shop_qty))} {shop_unit}'
             shop_desc = f'{item_name} · {shop_qty_txt}' if item_name else shop_qty_txt
             if paid_display > 0.01:
