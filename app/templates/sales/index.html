@@ -413,7 +413,7 @@
                                     </div>
                                     <small class="text-muted-custom d-block mt-2">
                                         Sold: <strong class="sold-line" data-machine="{{ machine.id }}">0.00</strong> L
-                                        <span class="ms-1 meter-open-note">· Opening is the previous closing. Enter the closing only.</span>
+                                        <span class="ms-1 meter-open-note">· Another reading on this date starts from the last closing. Paste that closing as the opening, then enter the new closing.</span>
                                     </small>
                                 </div>
                             </div>
@@ -752,7 +752,7 @@
                     openInput.dataset.locked = '0';
                 } else {
                     openInput.value = meterReadingText(machine.opening);
-                    openInput.dataset.locked = '1';
+                    openInput.dataset.locked = '0';
                 }
                 if (closeInput && document.activeElement !== closeInput) {
                     closeInput.value = (machine.closing === null || machine.closing === undefined)
@@ -870,7 +870,7 @@
                 </div>
                 <small class="text-muted-custom d-block mt-2">
                     Sold: <strong class="sold-line" data-machine="${machineId}">0.00</strong> L
-                    <span class="ms-1 meter-open-note">· Opening is the previous closing. Enter the closing only.</span>
+                    <span class="ms-1 meter-open-note">· Another reading on this date starts from the last closing. Paste that closing as the opening, then enter the new closing.</span>
                 </small>
             </div>`;
         col.querySelector('.machine-name').textContent = machineName;

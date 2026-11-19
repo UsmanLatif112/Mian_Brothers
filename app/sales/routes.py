@@ -457,18 +457,6 @@ def index():
                         db.session.add(row)
                         touched_readings.append(row)
                         stock_delta += liters
-                    elif len(readings) == 1:
-                        # Legacy single-row replace for the day
-                        old_liters = float(latest.liters_sold or 0)
-                        latest.opening_reading = opening
-                        latest.closing_reading = closing
-                        latest.liters_sold = liters
-                        latest.sale_rate = rate
-                        latest.closed_by = current_user.id
-                        latest.closed_at = datetime.utcnow()
-                        latest.fuel_type_id = fuel_type.id
-                        stock_delta += liters - old_liters
-                        touched_readings.append(latest)
                     else:
                         last_close = float(latest.closing_reading or latest.opening_reading)
                         raise ValueError(
@@ -1104,17 +1092,18 @@ def meter_openings():
         )
         opening = None
         closing = None
-        if same_day is not None:
+        if same_day is not None and same_day.closing_reading is not None:
+            # Next reading on this date starts where the last one closed.
+            opening = float(same_day.closing_reading)
+        elif same_day is not None:
             opening = float(same_day.opening_reading or 0)
-            if same_day.closing_reading is not None:
-                closing = float(same_day.closing_reading)
         elif prior is not None and prior.closing_reading is not None:
             opening = float(prior.closing_reading)
         payload.append({
             'id': machine.id,
             'opening': opening,
             'closing': closing,
-            'locked': opening is not None,
+            'locked': False,
         })
     return jsonify({'ok': True, 'date': sale_day.isoformat(), 'machines': payload})
 
