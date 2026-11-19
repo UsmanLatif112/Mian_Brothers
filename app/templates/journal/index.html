@@ -100,7 +100,7 @@
                 <span class="journal-kpi-label">Cash Out</span>
             </div>
             <div class="journal-kpi-value">{{ total_out | money }}</div>
-            <div class="journal-kpi-meta">Expenses · inventory · payments to customers</div>
+            <div class="journal-kpi-meta">Expenses · inventory · payments to customers and vendors</div>
         </article>
         <article class="journal-kpi journal-kpi-net {% if net >= 0 %}is-positive{% else %}is-negative{% endif %}">
             <div class="journal-kpi-top">
@@ -124,6 +124,7 @@
             ('expense', 'Expense', by_type.get('expense', 0)),
             ('purchase', 'Inventory', by_type.get('purchase', 0)),
             ('loan', 'Paid to customer', by_type.get('loan', 0)),
+            ('vendor_pay', 'Paid to vendor', (by_type.get('vendor_pay', 0) or 0) + (by_type.get('vendor_advance', 0) or 0)),
             ('payment', 'Received', received),
         ] %}
         {% for key, label, amt in chips %}

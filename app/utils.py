@@ -1285,7 +1285,7 @@ def build_period_cash_entries(stats):
                     sale_date=e.sale_date,
                     entry_type=credit_type,
                     customer=getattr(e, 'customer', None),
-                    item_name=item_name,
+                    item_name=f'{fuel_name} credit sale · {credit_liters:,.2f} L',
                     liters=credit_liters,
                     amount=credit,
                     discount=float(getattr(e, 'discount', 0) or 0),
@@ -1322,13 +1322,17 @@ def build_period_cash_entries(stats):
             continue
 
         if display_type == 'sale':
+            shop_qty = float(getattr(e, 'liters', 0) or 0)
+            shop_unit = 'L' if (other_item and other_item.tracks_liters()) else 'pcs'
+            shop_qty_txt = f'{shop_qty:,.2f} {shop_unit}' if shop_unit == 'L' else f'{int(round(shop_qty))} {shop_unit}'
+            shop_desc = f'{item_name} · {shop_qty_txt}' if item_name else shop_qty_txt
             if paid_display > 0.01:
                 rows.append(SimpleNamespace(
                     id=e.id,
                     sale_date=e.sale_date,
                     entry_type='other_cash',
                     customer=getattr(e, 'customer', None),
-                    item_name=item_name,
+                    item_name=f'Other cash sale · {shop_desc}',
                     liters=float(getattr(e, 'liters', 0) or 0),
                     amount=paid_display,
                     discount=float(getattr(e, 'discount', 0) or 0),
@@ -1348,7 +1352,7 @@ def build_period_cash_entries(stats):
                     sale_date=e.sale_date,
                     entry_type='other_credit',
                     customer=getattr(e, 'customer', None),
-                    item_name=item_name,
+                    item_name=f'Other credit sale · {shop_desc}',
                     liters=float(getattr(e, 'liters', 0) or 0),
                     amount=credit,
                     discount=float(getattr(e, 'discount', 0) or 0),
@@ -1402,7 +1406,7 @@ def build_period_cash_entries(stats):
             sale_date=key[0],
             entry_type=bucket.get('cash_type') or 'other_cash',
             customer=None,
-            item_name=f"Cash sale · {bucket['name']} {cash_liters:,.2f} L",
+            item_name=f"Cash sale · {bucket['name']} · {cash_liters:,.2f} L",
             liters=cash_liters,
             amount=cash_amt,
             discount=0,
@@ -1562,9 +1566,9 @@ def build_period_cash_entries(stats):
         entry_type = 'vendor_advance' if is_advance else 'vendor_pay'
         fund_label = 'Till' if funding == 'till' else 'Account'
         if is_advance:
-            item_name = f'Advance · {method} · {fund_label}'
+            item_name = f'Vendor advance · {method} · {fund_label}'
         else:
-            item_name = f'Payment · {method} · {fund_label}'
+            item_name = f'Payment to vendor · {method} · {fund_label}'
         if note:
             item_name = f'{item_name} — {note}'
         amt = float(vp.amount_paid or 0)

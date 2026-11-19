@@ -20,6 +20,8 @@ JOURNAL_DIRECTION = {
     'loan': 'out',
     'expense': 'out',
     'purchase': 'out',
+    'vendor_pay': 'out',
+    'vendor_advance': 'out',
 }
 
 JOURNAL_TYPE_LABELS = {
@@ -35,6 +37,8 @@ JOURNAL_TYPE_LABELS = {
     'loan': 'Payment to customer',
     'expense': 'Expense',
     'purchase': 'Inventory purchase',
+    'vendor_pay': 'Payment to vendor',
+    'vendor_advance': 'Vendor advance',
 }
 
 TYPE_FILTER_CHOICES = (
@@ -49,6 +53,8 @@ TYPE_FILTER_CHOICES = (
     ('purchase', 'Inventory purchase'),
     ('loan', 'Payment to customer'),
     ('payment', 'Payment received'),
+    ('vendor_pay', 'Payment to vendor'),
+    ('vendor_advance', 'Vendor advance'),
 )
 
 FUEL_CASH_TOTALS = ('diesel_cash', 'petrol_cash')
@@ -103,7 +109,9 @@ def build_cash_flow_rows(stats, direction='all', entry_type='all'):
             continue
         if entry_type == 'payment' and et not in ('payment', 'advance', 'overpay'):
             continue
-        if entry_type not in ('all', 'payment') and et != entry_type:
+        if entry_type == 'vendor_pay' and et not in ('vendor_pay', 'vendor_advance'):
+            continue
+        if entry_type not in ('all', 'payment', 'vendor_pay') and et != entry_type:
             continue
 
         if et in FUEL_CASH_TOTALS:
