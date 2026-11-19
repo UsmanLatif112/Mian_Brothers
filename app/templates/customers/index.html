@@ -76,6 +76,17 @@
                     <span class="badge badge-custom badge-staff">{{ balance | money }}</span>
                     {% endif %}
                     <div class="table-actions">
+                        <button type="button" class="btn btn-sm btn-outline-primary border-0"
+                                data-bs-toggle="modal"
+                                data-bs-target="#ledgerModal"
+                                data-ledger-mode="payment"
+                                data-pay-action="{{ url_for('customers.ledger', customer_id=cust.id) }}"
+                                data-balance="{{ '%.2f'|format(balance) }}"
+                                data-customer-name="{{ cust.name }}"
+                                data-return-to="{{ url_for('customers.index', search=search or none, filter=filter or none, page=request.args.get('page') or none) }}"
+                                title="Record Payment">
+                            <i class="bi bi-wallet2"></i>
+                        </button>
                         <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="btn btn-sm btn-outline-primary border-0" title="Ledger">
                             <i class="bi bi-journal-text"></i>
                         </a>
@@ -164,6 +175,17 @@
                         </td>
                         <td class="text-end">
                             <div class="table-actions btn-group gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary border-0"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#ledgerModal"
+                                        data-ledger-mode="payment"
+                                        data-pay-action="{{ url_for('customers.ledger', customer_id=cust.id) }}"
+                                        data-balance="{{ '%.2f'|format(balance) }}"
+                                        data-customer-name="{{ cust.name }}"
+                                        data-return-to="{{ url_for('customers.index', search=search or none, filter=filter or none, page=request.args.get('page') or none) }}"
+                                        title="Record Payment">
+                                    <i class="bi bi-wallet2"></i>
+                                </button>
                                 <a href="{{ url_for('customers.ledger', customer_id=cust.id) }}" class="btn btn-sm btn-outline-primary border-0 d-flex align-items-center gap-1" title="Ledger">
                                     <i class="bi bi-journal-text"></i><span class="btn-label"> Ledger</span>
                                 </a>
@@ -225,6 +247,7 @@
 
 {% block modals %}
 {% include 'partials/create_customer_modal.html' %}
+{% include 'partials/customer_payment_modal.html' %}
 
 <!-- EDIT CUSTOMER MODAL -->
 <div class="modal fade" id="editCustomerModal" tabindex="-1" aria-hidden="true">

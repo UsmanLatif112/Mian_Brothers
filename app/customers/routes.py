@@ -23,6 +23,7 @@ from app.customers.service import (
     RECOVERY_DAYS_CHOICES,
 )
 from datetime import datetime
+from urllib.parse import urlparse
 
 PER_PAGE = 15
 
@@ -274,6 +275,21 @@ def ledger(customer_id):
     require_agency_access(customer)
 
     if request.method == 'POST':
+        def _done():
+            nxt = (request.form.get('return_to') or '').strip()
+            index_path = url_for('customers.index')
+            parsed = urlparse(nxt)
+            same_list = (
+                nxt.startswith('/')
+                and not nxt.startswith('//')
+                and not parsed.scheme
+                and not parsed.netloc
+                and parsed.path.rstrip('/') == index_path.rstrip('/')
+            )
+            if same_list:
+                return redirect(nxt)
+            return redirect(url_for('customers.ledger', customer_id=customer.id))
+
         action = (request.form.get('action') or 'payment').strip().lower()
 
         # ---------- Edit / delete ledger rows ----------
@@ -298,7 +314,7 @@ def ledger(customer_id):
             except EntryError as e:
                 db.session.rollback()
                 flash(str(e), 'danger')
-            return redirect(url_for('customers.ledger', customer_id=customer.id))
+            return _done()
 
         if action == 'delete_entry':
             source_type = (request.form.get('source_type') or '').strip().lower()
@@ -332,7 +348,7 @@ def ledger(customer_id):
             except Exception as e:
                 db.session.rollback()
                 flash(f'Could not delete entry: {e}', 'danger')
-            return redirect(url_for('customers.ledger', customer_id=customer.id))
+            return _done()
 
         # ---------- Advance / Loan ----------
         if action == 'advance_loan':
@@ -343,7 +359,7 @@ def ledger(customer_id):
 
             if kind not in ('advance', 'loan', 'salary'):
                 flash('Please select Advance, Loan, or Salary.', 'danger')
-                return redirect(url_for('customers.ledger', customer_id=customer.id))
+                return _done()
 
             try:
                 amt_val = float(amount)
@@ -351,7 +367,7 @@ def ledger(customer_id):
                     raise ValueError('Amount must be greater than zero.')
             except (TypeError, ValueError) as e:
                 flash(f'Invalid amount: {e}', 'danger')
-                return redirect(url_for('customers.ledger', customer_id=customer.id))
+                return _done()
 
             if kind in ('advance', 'salary'):
                 cs = CreditSale(
@@ -406,12 +422,12 @@ def ledger(customer_id):
                     f"Balance due: PKR {float(customer.current_balance_due):,.2f}.",
                     'success'
                 )
-            return redirect(url_for('customers.ledger', customer_id=customer.id))
+            return _done()
 
         # ---------- Payment / credit clear ----------
         if action != 'payment':
             flash('Unknown action.', 'danger')
-            return redirect(url_for('customers.ledger', customer_id=customer.id))
+            return _done()
 
         amount = request.form.get('amount_paid')
         method = request.form.get('method', 'Cash')
@@ -420,7 +436,7 @@ def ledger(customer_id):
         
         if not amount:
             flash('Payment amount is required.', 'danger')
-            return redirect(url_for('customers.ledger', customer_id=customer.id))
+            return _done()
             
         try:
             amt_val = float(amount)
@@ -428,7 +444,7 @@ def ledger(customer_id):
                 raise ValueError("Payment amount must be greater than zero.")
         except ValueError as e:
             flash(f"Invalid payment amount: {e}", 'danger')
-            return redirect(url_for('customers.ledger', customer_id=customer.id))
+            return _done()
             
         payment = Payment(
             customer_id=customer.id,
@@ -450,7 +466,7 @@ def ledger(customer_id):
             f"Balance: PKR {bal:,.2f}{bal_note}.",
             'success'
         )
-        return redirect(url_for('customers.ledger', customer_id=customer.id))
+        return _done()
         
     # GET request — credit sales are the customer receivable source of truth
     purchases = CreditSale.query.filter_by(customer_id=customer.id).all()
