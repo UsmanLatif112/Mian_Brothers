@@ -992,6 +992,14 @@ def index():
             return search_q in blob
         editable_entries = [e for e in editable_entries if _sale_match(e)]
 
+    editable_entries.sort(
+        key=lambda e: (
+            getattr(e, 'created_at', None) or datetime.min,
+            getattr(e, 'sale_date', None) or datetime.min.date(),
+            getattr(e, 'id', 0) or 0,
+        ),
+        reverse=True,
+    )
     period_entries, entries_pagination = paginate(editable_entries, entries_page, PER_PAGE)
 
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
