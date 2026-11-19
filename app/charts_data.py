@@ -82,7 +82,7 @@ def vendors_listing_series():
     """Line: daily purchases vs vendor payments (last 14 days)."""
     from app.models import ItemPurchaseLog, VendorPayment
     from app.tenancy import apply_agency_filter
-    from app.vendors.service import purchase_log_total
+    from app.vendors.service import purchase_log_total, is_expense_settle_payment
 
     labels, dates, start, end = daily_labels(14)
     buys = defaultdict(float)
@@ -109,7 +109,7 @@ def vendors_listing_series():
         VendorPayment,
     ).all():
         d = _as_date(p.payment_date)
-        if d:
+        if d and not is_expense_settle_payment(p):
             pays[d] += float(p.amount_paid or 0)
 
     return {

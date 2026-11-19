@@ -210,7 +210,7 @@ def vendor_payment(payment_id):
         'print/receipt.html',
         agency=agency,
         subtitle='Vendor Receipt',
-        title='Payment',
+        title='Settle payment' if (payment.method or '').strip().lower() == 'settle' else 'Payment',
         ref=f'Payment #{payment.id}',
         date=payment.payment_date.strftime('%Y-%m-%d %H:%M') if payment.payment_date else '—',
         party_label='Vendor',

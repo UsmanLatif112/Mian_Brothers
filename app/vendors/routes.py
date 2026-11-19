@@ -25,6 +25,7 @@ from app.vendors.service import (
     purchase_log_payment_status,
     normalize_funding_source,
     payment_funding_source,
+    is_expense_settle_payment,
 )
 from app.account.service import upsert_till_balance
 
@@ -292,6 +293,9 @@ def ledger(vendor_id):
             if not payment:
                 flash('Payment not found.', 'danger')
                 return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+            if is_expense_settle_payment(payment):
+                flash('This settle payment belongs to an expense. Edit the expense to change it.', 'warning')
+                return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
             old_day = _payment_day(payment)
             try:
                 edit_vendor_payment(payment, request.form)
@@ -313,6 +317,9 @@ def ledger(vendor_id):
             ).first()
             if not payment:
                 flash('Payment not found.', 'danger')
+                return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
+            if is_expense_settle_payment(payment):
+                flash('This settle payment belongs to an expense. Unsettle the expense to remove it.', 'warning')
                 return redirect(url_for('vendors.ledger', vendor_id=vendor.id))
             pay_day = _payment_day(payment)
             delete_vendor_payment(payment)
@@ -500,20 +507,33 @@ def ledger(vendor_id):
             continue
         funding = payment_funding_source(pay)
         fund_label = 'Cash in hand' if funding == 'till' else 'Account'
+        is_settle_pay = is_expense_settle_payment(pay)
+        if is_settle_pay:
+            desc = (pay.note or '').strip() or 'Settle payment'
+            ref = f"Settle #{pay.id}"
+            pay_type = 'settle'
+            status = 'settle'
+        else:
+            desc = (
+                f"Paid via {pay.method} · {fund_label}"
+                f"{f' ({pay.note})' if pay.note else ''}"
+            )
+            ref = f"Payment #{pay.id}"
+            pay_type = pay.method
+            status = 'paid'
         entry = {
             'date': pay.payment_date or datetime.min,
             'type': 'payment',
-            'desc': (
-                f"Paid via {pay.method} · {fund_label}"
-                f"{f' ({pay.note})' if pay.note else ''}"
-            ),
+            'desc': desc,
             'debit': 0.0,
             'credit': float(pay.amount_paid or 0),
-            'ref_id': f"Payment #{pay.id}",
-            'pay_type': pay.method,
-            'payment_status': 'paid',
+            'ref_id': ref,
+            'pay_type': pay_type,
+            'payment_status': status,
         }
         entry.update(_pay_meta(pay))
+        if is_settle_pay:
+            entry['can_edit'] = False
         ledger_entries.append(entry)
 
     ledger_entries.sort(key=lambda x: (x['date'] or datetime.min, x.get('ref_id') or ''))

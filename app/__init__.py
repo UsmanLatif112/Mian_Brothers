@@ -1149,6 +1149,8 @@ def ensure_expenses_schema():
         alters.append("ALTER TABLE expenses ADD COLUMN settle_vendor_id INTEGER NULL")
     if 'settle_purchase_log_id' not in existing:
         alters.append("ALTER TABLE expenses ADD COLUMN settle_purchase_log_id INTEGER NULL")
+    if 'settle_vendor_payment_id' not in existing:
+        alters.append("ALTER TABLE expenses ADD COLUMN settle_vendor_payment_id INTEGER NULL")
 
     if not alters:
         return

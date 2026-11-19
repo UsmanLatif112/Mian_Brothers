@@ -76,9 +76,25 @@ def counts_toward_purchase_kpis(log):
     return True
 
 
+def is_expense_settle_payment(payment):
+    """Expense settled as a vendor payment. It reduces payable and does not move cash."""
+    if not payment:
+        return False
+    return (getattr(payment, 'method', None) or '').strip().lower() == 'settle'
+
+
+def payment_reduces_payable(payment):
+    """Payments that lower the vendor balance, including non-cash expense settles."""
+    if is_expense_settle_payment(payment):
+        return True
+    return payment_counts_toward_cash(payment)
+
+
 def payment_counts_toward_cash(payment):
     """Opening-stock vendor payments must not drain cash in hand / account pool."""
     if not payment:
+        return False
+    if is_expense_settle_payment(payment):
         return False
     log = getattr(payment, 'purchase_log', None)
     if log is None and getattr(payment, 'purchase_log_id', None):
@@ -143,6 +159,8 @@ def upsert_expense_vendor_payable(expense, vendor, settled_date, settle_note=Non
         for pay in find_auto_payments_for_log(log):
             db.session.delete(pay)
 
+    if getattr(expense, 'settle_vendor_payment_id', None):
+        touched |= clear_expense_vendor_payment(expense)
     link_purchase_to_vendor(vendor.name, log, vendor=vendor, increment_balance=False)
     apply_purchase_vendor_payment(vendor, log, payment_status='unpaid', payment_date=entry_dt)
     expense.settle_vendor_id = vendor.id
@@ -152,11 +170,25 @@ def upsert_expense_vendor_payable(expense, vendor, settled_date, settle_note=Non
     return log, touched
 
 
-def clear_expense_vendor_payable(expense):
-    """Delete linked expense-settle purchase log; returns vendor ids to recalc."""
+def clear_expense_vendor_payment(expense):
+    """Delete the linked settle payment. Does not clear the vendor id."""
     touched = set()
-    if getattr(expense, 'settle_vendor_id', None):
-        touched.add(expense.settle_vendor_id)
+    pay_id = getattr(expense, 'settle_vendor_payment_id', None)
+    expense.settle_vendor_payment_id = None
+    if pay_id:
+        db.session.flush()
+        pay = VendorPayment.query.get(pay_id)
+        if pay:
+            if pay.vendor_id:
+                touched.add(pay.vendor_id)
+            db.session.delete(pay)
+            db.session.flush()
+    return touched
+
+
+def _drop_expense_settle_purchase(expense):
+    """Remove the unpaid purchase created by a vendor-unpaid settle."""
+    touched = set()
     log_id = getattr(expense, 'settle_purchase_log_id', None)
     if log_id:
         log = ItemPurchaseLog.query.get(log_id)
@@ -165,10 +197,73 @@ def clear_expense_vendor_payable(expense):
                 touched.add(log.vendor_id)
             for pay in find_auto_payments_for_log(log):
                 db.session.delete(pay)
-            # No stock reverse — expense settles never added stock
             db.session.delete(log)
             db.session.flush()
     expense.settle_purchase_log_id = None
+    return touched
+
+
+def upsert_expense_vendor_payment(expense, vendor, settled_date, settle_note=None, user_id=None):
+    """
+    Settle payment on the vendor ledger. Payable goes down. Cash stays put.
+    Returns (payment, vendor_ids_to_recalc).
+    """
+    from datetime import datetime
+    from app.utils import expense_settle_remark, datetime_from_date
+
+    amount = float(expense.amount or 0)
+    note = (
+        expense_settle_remark(
+            expense.name, settle_note, getattr(expense, 'description', None)
+        ) or 'Settle'
+    )[:200]
+    pay_dt = datetime_from_date(settled_date) if settled_date else datetime.utcnow()
+    touched = set()
+    old_vendor_id = getattr(expense, 'settle_vendor_id', None)
+    touched |= _drop_expense_settle_purchase(expense)
+
+    pay = None
+    pay_id = getattr(expense, 'settle_vendor_payment_id', None)
+    if pay_id:
+        pay = VendorPayment.query.get(pay_id)
+    if pay is not None and pay.vendor_id and pay.vendor_id != vendor.id:
+        touched.add(pay.vendor_id)
+
+    if pay is None:
+        pay = stamp_agency(VendorPayment(
+            vendor_id=vendor.id,
+            amount_paid=amount,
+            payment_date=pay_dt,
+            method='Settle',
+            funding_source='till',
+            note=note,
+        ))
+        db.session.add(pay)
+        db.session.flush()
+        expense.settle_vendor_payment_id = pay.id
+    else:
+        pay.vendor_id = vendor.id
+        pay.amount_paid = amount
+        pay.payment_date = pay_dt
+        pay.method = 'Settle'
+        pay.funding_source = 'till'
+        pay.note = note
+        pay.purchase_log_id = None
+
+    expense.settle_vendor_id = vendor.id
+    touched.add(vendor.id)
+    if old_vendor_id:
+        touched.add(old_vendor_id)
+    return pay, touched
+
+
+def clear_expense_vendor_payable(expense):
+    """Delete linked vendor unpaid purchase and settle payment; returns vendor ids."""
+    touched = set()
+    if getattr(expense, 'settle_vendor_id', None):
+        touched.add(expense.settle_vendor_id)
+    touched |= _drop_expense_settle_purchase(expense)
+    touched |= clear_expense_vendor_payment(expense)
     expense.settle_vendor_id = None
     return touched
 
@@ -511,7 +606,7 @@ def recalculate_vendor_balance(vendor):
     opening = float(vendor.previous_payable or 0)
     total_paid = sum(
         float(p.amount_paid or 0) for p in vendor.payments
-        if payment_counts_toward_cash(p)
+        if payment_reduces_payable(p)
     )
     vendor.current_balance_payable = opening + total_purchases - total_paid
     return vendor.current_balance_payable
@@ -519,6 +614,8 @@ def recalculate_vendor_balance(vendor):
 
 def edit_vendor_payment(payment, form):
     """Update a vendor payment and rebuild payable."""
+    if is_expense_settle_payment(payment):
+        raise ValueError('This settle payment belongs to an expense. Edit the expense to change it.')
     try:
         amt = float(form.get('amount_paid') or form.get('amount'))
         if amt <= 0:
@@ -551,6 +648,8 @@ def edit_vendor_payment(payment, form):
 
 def delete_vendor_payment(payment):
     """Delete a vendor payment and rebuild payable."""
+    if is_expense_settle_payment(payment):
+        raise ValueError('This settle payment belongs to an expense. Unsettle the expense to remove it.')
     vendor = Vendor.query.get(payment.vendor_id)
     db.session.delete(payment)
     db.session.flush()

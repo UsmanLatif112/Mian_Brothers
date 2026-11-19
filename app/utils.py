@@ -596,10 +596,12 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
     def _settle_method(row):
         method = (getattr(row, 'settle_method', None) or 'cash').strip().lower()
         # Linked FKs win over a stale settle_method flag.
+        if method == 'vendor_pay' or getattr(row, 'settle_vendor_payment_id', None):
+            return 'vendor_pay'
         if (
             method == 'vendor'
-            or getattr(row, 'settle_vendor_id', None)
             or getattr(row, 'settle_purchase_log_id', None)
+            or getattr(row, 'settle_vendor_id', None)
         ):
             return 'vendor'
         if (
@@ -619,7 +621,8 @@ def compute_period_stats(start, end, models, include_opening_credit=False):
         float(x.amount or 0) for x in expense_settlements if _settle_method(x) == 'credit'
     )
     expense_vendor_settle_total = sum(
-        float(x.amount or 0) for x in expense_settlements if _settle_method(x) == 'vendor'
+        float(x.amount or 0) for x in expense_settlements
+        if _settle_method(x) in ('vendor', 'vendor_pay')
     )
     # P&L / “net expense cost” after all recoveries.
     expense_net = (
@@ -1628,7 +1631,12 @@ def build_period_cash_entries(stats):
         amt = float(exp.amount or 0)
         note = (getattr(exp, 'settle_note', None) or '').strip()
         method = (getattr(exp, 'settle_method', None) or 'cash').strip().lower()
-        if method in ('credit', 'vendor') or getattr(exp, 'settle_customer_id', None) or getattr(exp, 'settle_vendor_id', None):
+        if (
+            method in ('credit', 'vendor', 'vendor_pay')
+            or getattr(exp, 'settle_customer_id', None)
+            or getattr(exp, 'settle_vendor_id', None)
+            or getattr(exp, 'settle_vendor_payment_id', None)
+        ):
             # No till movement — lives on customer receivable / vendor payable.
             continue
         item_name = f'Settle return · {exp.name}'

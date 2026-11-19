@@ -133,7 +133,8 @@
             <tbody>
                 {% if ledger_entries %}
                     {% for entry in ledger_entries %}
-                    {% set is_paid = entry.payment_status == 'paid' or entry.type == 'payment' %}
+                    {% set is_settle_pay = entry.pay_type == 'settle' and entry.type == 'payment' %}
+                    {% set is_paid = (entry.payment_status == 'paid' or entry.type == 'payment') and not is_settle_pay %}
                     {% set is_unpaid = entry.payment_status == 'unpaid' %}
                     {% set amt = entry.debit if entry.debit > 0 else entry.credit %}
                     <tr>
@@ -156,13 +157,15 @@
                             <span class="badge badge-custom badge-success-custom text-uppercase">Paid</span>
                             {% elif is_unpaid %}
                             <span class="badge badge-custom badge-danger-custom text-uppercase">Unpaid</span>
+                            {% elif is_settle_pay %}
+                            <span class="badge badge-custom badge-staff text-uppercase">Settle</span>
                             {% elif entry.payment_status == 'opening' or entry.pay_type == 'opening' %}
                             <span class="badge badge-custom badge-staff text-uppercase">Opening</span>
                             {% else %}
                             <span class="text-muted-custom">—</span>
                             {% endif %}
                         </td>
-                        <td class="text-end fw-semibold {% if is_paid %}text-success{% elif is_unpaid %}text-danger{% endif %}">
+                        <td class="text-end fw-semibold {% if is_paid or is_settle_pay %}text-success{% elif is_unpaid %}text-danger{% endif %}">
                             {% if amt > 0 %}{{ amt | money }}{% else %}—{% endif %}
                         </td>
                         <td class="text-end fw-bold">{{ entry.running_balance | money }}</td>
@@ -250,7 +253,8 @@
         </thead>
         <tbody>
             {% for entry in ledger_entries|reverse %}
-            {% set is_paid = entry.payment_status == 'paid' or entry.type == 'payment' %}
+            {% set is_settle_pay = entry.pay_type == 'settle' and entry.type == 'payment' %}
+            {% set is_paid = (entry.payment_status == 'paid' or entry.type == 'payment') and not is_settle_pay %}
             {% set is_unpaid = entry.payment_status == 'unpaid' %}
             {% set amt = entry.debit if entry.debit > 0 else entry.credit %}
             <tr>
@@ -258,7 +262,7 @@
                 <td class="col-ref">{{ entry.ref_id }}</td>
                 <td class="col-desc">{{ entry.desc }}</td>
                 <td class="col-status">
-                    {% if is_paid %}Paid{% elif is_unpaid %}Unpaid{% elif entry.payment_status == 'opening' or entry.pay_type == 'opening' %}Opening{% else %}{% endif %}
+                    {% if is_settle_pay %}Settle{% elif is_paid %}Paid{% elif is_unpaid %}Unpaid{% elif entry.payment_status == 'opening' or entry.pay_type == 'opening' %}Opening{% else %}{% endif %}
                 </td>
                 <td class="col-amt">{% if amt > 0 %}{{ '%.2f'|format(amt) }}{% endif %}</td>
                 <td class="col-bal">{{ '%.2f'|format(entry.running_balance or 0) }}</td>

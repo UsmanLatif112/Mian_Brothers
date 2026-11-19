@@ -10,7 +10,8 @@ from app.utils import (
 from app.services.entries import EntryError, edit_expense, delete_expense
 from app.customers.service import recalculate_customer_balance
 from app.vendors.service import (
-    upsert_expense_vendor_payable, clear_expense_vendor_payable, recalculate_vendor_balance,
+    upsert_expense_vendor_payable, upsert_expense_vendor_payment,
+    clear_expense_vendor_payable, recalculate_vendor_balance,
 )
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -74,7 +75,7 @@ def index():
 
             settle_note = (request.form.get('settle_note') or '').strip() or None
             settle_method = (request.form.get('settle_method') or 'cash').strip().lower()
-            if settle_method not in ('cash', 'credit', 'vendor'):
+            if settle_method not in ('cash', 'credit', 'vendor', 'vendor_pay'):
                 settle_method = 'cash'
             settled_date = parse_form_date(request.form.get('settled_date'), today)
 
@@ -109,14 +110,19 @@ def index():
                 ))
                 db.session.add(credit_sale)
                 db.session.flush()
-            elif settle_method == 'vendor':
+            elif settle_method in ('vendor', 'vendor_pay'):
                 try:
                     vendor_id = int(request.form.get('settle_vendor_id') or 0)
                 except (TypeError, ValueError):
                     vendor_id = 0
                 vendor = Vendor.query.get(vendor_id) if vendor_id else None
                 if not vendor:
-                    flash('Select a vendor to settle this expense as unpaid.', 'danger')
+                    flash(
+                        'Select a vendor to settle this expense.'
+                        if settle_method == 'vendor_pay'
+                        else 'Select a vendor to settle this expense as unpaid.',
+                        'danger',
+                    )
                     return redirect(url_for('expenses.index', **_filter_args()))
                 require_agency_access(vendor)
 
@@ -129,18 +135,38 @@ def index():
             expense.settle_credit_sale_id = credit_sale.id if credit_sale else None
             expense.settle_vendor_id = None
             expense.settle_purchase_log_id = None
+            expense.settle_vendor_payment_id = None
             if customer:
                 recalculate_customer_balance(customer)
-            if vendor:
-                upsert_expense_vendor_payable(
+            if vendor and settle_method == 'vendor_pay':
+                _, touched = upsert_expense_vendor_payment(
                     expense, vendor, settled_date, settle_note, current_user.id
                 )
+                for vid in touched:
+                    v = Vendor.query.get(vid)
+                    if v:
+                        recalculate_vendor_balance(v)
+            elif vendor:
+                _, touched = upsert_expense_vendor_payable(
+                    expense, vendor, settled_date, settle_note, current_user.id
+                )
+                for vid in touched:
+                    v = Vendor.query.get(vid)
+                    if v:
+                        recalculate_vendor_balance(v)
             db.session.commit()
             if settle_method == 'credit':
                 flash(
                     f'Settled "{expense.name}" → credit on {customer.name}: '
                     f'PKR {float(expense.amount):,.2f} (no cash change). '
                     f'Balance due PKR {float(customer.current_balance_due):,.2f}.',
+                    'success',
+                )
+            elif settle_method == 'vendor_pay':
+                flash(
+                    f'Settled "{expense.name}" as a settle payment on {vendor.name}: '
+                    f'PKR {float(expense.amount):,.2f}. '
+                    f'Payable PKR {float(vendor.current_balance_payable):,.2f}.',
                     'success',
                 )
             elif settle_method == 'vendor':
@@ -198,7 +224,7 @@ def index():
             if customer:
                 extra.append('customer credit removed')
             if vendor_ids:
-                extra.append('vendor unpaid removed')
+                extra.append('vendor settle removed')
             flash(
                 f'Unsettled "{expense.name}" — open again'
                 f'{" (" + ", ".join(extra) + ")" if extra else ""}.',

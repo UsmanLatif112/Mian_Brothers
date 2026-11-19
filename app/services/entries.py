@@ -457,7 +457,8 @@ def edit_expense(expense, form, current_user_id=None):
     require_agency_access(expense)
     from app.models import Vendor
     from app.vendors.service import (
-        upsert_expense_vendor_payable, clear_expense_vendor_payable, recalculate_vendor_balance,
+        upsert_expense_vendor_payable, upsert_expense_vendor_payment,
+        clear_expense_vendor_payable, recalculate_vendor_balance,
     )
 
     name = (form.get('name') or '').strip()
@@ -497,7 +498,7 @@ def edit_expense(expense, form, current_user_id=None):
             settle_note = expense.settle_note
 
         method = (form.get('settle_method') or expense.settle_method or 'cash').strip().lower()
-        if method not in ('cash', 'credit', 'vendor'):
+        if method not in ('cash', 'credit', 'vendor', 'vendor_pay'):
             method = 'cash'
         old_method = (expense.settle_method or 'cash').strip().lower()
         expense.settle_method = method
@@ -506,7 +507,11 @@ def edit_expense(expense, form, current_user_id=None):
             expense.settled_by = current_user_id
 
         if method == 'credit':
-            if old_method == 'vendor' or expense.settle_purchase_log_id:
+            if (
+                old_method in ('vendor', 'vendor_pay')
+                or expense.settle_purchase_log_id
+                or getattr(expense, 'settle_vendor_payment_id', None)
+            ):
                 vendors_to_recalc |= clear_expense_vendor_payable(expense)
             try:
                 customer_id = int(form.get('settle_customer_id') or expense.settle_customer_id or 0)
@@ -520,7 +525,7 @@ def edit_expense(expense, form, current_user_id=None):
                 expense, customer, settled_date, settle_note, current_user_id
             )
             customers_to_recalc |= touched
-        elif method == 'vendor':
+        elif method in ('vendor', 'vendor_pay'):
             if old_method == 'credit' or expense.settle_credit_sale_id:
                 customers_to_recalc |= _clear_expense_credit_sale(expense)
             try:
@@ -529,9 +534,18 @@ def edit_expense(expense, form, current_user_id=None):
                 vendor_id = int(expense.settle_vendor_id or 0)
             vendor = Vendor.query.get(vendor_id) if vendor_id else None
             if not vendor:
-                raise EntryError('Select a vendor for vendor settle.')
+                raise EntryError(
+                    'Select a vendor for the settle payment.'
+                    if method == 'vendor_pay'
+                    else 'Select a vendor for vendor settle.'
+                )
             require_agency_access(vendor)
-            _, touched = upsert_expense_vendor_payable(
+            upsert = (
+                upsert_expense_vendor_payment
+                if method == 'vendor_pay'
+                else upsert_expense_vendor_payable
+            )
+            _, touched = upsert(
                 expense, vendor, settled_date, settle_note, current_user_id
             )
             vendors_to_recalc |= touched
@@ -542,11 +556,16 @@ def edit_expense(expense, form, current_user_id=None):
             else:
                 expense.settle_customer_id = None
                 expense.settle_credit_sale_id = None
-            if old_method == 'vendor' or expense.settle_purchase_log_id:
+            if (
+                old_method in ('vendor', 'vendor_pay')
+                or expense.settle_purchase_log_id
+                or getattr(expense, 'settle_vendor_payment_id', None)
+            ):
                 vendors_to_recalc |= clear_expense_vendor_payable(expense)
             else:
                 expense.settle_vendor_id = None
                 expense.settle_purchase_log_id = None
+                expense.settle_vendor_payment_id = None
 
     db.session.flush()
     for cid in customers_to_recalc:
