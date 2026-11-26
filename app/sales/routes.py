@@ -993,7 +993,7 @@ def index():
     sale_overs = infer_sale_overpayments(stats['entries'], stats.get('payments'))
     price_bands = build_sales_price_bands(stats)
     price_band_days, price_pagination = paginate(
-        price_bands.days, request.args.get('price_page', 1), PER_PAGE,
+        price_bands.days, request.args.get('price_page', 1), 5,
     )
     from app.charts_data import sales_listing_series
 
