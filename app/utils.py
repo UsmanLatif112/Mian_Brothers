@@ -1023,6 +1023,8 @@ def build_sales_price_bands(stats):
                 fuel_name=b.fuel_name,
                 bands=[],
                 total_liters=0.0,
+                total_cash_liters=0.0,
+                total_credit_liters=0.0,
                 total_sale=0.0,
                 total_cash=0.0,
                 total_credit=0.0,
@@ -1031,6 +1033,8 @@ def build_sales_price_bands(stats):
         fg = fuels[b.fuel_type_id]
         fg.bands.append(b)
         fg.total_liters += b.liters
+        fg.total_cash_liters += b.cash_liters
+        fg.total_credit_liters += b.credit_liters
         fg.total_sale += b.sale
         fg.total_cash += b.cash
         fg.total_credit += b.credit
@@ -1039,6 +1043,8 @@ def build_sales_price_bands(stats):
     days = []
     grand = SimpleNamespace(
         total_liters=0.0,
+        total_cash_liters=0.0,
+        total_credit_liters=0.0,
         total_sale=0.0,
         total_cash=0.0,
         total_credit=0.0,
@@ -1050,6 +1056,8 @@ def build_sales_price_bands(stats):
             # Rate rows in chronological order (first meter segment first)
             fg.bands.sort(key=lambda x: (x._sort_id, x.rate))
             grand.total_liters += fg.total_liters
+            grand.total_cash_liters += fg.total_cash_liters
+            grand.total_credit_liters += fg.total_credit_liters
             grand.total_sale += fg.total_sale
             grand.total_cash += fg.total_cash
             grand.total_credit += fg.total_credit

@@ -124,6 +124,8 @@
                         <th>Date</th>
                         <th>Fuel</th>
                         <th class="text-end">Liters</th>
+                        <th class="text-end">Cash liters</th>
+                        <th class="text-end">Credit liters</th>
                         <th class="text-end">Rate</th>
                         <th class="text-end">Total sale</th>
                         <th class="text-end">Cash</th>
@@ -131,7 +133,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for day in price_bands.days %}
+                    {% for day in price_band_days %}
                         {% for fuel in day.fuels %}
                             {% set fuel_first = loop.first %}
                             {% for b in fuel.bands %}
@@ -139,6 +141,8 @@
                                 <td class="text-nowrap">{% if fuel_first and loop.first %}{{ day.date }}{% endif %}</td>
                                 <td class="fw-semibold">{% if loop.first %}{{ fuel.fuel_name }}{% endif %}</td>
                                 <td class="text-end text-nowrap">{{ b.liters | num(2) }} L</td>
+                                <td class="text-end text-nowrap text-success">{{ b.cash_liters | num(2) }} L</td>
+                                <td class="text-end text-nowrap text-warning">{{ b.credit_liters | num(2) }} L</td>
                                 <td class="text-end text-nowrap">{{ b.rate | money }}</td>
                                 <td class="text-end text-nowrap">{{ b.sale | money }}</td>
                                 <td class="text-end text-nowrap text-success">{{ b.cash | money }}</td>
@@ -149,6 +153,8 @@
                                 <td></td>
                                 <td class="fw-semibold">{{ fuel.fuel_name }} day total</td>
                                 <td class="text-end fw-semibold text-nowrap">{{ fuel.total_liters | num(2) }} L</td>
+                                <td class="text-end fw-semibold text-nowrap text-success">{{ fuel.total_cash_liters | num(2) }} L</td>
+                                <td class="text-end fw-semibold text-nowrap text-warning">{{ fuel.total_credit_liters | num(2) }} L</td>
                                 <td></td>
                                 <td class="text-end fw-semibold text-nowrap">{{ fuel.total_sale | money }}</td>
                                 <td class="text-end fw-semibold text-nowrap text-success">{{ fuel.total_cash | money }}</td>
@@ -162,6 +168,8 @@
                     <tr class="fw-semibold">
                         <td colspan="2">Period total</td>
                         <td class="text-end text-nowrap">{{ price_bands.grand.total_liters | num(2) }} L</td>
+                        <td class="text-end text-nowrap text-success">{{ price_bands.grand.total_cash_liters | num(2) }} L</td>
+                        <td class="text-end text-nowrap text-warning">{{ price_bands.grand.total_credit_liters | num(2) }} L</td>
                         <td></td>
                         <td class="text-end text-nowrap">{{ price_bands.grand.total_sale | money }}</td>
                         <td class="text-end text-nowrap text-success">{{ price_bands.grand.total_cash | money }}</td>
@@ -171,6 +179,9 @@
                 {% endif %}
             </table>
         </div>
+        {% with pagination=price_pagination, page_param='price_page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'entry_type': entry_type, 'search': search, 'page': entries_pagination.page if entries_pagination.page > 1 else none} %}
+            {% include "partials/pagination.html" %}
+        {% endwith %}
     </div>
 </section>
 {% endif %}
@@ -286,7 +297,7 @@
                     </tbody>
                 </table>
             </div>
-            {% with pagination=entries_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'entry_type': entry_type, 'search': search} %}
+            {% with pagination=entries_pagination, page_param='page', keep_args={'period': period, 'start_date': start_date, 'end_date': end_date, 'entry_type': entry_type, 'search': search, 'price_page': price_pagination.page if price_pagination.page > 1 else none} %}
                 {% include "partials/pagination.html" %}
             {% endwith %}
         </div>
