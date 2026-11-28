@@ -7,6 +7,99 @@
 {% endblock %}
 
 {% block content %}
+{% macro mix_bar(cash, credit) -%}
+{% set total = (cash or 0) + (credit or 0) %}
+<div class="mix" aria-hidden="true">
+    {% if total > 0 %}
+    <span class="mix-cash" style="width: {{ (cash / total * 100) | round(1) }}%"></span>
+    <span class="mix-credit" style="width: {{ (credit / total * 100) | round(1) }}%"></span>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+<style>
+.report-page { --cash: #059669; --credit: #d97706; --petrol: #db2777; --diesel: #0284c7; }
+.report-kicker { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 0.15rem 0 0.75rem; }
+.report-kicker h2 { margin: 0; font-size: 0.95rem; font-weight: 650; letter-spacing: -0.02em; }
+.report-kicker p { margin: 0; color: var(--text-secondary); font-size: 0.78rem; }
+.fuel-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.9rem; margin-bottom: 1.25rem; }
+.fuel-tile {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    border: var(--card-border);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.05rem 0.95rem;
+}
+.fuel-tile::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--accent-blue);
+}
+.fuel-tile.petrol::before { background: var(--petrol); }
+.fuel-tile.diesel::before { background: var(--diesel); }
+.fuel-tile.best::before { background: var(--accent-emerald, #059669); }
+.fuel-tile-top { display: flex; align-items: center; gap: 0.45rem; color: var(--text-secondary); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
+.fuel-tile-value { margin-top: 0.35rem; font-family: var(--font-data); font-size: clamp(1.05rem, 1rem + 0.4vw, 1.35rem); font-weight: 650; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.fuel-tile-liters { margin-top: 0.15rem; color: var(--text-secondary); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.fuel-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-top: 0.75rem; }
+.fuel-pill { border-radius: 12px; padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.fuel-pill span { font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); }
+.fuel-pill strong { font-family: var(--font-data); font-size: 0.82rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fuel-pill em { font-style: normal; font-size: 0.72rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.fuel-pill.cash { background: color-mix(in srgb, var(--cash) 12%, transparent); }
+.fuel-pill.cash strong { color: var(--cash); }
+.fuel-pill.credit { background: color-mix(in srgb, var(--credit) 14%, transparent); }
+.fuel-pill.credit strong { color: var(--credit); }
+.mix { display: flex; height: 6px; border-radius: 99px; overflow: hidden; background: color-mix(in srgb, var(--border-color) 80%, transparent); margin-top: 0.55rem; }
+.mix-cash { background: var(--cash); height: 100%; }
+.mix-credit { background: var(--credit); height: 100%; }
+.report-sheet thead th { font-size: 0.68rem; }
+.report-sheet thead tr.group-row th { border-bottom: none; padding-bottom: 0.35rem; }
+.report-sheet .col-cash { background: color-mix(in srgb, var(--cash) 11%, var(--card-bg)); color: color-mix(in srgb, var(--cash) 80%, var(--text-primary)); }
+.report-sheet .col-credit { background: color-mix(in srgb, var(--credit) 13%, var(--card-bg)); color: color-mix(in srgb, var(--credit) 82%, var(--text-primary)); }
+.report-sheet tbody td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.report-sheet tbody tr.report-total td { font-weight: 650; background: color-mix(in srgb, var(--accent-blue) 9%, var(--card-bg)); }
+.report-sheet tbody tr.report-total td.col-cash { background: color-mix(in srgb, var(--cash) 16%, var(--card-bg)); }
+.report-sheet tbody tr.report-total td.col-credit { background: color-mix(in srgb, var(--credit) 16%, var(--card-bg)); }
+.report-sheet td:first-child, .report-sheet th:first-child { position: sticky; left: 0; z-index: 2; }
+.report-sheet thead th:first-child { background: var(--table-head-bg); z-index: 3; }
+.report-sheet tbody td:first-child { background: var(--card-bg); }
+.report-sheet tbody tr.report-total td:first-child { background: color-mix(in srgb, var(--accent-blue) 9%, var(--card-bg)); }
+.report-sheet tbody tr:hover td:first-child { background: var(--table-row-hover); }
+.prod-name { display: flex; align-items: center; gap: 0.5rem; font-weight: 650; letter-spacing: -0.01em; white-space: normal; }
+.prod-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-blue); flex: 0 0 auto; }
+.prod-dot.petrol { background: var(--petrol); }
+.prod-dot.diesel { background: var(--diesel); }
+.prod-dot.all { background: linear-gradient(135deg, var(--petrol), var(--diesel)); }
+.prod-cell .mix { max-width: 9.5rem; }
+.rank-list { list-style: none; margin: 0; padding: 0.35rem 0.9rem 0.85rem; }
+.rank-list li { display: grid; grid-template-columns: 1.7rem 1fr; gap: 0.65rem; align-items: start; padding: 0.7rem 0; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent); }
+.rank-list li:last-child { border-bottom: none; }
+.rank-no { width: 1.7rem; height: 1.7rem; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; background: var(--surface-tint); color: var(--text-secondary); }
+.rank-list li:nth-child(1) .rank-no { background: color-mix(in srgb, var(--accent-amber) 22%, var(--card-bg)); color: var(--credit); }
+.rank-top { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }
+.rank-top span { font-weight: 650; letter-spacing: -0.01em; }
+.rank-top strong { font-family: var(--font-data); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rank-track { height: 5px; border-radius: 99px; background: color-mix(in srgb, var(--border-color) 75%, transparent); margin-top: 0.4rem; overflow: hidden; }
+.rank-track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent-blue), var(--sky, #38bdf8)); }
+.rank-track.profit i { background: linear-gradient(90deg, #059669, #34d399); }
+.rank-track.pay i { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+.rank-sub { margin: 0.28rem 0 0; color: var(--text-secondary); font-size: 0.75rem; }
+.rank-empty { padding: 1rem 1.1rem 1.15rem; color: var(--text-secondary); }
+@media (max-width: 1100px) {
+    .fuel-board { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+    .fuel-board { grid-template-columns: 1fr; }
+    .report-kicker { flex-direction: column; gap: 0.15rem; }
+}
+</style>
+
+<div class="report-page">
 <header class="page-header mb-4">
     <div class="page-header-row">
         <div class="page-header-text">
@@ -17,6 +110,10 @@
     </div>
 </header>
 
+<div class="report-kicker">
+    <h2>Period totals</h2>
+    <p>Follows the date filter</p>
+</div>
 <section class="kpi-grid kpi-grid-main mb-4" aria-label="Report totals">
     <div class="kpi-card kpi-purchase">
         <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-cart-plus"></i></span><span class="kpi-label">Purchases</span></div>
@@ -85,6 +182,10 @@
     </div>
 </section>
 
+<div class="report-kicker">
+    <h2>Stock and vendors</h2>
+    <p>Stock value is as of today</p>
+</div>
 <section class="kpi-grid kpi-grid-main mb-4" aria-label="Stock and vendors">
     <div class="kpi-card kpi-total">
         <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-box-seam"></i></span><span class="kpi-label">Current stock value</span></div>
@@ -113,27 +214,52 @@
     </div>
 </section>
 
-<section class="kpi-grid kpi-grid-main mb-4" aria-label="Liters">
-    <div class="kpi-card kpi-total">
-        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-collection"></i></span><span class="kpi-label">All sales</span></div>
-        <div class="kpi-value">{{ all_sale.amount | money }}</div>
-        <div class="kpi-meta">{{ all_sale.liters | num(2) }} L{% if piece_qty %} · {{ piece_qty | num(0) }} pcs{% endif %} · Cash {{ all_sale.cash_amount | money }} · Credit {{ all_sale.credit_amount | money }}</div>
-    </div>
-    <div class="kpi-card kpi-petrol">
-        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-fuel-pump-fill"></i></span><span class="kpi-label">Petrol</span></div>
-        <div class="kpi-value">{{ stats.petrol_sale | money }}</div>
-        <div class="kpi-meta">{{ petrol_liters | num(2) }} L · Cash {{ petrol_cash_liters | num(2) }} L {{ stats.petrol_cash | money }} · Credit {{ petrol_credit_liters | num(2) }} L {{ stats.petrol_credit | money }}</div>
-    </div>
-    <div class="kpi-card kpi-diesel">
-        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-fuel-pump"></i></span><span class="kpi-label">Diesel</span></div>
-        <div class="kpi-value">{{ stats.diesel_sale | money }}</div>
-        <div class="kpi-meta">{{ diesel_liters | num(2) }} L · Cash {{ diesel_cash_liters | num(2) }} L {{ stats.diesel_cash | money }} · Credit {{ diesel_credit_liters | num(2) }} L {{ stats.diesel_credit | money }}</div>
-    </div>
-    <div class="kpi-card kpi-profit">
-        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-star"></i></span><span class="kpi-label">Best item</span></div>
-        <div class="kpi-value">{% if best_item %}{{ best_item.profit | money }}{% else %}—{% endif %}</div>
-        <div class="kpi-meta">{% if best_item %}{{ best_item.name }} · sale {{ best_item.sale | money }}{% else %}No sales in this period{% endif %}</div>
-    </div>
+<div class="report-kicker">
+    <h2>Sales by fuel</h2>
+    <p>Liters and amount, cash against credit</p>
+</div>
+<section class="fuel-board" aria-label="Sales by fuel">
+    <article class="fuel-tile">
+        <div class="fuel-tile-top"><span class="prod-dot all"></span><span>All sales</span></div>
+        <div class="fuel-tile-value">{{ all_sale.amount | money }}</div>
+        <div class="fuel-tile-liters">{{ all_sale.liters | num(2) }} L{% if piece_qty %} · {{ piece_qty | num(0) }} pcs{% endif %}</div>
+        {{ mix_bar(all_sale.cash_amount, all_sale.credit_amount) }}
+        <div class="fuel-split">
+            <div class="fuel-pill cash"><span>Cash</span><strong>{{ all_sale.cash_amount | money }}</strong><em>{{ all_sale.cash_liters | num(2) }} L</em></div>
+            <div class="fuel-pill credit"><span>Credit</span><strong>{{ all_sale.credit_amount | money }}</strong><em>{{ all_sale.credit_liters | num(2) }} L</em></div>
+        </div>
+    </article>
+    <article class="fuel-tile petrol">
+        <div class="fuel-tile-top"><span class="prod-dot petrol"></span><span>Petrol</span></div>
+        <div class="fuel-tile-value">{{ stats.petrol_sale | money }}</div>
+        <div class="fuel-tile-liters">{{ petrol_liters | num(2) }} L</div>
+        {{ mix_bar(stats.petrol_cash, stats.petrol_credit) }}
+        <div class="fuel-split">
+            <div class="fuel-pill cash"><span>Cash</span><strong>{{ stats.petrol_cash | money }}</strong><em>{{ petrol_cash_liters | num(2) }} L</em></div>
+            <div class="fuel-pill credit"><span>Credit</span><strong>{{ stats.petrol_credit | money }}</strong><em>{{ petrol_credit_liters | num(2) }} L</em></div>
+        </div>
+    </article>
+    <article class="fuel-tile diesel">
+        <div class="fuel-tile-top"><span class="prod-dot diesel"></span><span>Diesel</span></div>
+        <div class="fuel-tile-value">{{ stats.diesel_sale | money }}</div>
+        <div class="fuel-tile-liters">{{ diesel_liters | num(2) }} L</div>
+        {{ mix_bar(stats.diesel_cash, stats.diesel_credit) }}
+        <div class="fuel-split">
+            <div class="fuel-pill cash"><span>Cash</span><strong>{{ stats.diesel_cash | money }}</strong><em>{{ diesel_cash_liters | num(2) }} L</em></div>
+            <div class="fuel-pill credit"><span>Credit</span><strong>{{ stats.diesel_credit | money }}</strong><em>{{ diesel_credit_liters | num(2) }} L</em></div>
+        </div>
+    </article>
+    <article class="fuel-tile best">
+        <div class="fuel-tile-top"><span class="prod-dot"></span><span>Best item</span></div>
+        <div class="fuel-tile-value">{% if best_item %}{{ best_item.profit | money }}{% else %}—{% endif %}</div>
+        <div class="fuel-tile-liters">{% if best_item %}{{ best_item.name }} · {{ best_item.liters | num(2) }}{% else %}No sales in this period{% endif %}</div>
+        {% if best_item %}
+        <div class="fuel-split">
+            <div class="fuel-pill cash"><span>Sale</span><strong>{{ best_item.sale | money }}</strong><em>Profit above</em></div>
+            <div class="fuel-pill"><span>Cost</span><strong>{{ best_item.cost | money }}</strong><em>Cost of goods</em></div>
+        </div>
+        {% endif %}
+    </article>
 </section>
 
 <div class="row g-4 mb-4">
@@ -141,40 +267,51 @@
         <div class="card card-premium list-panel">
             <div class="card-header-premium">
                 <h2 class="panel-title mb-0">Sales by product</h2>
-                <p class="panel-subtitle mb-0">Liters and amount. All includes petrol, diesel, and every other item.</p>
+                <p class="panel-subtitle mb-0">Green is cash. Amber is credit. The bar is the split.</p>
             </div>
             <div class="table-responsive">
-                <table class="table table-custom mb-0">
+                <table class="table table-custom report-sheet mb-0">
                     <thead>
+                        <tr class="group-row">
+                            <th rowspan="2">Product</th>
+                            <th rowspan="2" class="text-end">Qty</th>
+                            <th rowspan="2" class="text-end">Sale</th>
+                            <th colspan="2" class="col-cash text-center">Cash</th>
+                            <th colspan="2" class="col-credit text-center">Credit</th>
+                        </tr>
                         <tr>
-                            <th>Product</th>
-                            <th class="text-end">Liters / qty</th>
-                            <th class="text-end">Sale</th>
-                            <th class="text-end">Cash qty</th>
-                            <th class="text-end">Cash sale</th>
-                            <th class="text-end">Credit qty</th>
-                            <th class="text-end">Credit sale</th>
+                            <th class="text-end col-cash">Qty</th>
+                            <th class="text-end col-cash">Amount</th>
+                            <th class="text-end col-credit">Qty</th>
+                            <th class="text-end col-credit">Amount</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td><strong>All</strong></td>
-                            <td class="text-end">{{ all_sale.liters | num(2) }} L{% if piece_qty %} · {{ piece_qty | num(0) }} pcs{% endif %}</td>
+                        <tr class="report-total">
+                            <td class="prod-cell">
+                                <div class="prod-name"><span class="prod-dot all"></span>All</div>
+                                {{ mix_bar(all_sale.cash_amount, all_sale.credit_amount) }}
+                            </td>
+                            <td class="text-end">{{ all_sale.liters | num(2) }} L{% if piece_qty %}<div class="rank-sub">{{ piece_qty | num(0) }} pcs</div>{% endif %}</td>
                             <td class="text-end">{{ all_sale.amount | money }}</td>
-                            <td class="text-end">{{ all_sale.cash_liters | num(2) }} L</td>
-                            <td class="text-end">{{ all_sale.cash_amount | money }}</td>
-                            <td class="text-end">{{ all_sale.credit_liters | num(2) }} L</td>
-                            <td class="text-end text-warning">{{ all_sale.credit_amount | money }}</td>
+                            <td class="text-end col-cash">{{ all_sale.cash_liters | num(2) }} L</td>
+                            <td class="text-end col-cash">{{ all_sale.cash_amount | money }}</td>
+                            <td class="text-end col-credit">{{ all_sale.credit_liters | num(2) }} L</td>
+                            <td class="text-end col-credit">{{ all_sale.credit_amount | money }}</td>
                         </tr>
                         {% for row in sale_products %}
+                        {% set dot = 'petrol' if row.name == 'Petrol' else ('diesel' if row.name == 'Diesel' else 'other') %}
                         <tr>
-                            <td>{{ row.name }}</td>
+                            <td class="prod-cell">
+                                <div class="prod-name"><span class="prod-dot {{ dot }}"></span>{{ row.name }}</div>
+                                {{ mix_bar(row.cash_amount, row.credit_amount) }}
+                            </td>
                             <td class="text-end">{{ row.liters | num(2) }} {{ row.unit }}</td>
                             <td class="text-end">{{ row.amount | money }}</td>
-                            <td class="text-end">{{ row.cash_liters | num(2) }} {{ row.unit }}</td>
-                            <td class="text-end">{{ row.cash_amount | money }}</td>
-                            <td class="text-end">{{ row.credit_liters | num(2) }} {{ row.unit }}</td>
-                            <td class="text-end text-warning">{{ row.credit_amount | money }}</td>
+                            <td class="text-end col-cash">{{ row.cash_liters | num(2) }} {{ row.unit }}</td>
+                            <td class="text-end col-cash">{{ row.cash_amount | money }}</td>
+                            <td class="text-end col-credit">{{ row.credit_liters | num(2) }} {{ row.unit }}</td>
+                            <td class="text-end col-credit">{{ row.credit_amount | money }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -186,34 +323,41 @@
         <div class="card card-premium list-panel">
             <div class="card-header-premium">
                 <h2 class="panel-title mb-0">Purchases by product</h2>
-                <p class="panel-subtitle mb-0">Stock bought in this period, split into paid and on credit.</p>
+                <p class="panel-subtitle mb-0">Paid against still on credit for stock bought in this period.</p>
             </div>
             <div class="table-responsive">
-                <table class="table table-custom mb-0">
+                <table class="table table-custom report-sheet mb-0">
                     <thead>
                         <tr>
                             <th>Product</th>
                             <th class="text-end">Qty</th>
                             <th class="text-end">Purchased</th>
-                            <th class="text-end">Paid</th>
-                            <th class="text-end">On credit</th>
+                            <th class="text-end col-cash">Paid</th>
+                            <th class="text-end col-credit">On credit</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td><strong>All</strong></td>
+                        <tr class="report-total">
+                            <td class="prod-cell">
+                                <div class="prod-name"><span class="prod-dot all"></span>All</div>
+                                {{ mix_bar(purchases_paid, purchases_credit) }}
+                            </td>
                             <td class="text-end">—</td>
                             <td class="text-end">{{ purchases | money }}</td>
-                            <td class="text-end text-success">{{ purchases_paid | money }}</td>
-                            <td class="text-end text-warning">{{ purchases_credit | money }}</td>
+                            <td class="text-end col-cash">{{ purchases_paid | money }}</td>
+                            <td class="text-end col-credit">{{ purchases_credit | money }}</td>
                         </tr>
                         {% for row in purchase_rows %}
+                        {% set dot = 'petrol' if row.name == 'Petrol' else ('diesel' if row.name == 'Diesel' else 'other') %}
                         <tr>
-                            <td>{{ row.name }}</td>
+                            <td class="prod-cell">
+                                <div class="prod-name"><span class="prod-dot {{ dot }}"></span>{{ row.name }}</div>
+                                {{ mix_bar(row.paid, row.credit) }}
+                            </td>
                             <td class="text-end">{{ row.liters | num(2) }} {{ row.unit }}</td>
                             <td class="text-end">{{ row.amount | money }}</td>
-                            <td class="text-end text-success">{{ row.paid | money }}</td>
-                            <td class="text-end text-warning">{{ row.credit | money }}</td>
+                            <td class="text-end col-cash">{{ row.paid | money }}</td>
+                            <td class="text-end col-credit">{{ row.credit | money }}</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="5" class="text-muted-custom">No stock purchased in this period.</td></tr>
@@ -274,6 +418,9 @@
     </article>
 </section>
 
+{% set profit_max = profitable[0].profit if profitable and profitable[0].profit > 0 else 0 %}
+{% set buyer_max = top_buyers[0].amount if top_buyers else 0 %}
+{% set pay_max = frequent_payers[0].count if frequent_payers else 0 %}
 <div class="row g-4">
     <div class="col-lg-4">
         <div class="card card-premium list-panel h-100">
@@ -281,22 +428,25 @@
                 <h2 class="panel-title mb-0">Most profitable</h2>
                 <p class="panel-subtitle mb-0">Sale minus cost</p>
             </div>
-            <div class="table-responsive">
-                <table class="table table-custom mb-0">
-                    <thead><tr><th>Item</th><th class="text-end">Profit</th><th class="text-end">Liters</th></tr></thead>
-                    <tbody>
-                        {% for row in profitable %}
-                        <tr>
-                            <td>{{ row.name }}</td>
-                            <td class="text-end text-success">{{ row.profit | money }}</td>
-                            <td class="text-end">{{ row.liters | num(2) }}</td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="3" class="text-muted-custom">No sales in this period.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            {% if profitable %}
+            <ol class="rank-list">
+                {% for row in profitable %}
+                <li>
+                    <span class="rank-no">{{ loop.index }}</span>
+                    <div>
+                        <div class="rank-top">
+                            <span>{{ row.name }}</span>
+                            <strong class="{% if row.profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ row.profit | money }}</strong>
+                        </div>
+                        <div class="rank-track profit"><i style="width: {{ ((row.profit / profit_max * 100) if profit_max and row.profit > 0 else 0) | round(1) }}%"></i></div>
+                        <p class="rank-sub">{{ row.liters | num(2) }} · sale {{ row.sale | money }}</p>
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="rank-empty">No sales in this period.</p>
+            {% endif %}
         </div>
     </div>
     <div class="col-lg-4">
@@ -305,22 +455,22 @@
                 <h2 class="panel-title mb-0">Bought the most</h2>
                 <p class="panel-subtitle mb-0">Customer sale amount</p>
             </div>
-            <div class="table-responsive">
-                <table class="table table-custom mb-0">
-                    <thead><tr><th>Customer</th><th class="text-end">Sales</th><th class="text-end">Amount</th></tr></thead>
-                    <tbody>
-                        {% for row in top_buyers %}
-                        <tr>
-                            <td>{{ row.name }}</td>
-                            <td class="text-end">{{ row.count }}</td>
-                            <td class="text-end">{{ row.amount | money }}</td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="3" class="text-muted-custom">No customer sales in this period.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            {% if top_buyers %}
+            <ol class="rank-list">
+                {% for row in top_buyers %}
+                <li>
+                    <span class="rank-no">{{ loop.index }}</span>
+                    <div>
+                        <div class="rank-top"><span>{{ row.name }}</span><strong>{{ row.amount | money }}</strong></div>
+                        <div class="rank-track"><i style="width: {{ ((row.amount / buyer_max * 100) if buyer_max else 0) | round(1) }}%"></i></div>
+                        <p class="rank-sub">{{ row.count }} sale{{ 's' if row.count != 1 else '' }}{% if row.liters %} · {{ row.liters | num(2) }}{% endif %}</p>
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="rank-empty">No customer sales in this period.</p>
+            {% endif %}
         </div>
     </div>
     <div class="col-lg-4">
@@ -329,24 +479,25 @@
                 <h2 class="panel-title mb-0">Pay us most often</h2>
                 <p class="panel-subtitle mb-0">Payment count and amount recovered</p>
             </div>
-            <div class="table-responsive">
-                <table class="table table-custom mb-0">
-                    <thead><tr><th>Customer</th><th class="text-end">Payments</th><th class="text-end">Amount</th></tr></thead>
-                    <tbody>
-                        {% for row in frequent_payers %}
-                        <tr>
-                            <td>{{ row.name }}</td>
-                            <td class="text-end">{{ row.count }}</td>
-                            <td class="text-end text-success">{{ row.amount | money }}</td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="3" class="text-muted-custom">No payments in this period.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            {% if frequent_payers %}
+            <ol class="rank-list">
+                {% for row in frequent_payers %}
+                <li>
+                    <span class="rank-no">{{ loop.index }}</span>
+                    <div>
+                        <div class="rank-top"><span>{{ row.name }}</span><strong class="text-success">{{ row.amount | money }}</strong></div>
+                        <div class="rank-track pay"><i style="width: {{ ((row.count / pay_max * 100) if pay_max else 0) | round(1) }}%"></i></div>
+                        <p class="rank-sub">{{ row.count }} payment{{ 's' if row.count != 1 else '' }}</p>
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="rank-empty">No payments in this period.</p>
+            {% endif %}
         </div>
     </div>
+</div>
 </div>
 
 <script type="application/json" id="reportSaleMix-json">{{ sale_mix | tojson }}</script>
