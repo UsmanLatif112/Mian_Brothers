@@ -761,9 +761,367 @@ def chart_data():
     return jsonify(_build_meter_trend(start, end))
 
 
+def _bucket_amounts(day_map, start, end, label, color):
+    """Line series. Daily up to 62 days, otherwise one point per month."""
+    span = (end - start).days + 1
+    labels = []
+    values = []
+    if span <= 62:
+        cursor = start
+        points = 0
+        while cursor <= end and points < 62:
+            labels.append(cursor.strftime('%b %d'))
+            values.append(round(float(day_map.get(cursor, 0.0)), 2))
+            cursor += timedelta(days=1)
+            points += 1
+    else:
+        buckets = {}
+        for day, amount in day_map.items():
+            if day < start or day > end:
+                continue
+            key = (day.year, day.month)
+            buckets[key] = buckets.get(key, 0.0) + float(amount or 0)
+        for key in sorted(buckets):
+            labels.append(datetime(key[0], key[1], 1).strftime('%b %Y'))
+            values.append(round(buckets[key], 2))
+    return {
+        'labels': labels,
+        'datasets': [{'label': label, 'data': values, 'borderColor': color}],
+    }
+
+
+def _current_stock_value():
+    """Live tank and shop stock at FIFO cost. Same figure as the dashboard."""
+    from app.models import StockBatch
+
+    today = business_today()
+    inventory_items = apply_agency_filter(
+        Inventory.query.options(joinedload(Inventory.fuel_type)),
+        Inventory,
+    ).all()
+    other_items = apply_agency_filter(OtherItem.query, OtherItem).filter(
+        db.or_(OtherItem.quantity > 0, OtherItem.liters > 0)
+    ).all()
+    batch_rows = apply_agency_filter(
+        StockBatch.query.options(
+            joinedload(StockBatch.fuel_type),
+            joinedload(StockBatch.other_item),
+        ).filter(StockBatch.qty_remaining > 0),
+        StockBatch,
+    ).all()
+    total = sum(float(b.qty_remaining or 0) * float(b.unit_cost or 0) for b in batch_rows)
+    petrol_liters = diesel_liters = 0.0
+    for inv in inventory_items:
+        name = (inv.fuel_type.name if inv.fuel_type else '').lower()
+        liters = float(inv.current_stock_liters or 0)
+        if 'petrol' in name:
+            petrol_liters += liters
+        elif 'diesel' in name:
+            diesel_liters += liters
+    if total <= 0:
+        fuel_cost_as_of = _fuel_cost_timeline(today)
+        for inv in inventory_items:
+            liters = float(inv.current_stock_liters or 0)
+            if liters <= 0:
+                continue
+            total += liters * float(fuel_cost_as_of(inv.fuel_type_id, today) or 0)
+        for item in other_items:
+            cost = float(item.cost_price or 0)
+            qty = float(item.liters or 0) if item.tracks_liters() else float(item.quantity or 0)
+            if qty > 0:
+                total += qty * cost
+    return {
+        'value': round(total, 2),
+        'petrol_liters': petrol_liters,
+        'diesel_liters': diesel_liters,
+    }
+
+
+def _report_page(period, start, end):
+    """KPIs and charts for the reports screen. Period figures follow the filter.
+    Vendor payable, customer receivable, stock value, and cash in hand are live."""
+    from app.utils import is_salary_payment_note
+    from app.vendors.service import (
+        purchase_log_total, counts_toward_purchase_kpis, purchase_log_payment_status,
+    )
+
+    stats = compute_period_stats(start, end, _models_ns(), include_opening_credit=False)
+    trend = _build_meter_trend(start, end)
+
+    purchase_days = {}
+    for log in stats.get('purchase_logs') or []:
+        if not counts_toward_purchase_kpis(log):
+            continue
+        day = _as_plain_date(getattr(log, 'entry_date', None))
+        if day is None:
+            continue
+        purchase_days[day] = purchase_days.get(day, 0.0) + purchase_log_total(log)
+    for entry in stats.get('legacy_stock_entries') or []:
+        day = _as_plain_date(getattr(entry, 'entry_date', None))
+        if day is None:
+            continue
+        purchase_days[day] = purchase_days.get(day, 0.0) + (
+            float(entry.cost_per_liter or 0) * float(entry.liters_added or 0)
+        )
+
+    items = {}
+    for reading in stats.get('meter_rows') or []:
+        liters = float(reading.liters_sold or 0)
+        if liters <= 0:
+            continue
+        name = reading.fuel_type.name if reading.fuel_type else 'Fuel'
+        rate = float(reading.sale_rate or 0)
+        sale = liters * rate
+        cost = float(reading.cogs_total or 0)
+        row = items.setdefault(name, {'name': name, 'sale': 0.0, 'cost': 0.0, 'profit': 0.0, 'liters': 0.0})
+        row['sale'] += sale
+        row['cost'] += cost
+        row['profit'] += sale - cost
+        row['liters'] += liters
+    for entry in stats.get('entries') or []:
+        if (entry.entry_type or 'sale').lower() != 'sale' or not entry.other_item_id:
+            continue
+        name = entry.item_name or 'Item'
+        sale = float(entry.amount or 0)
+        cost = float(entry.cogs_total or 0)
+        qty = float(entry.liters or 0)
+        row = items.setdefault(name, {'name': name, 'sale': 0.0, 'cost': 0.0, 'profit': 0.0, 'liters': 0.0})
+        row['sale'] += sale
+        row['cost'] += cost
+        row['profit'] += sale - cost
+        row['liters'] += qty
+    profitable = sorted(items.values(), key=lambda row: row['profit'], reverse=True)[:8]
+
+    buyers = {}
+    for entry in stats.get('entries') or []:
+        if (entry.entry_type or 'sale').lower() != 'sale' or not entry.customer_id:
+            continue
+        name = entry.customer.name if entry.customer else 'Customer'
+        row = buyers.setdefault(entry.customer_id, {'name': name, 'amount': 0.0, 'count': 0, 'liters': 0.0})
+        row['amount'] += float(entry.amount or 0)
+        row['count'] += 1
+        row['liters'] += float(entry.liters or 0)
+    top_buyers = sorted(buyers.values(), key=lambda row: row['amount'], reverse=True)[:8]
+
+    payers = {}
+    for pay in stats.get('payments') or []:
+        if is_salary_payment_note(getattr(pay, 'note', None)) or not pay.customer_id:
+            continue
+        name = pay.customer.name if pay.customer else 'Customer'
+        row = payers.setdefault(pay.customer_id, {'name': name, 'amount': 0.0, 'count': 0})
+        row['amount'] += float(pay.amount_paid or 0)
+        row['count'] += 1
+    frequent_payers = sorted(payers.values(), key=lambda row: (row['count'], row['amount']), reverse=True)[:8]
+
+    payable = float(
+        apply_agency_filter(
+            Vendor.query.with_entities(func.coalesce(func.sum(Vendor.current_balance_payable), 0))
+            .filter(Vendor.current_balance_payable > 0),
+            Vendor,
+        ).scalar() or 0
+    )
+    receivable = float(
+        apply_agency_filter(
+            Customer.query.with_entities(func.coalesce(func.sum(Customer.current_balance_due), 0))
+            .filter(Customer.current_balance_due > 0),
+            Customer,
+        ).scalar() or 0
+    )
+
+    cash_liters = float(stats['petrol_cash_liters']) + float(stats['diesel_cash_liters'])
+    credit_liters = float(stats['petrol_credit_liters']) + float(stats['diesel_credit_liters'])
+    gross_expense = float(stats['expense_total'])
+    net_expense = float(stats['expense_net'])
+    purchases = float(stats['purchase_total'])
+    purchases_paid = float(stats['purchase_paid_total'])
+    purchases_credit = max(purchases - purchases_paid, 0.0)
+
+    def _product(name, unit='L'):
+        return {
+            'name': name,
+            'unit': unit,
+            'liters': 0.0,
+            'amount': 0.0,
+            'cash_liters': 0.0,
+            'cash_amount': 0.0,
+            'credit_liters': 0.0,
+            'credit_amount': 0.0,
+        }
+
+    sale_products = [
+        {
+            **_product('Petrol'),
+            'liters': float(stats['petrol_liters']),
+            'amount': float(stats['petrol_sale']),
+            'cash_liters': float(stats['petrol_cash_liters']),
+            'cash_amount': float(stats['petrol_cash']),
+            'credit_liters': float(stats['petrol_credit_liters']),
+            'credit_amount': float(stats['petrol_credit']),
+        },
+        {
+            **_product('Diesel'),
+            'liters': float(stats['diesel_liters']),
+            'amount': float(stats['diesel_sale']),
+            'cash_liters': float(stats['diesel_cash_liters']),
+            'cash_amount': float(stats['diesel_cash']),
+            'credit_liters': float(stats['diesel_credit_liters']),
+            'credit_amount': float(stats['diesel_credit']),
+        },
+    ]
+    other_products = {}
+    for entry in stats.get('entries') or []:
+        if (entry.entry_type or 'sale').lower() != 'sale' or not entry.other_item_id:
+            continue
+        item = entry.other_item
+        unit = 'L' if item and item.tracks_liters() else 'pcs'
+        name = entry.item_name or 'Item'
+        row = other_products.get(entry.other_item_id)
+        if row is None:
+            row = _product(name, unit)
+            other_products[entry.other_item_id] = row
+        amt = float(entry.amount or 0)
+        paid = float(entry.amount_paid or 0)
+        if (entry.payment_status or 'unpaid').lower() == 'paid' and paid <= 0:
+            paid = amt
+        credit = max(amt - paid, 0.0)
+        qty = float(entry.liters or 0)
+        paid_qty = qty if amt <= 0 or paid >= amt else qty * (paid / amt)
+        credit_qty = 0.0 if amt <= 0 else qty * (credit / amt)
+        row['liters'] += qty
+        row['amount'] += amt
+        row['cash_liters'] += paid_qty
+        row['cash_amount'] += paid
+        row['credit_liters'] += credit_qty
+        row['credit_amount'] += credit
+    sale_products.extend(sorted(other_products.values(), key=lambda row: row['amount'], reverse=True))
+
+    other_liter_rows = [row for row in other_products.values() if row['unit'] == 'L']
+    all_sale = _product('All')
+    all_sale['liters'] = (
+        float(stats['petrol_liters']) + float(stats['diesel_liters'])
+        + sum(row['liters'] for row in other_liter_rows)
+    )
+    all_sale['amount'] = float(stats['total_sale'])
+    all_sale['cash_liters'] = cash_liters + sum(row['cash_liters'] for row in other_liter_rows)
+    all_sale['cash_amount'] = (
+        float(stats['petrol_cash']) + float(stats['diesel_cash']) + float(stats['other_cash'])
+    )
+    all_sale['credit_liters'] = credit_liters + sum(row['credit_liters'] for row in other_liter_rows)
+    all_sale['credit_amount'] = (
+        float(stats['petrol_credit']) + float(stats['diesel_credit']) + float(stats['other_credit'])
+    )
+    piece_qty = sum(row['liters'] for row in other_products.values() if row['unit'] == 'pcs')
+
+    purchase_products = {}
+    for log in stats.get('purchase_logs') or []:
+        if not counts_toward_purchase_kpis(log):
+            continue
+        name = log.fuel_type.name if log.fuel_type else (log.item_name or 'Item')
+        unit = 'pcs' if (log.liters is None and int(log.quantity or 0) > 0 and (log.category or '') not in ('fuel', 'ft_mobile')) else 'L'
+        key = (name, unit)
+        row = purchase_products.get(key)
+        if row is None:
+            row = {'name': name, 'unit': unit, 'liters': 0.0, 'amount': 0.0, 'paid': 0.0, 'credit': 0.0}
+            purchase_products[key] = row
+        amt = purchase_log_total(log)
+        qty = float(log.liters or 0) if unit == 'L' else float(log.quantity or 0)
+        paid = amt if purchase_log_payment_status(log) == 'paid' else 0.0
+        row['liters'] += qty
+        row['amount'] += amt
+        row['paid'] += paid
+        row['credit'] += amt - paid
+    purchase_rows = sorted(purchase_products.values(), key=lambda row: row['amount'], reverse=True)
+
+    stock = _current_stock_value()
+    today = business_today()
+    if start == today and end == today:
+        current_cash = float(stats['remaining_balance'])
+    else:
+        today_stats = compute_period_stats(today, today, _models_ns(), include_opening_credit=False)
+        current_cash = float(today_stats['remaining_balance'])
+
+    return {
+        'stats': stats,
+        'purchases': purchases,
+        'gross_expense': gross_expense,
+        'net_expense': net_expense,
+        'gross_profit': float(trend['total_gross']),
+        'net_profit': float(trend['total_profit']),
+        'total_earn': float(stats['total_sale']),
+        'total_spend': purchases + net_expense,
+        'amount_taken': float(stats['cash_taken_total']),
+        'current_cash': current_cash,
+        'credit_sales': float(stats['period_credit_sales']),
+        'recovered': float(stats['payments_total']),
+        'payable': payable,
+        'receivable': receivable,
+        'purchases_paid': purchases_paid,
+        'purchases_credit': purchases_credit,
+        'paid_to_vendors': float(stats['vendor_payments_total']),
+        'stock_value': stock['value'],
+        'stock_petrol_liters': stock['petrol_liters'],
+        'stock_diesel_liters': stock['diesel_liters'],
+        'sale_products': sale_products,
+        'all_sale': all_sale,
+        'piece_qty': piece_qty,
+        'purchase_rows': purchase_rows,
+        'petrol_liters': float(stats['petrol_liters']),
+        'diesel_liters': float(stats['diesel_liters']),
+        'petrol_cash_liters': float(stats['petrol_cash_liters']),
+        'petrol_credit_liters': float(stats['petrol_credit_liters']),
+        'diesel_cash_liters': float(stats['diesel_cash_liters']),
+        'diesel_credit_liters': float(stats['diesel_credit_liters']),
+        'cash_liters': cash_liters,
+        'credit_liters': credit_liters,
+        'best_item': profitable[0] if profitable else None,
+        'profitable': profitable,
+        'top_buyers': top_buyers,
+        'frequent_payers': frequent_payers,
+        'purchase_chart': _bucket_amounts(purchase_days, start, end, 'Purchases', '#b45309'),
+        'profit_chart': {
+            'labels': trend['labels'],
+            'datasets': [
+                {'label': 'Gross profit', 'data': trend['gross_trend'], 'borderColor': '#008060'},
+                {'label': 'Net profit', 'data': trend['profit_trend'], 'borderColor': '#0891b2'},
+            ],
+        },
+        'expense_chart': {
+            'labels': trend['labels'],
+            'datasets': [
+                {'label': 'Net expense', 'data': trend['expense_trend'], 'borderColor': '#dc2626'},
+            ],
+        },
+        'sale_mix': {
+            'labels': ['Cash sales', 'Credit sales'],
+            'values': [
+                round(float(stats['petrol_cash']) + float(stats['diesel_cash']) + float(stats['other_cash']), 2),
+                round(float(stats['period_credit_sales']), 2),
+            ],
+        },
+        'liter_mix': {
+            'labels': ['Petrol', 'Diesel'],
+            'values': [round(float(stats['petrol_liters']), 2), round(float(stats['diesel_liters']), 2)],
+        },
+    }
+
+
 @dashboard_bp.route('/reports', methods=['GET', 'POST'])
 @login_required
 def reports():
+    if request.method == 'GET' and request.args.get('export') != 'csv':
+        if not request.args:
+            return redirect(url_for('dashboard.reports', period='all'))
+        period, start, end = parse_period(request.args, default_period='all')
+        page = _report_page(period, start, end)
+        return render_template(
+            'dashboard/reports.html',
+            period=period,
+            start_date=start.isoformat(),
+            end_date=end.isoformat(),
+            period_choices=PERIOD_CHOICES,
+            **page,
+        )
+
     report_type = request.form.get('report_type', 'sales')
     start_date_str = request.form.get('start_date', '')
     end_date_str = request.form.get('end_date', '')
@@ -915,11 +1273,9 @@ def reports():
         )
         return response
 
-    return render_template(
-        'dashboard/reports.html',
-        report_type=report_type,
+    return redirect(url_for(
+        'dashboard.reports',
+        period='custom',
         start_date=start_date_str,
         end_date=end_date_str,
-        headers=headers,
-        preview_data=preview_data,
-    )
+    ))

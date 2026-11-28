@@ -224,6 +224,11 @@
                 <i class="bi bi-tags"></i><span>Pricing</span>
             </a>
             {% endif %}
+            {% if can_access_module('reports') %}
+            <a class="sidebar-link {% if request.endpoint == 'dashboard.reports' %}active{% endif %}" href="{{ url_for('dashboard.reports', period='all') }}" data-search-label="Reports">
+                <i class="bi bi-bar-chart-line"></i><span>Reports</span>
+            </a>
+            {% endif %}
             {% if is_super_admin or is_agency_admin %}
             <a class="sidebar-link {% if request.blueprint == 'backup' %}active{% endif %}" href="{{ url_for('backup.index') }}" data-search-label="Backup">
                 <i class="bi bi-cloud-arrow-up"></i><span>Backup</span>

@@ -2,135 +2,381 @@
 
 {% block title %}Reports — OctaneFlow{% endblock %}
 
+{% block topbar_filters %}
+{% include "partials/topbar_period_filter.html" %}
+{% endblock %}
+
 {% block content %}
 <header class="page-header mb-4">
     <div class="page-header-row">
         <div class="page-header-text">
             <p class="page-eyebrow">Analytics</p>
-            <h1 class="page-title">Reports & Exporter</h1>
+            <h1 class="page-title">Reports</h1>
+            <p class="text-muted-custom mb-0">{{ start_date }} → {{ end_date }}</p>
         </div>
     </div>
 </header>
 
-<div class="reports-layout">
-    <div>
-        <div class="card card-premium">
-            <div class="card-header-premium">
-                <h2 class="panel-title mb-0">Report Queries</h2>
-                <p class="panel-subtitle mb-0">Select type and date range</p>
-            </div>
-            <div class="card-body card-body-premium">
-                <form action="{{ url_for('dashboard.reports') }}" method="POST" id="reportsForm">
-                    <div class="mb-3">
-                        <label for="report_type" class="form-label form-label-custom">Select Report Type</label>
-                        <select class="form-select form-control-custom" id="report_type" name="report_type" required>
-                            <option value="sales" {% if report_type == 'sales' %}selected{% endif %}>Sales History Log</option>
-                            <option value="profit" {% if report_type == 'profit' %}selected{% endif %}>Margin & Profits Summary</option>
-                            <option value="stock" {% if report_type == 'stock' %}selected{% endif %}>Stock Deliveries Log</option>
-                            <option value="due" {% if report_type == 'due' %}selected{% endif %}>Customer Due Balances</option>
-                            <option value="expense" {% if report_type == 'expense' %}selected{% endif %}>Expenses Ledger</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3 date-range-group">
-                        <label for="start_date" class="form-label form-label-custom">Start Date</label>
-                        <input type="date" class="form-control form-control-custom" id="start_date" name="start_date" value="{{ start_date }}">
-                    </div>
-                    
-                    <div class="mb-3 date-range-group">
-                        <label for="end_date" class="form-label form-label-custom">End Date</label>
-                        <input type="date" class="form-control form-control-custom" id="end_date" name="end_date" value="{{ end_date }}">
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary-custom w-100 mb-2">
-                        <i class="bi bi-play-circle me-1"></i> Run Report Query
-                    </button>
-                    
-                    <button type="button" id="exportCSVBtn" class="btn btn-outline-secondary w-100 border-0">
-                        <i class="bi bi-download me-1"></i> Download CSV File
-                    </button>
-                </form>
-            </div>
-        </div>
+<section class="kpi-grid kpi-grid-main mb-4" aria-label="Report totals">
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-cart-plus"></i></span><span class="kpi-label">Purchases</span></div>
+        <div class="kpi-value">{{ purchases | money }}</div>
+        <div class="kpi-meta">Stock bought in this period</div>
     </div>
-    
-    <div>
-        <div class="card card-premium">
-            <div class="card-header-premium d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                    <h2 class="panel-title mb-0">Report Preview</h2>
-                    <p class="panel-subtitle mb-0">Live data preview before export</p>
-                </div>
-                <span class="badge badge-custom badge-staff">{{ preview_data | length }} rows</span>
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-receipt"></i></span><span class="kpi-label">Gross expense</span></div>
+        <div class="kpi-value text-danger">{{ gross_expense | money }}</div>
+        <div class="kpi-meta">Expense paid out</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-receipt-cutoff"></i></span><span class="kpi-label">Net expense</span></div>
+        <div class="kpi-value text-danger">{{ net_expense | money }}</div>
+        <div class="kpi-meta">Gross expense minus settles</div>
+    </div>
+    <div class="kpi-card kpi-ft">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-pie-chart"></i></span><span class="kpi-label">Gross profit</span></div>
+        <div class="kpi-value {% if gross_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ gross_profit | money }}</div>
+        <div class="kpi-meta">Sale − cost of goods</div>
+    </div>
+    <div class="kpi-card kpi-profit">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-trophy"></i></span><span class="kpi-label">Net profit</span></div>
+        <div class="kpi-value {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ net_profit | money }}</div>
+        <div class="kpi-meta">Gross profit − net expense</div>
+    </div>
+    <div class="kpi-card kpi-total">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></span><span class="kpi-label">Total earn</span></div>
+        <div class="kpi-value">{{ total_earn | money }}</div>
+        <div class="kpi-meta">Petrol + diesel + other sales</div>
+    </div>
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-cash-stack"></i></span><span class="kpi-label">Total spend</span></div>
+        <div class="kpi-value">{{ total_spend | money }}</div>
+        <div class="kpi-meta">Purchases + net expense</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-cash-coin"></i></span><span class="kpi-label">Amount taken</span></div>
+        <div class="kpi-value text-danger">{{ amount_taken | money }}</div>
+        <div class="kpi-meta">Cash taken from the till in this period</div>
+    </div>
+    <div class="kpi-card kpi-cash">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-wallet2"></i></span><span class="kpi-label">Current cash in hand</span></div>
+        <div class="kpi-value {% if current_cash >= 0 %}text-success{% else %}text-danger{% endif %}">{{ current_cash | money }}</div>
+        <div class="kpi-meta">Till after amount taken, as of today</div>
+    </div>
+    <div class="kpi-card kpi-credit">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-credit-card-2-front"></i></span><span class="kpi-label">Credit sales</span></div>
+        <div class="kpi-value text-warning">{{ credit_sales | money }}</div>
+        <div class="kpi-meta">Sales we put on credit in this period</div>
+    </div>
+    <div class="kpi-card kpi-cash">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-arrow-down-circle"></i></span><span class="kpi-label">Recovered</span></div>
+        <div class="kpi-value text-success">{{ recovered | money }}</div>
+        <div class="kpi-meta">Payments received from customers</div>
+    </div>
+    <div class="kpi-card kpi-credit">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-person-lines-fill"></i></span><span class="kpi-label">Current credit to receive</span></div>
+        <div class="kpi-value text-warning">{{ receivable | money }}</div>
+        <div class="kpi-meta">Total customers still owe today</div>
+    </div>
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-truck"></i></span><span class="kpi-label">Still to pay vendors</span></div>
+        <div class="kpi-value">{{ payable | money }}</div>
+        <div class="kpi-meta">Total we still owe vendors today</div>
+    </div>
+</section>
+
+<section class="kpi-grid kpi-grid-main mb-4" aria-label="Stock and vendors">
+    <div class="kpi-card kpi-total">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-box-seam"></i></span><span class="kpi-label">Current stock value</span></div>
+        <div class="kpi-value">{{ stock_value | money }}</div>
+        <div class="kpi-meta">Petrol {{ stock_petrol_liters | num(2) }} L · Diesel {{ stock_diesel_liters | num(2) }} L in tank today</div>
+    </div>
+    <div class="kpi-card kpi-purchase">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-cart-plus"></i></span><span class="kpi-label">Stock purchased</span></div>
+        <div class="kpi-value">{{ purchases | money }}</div>
+        <div class="kpi-meta">All stock bought in this period</div>
+    </div>
+    <div class="kpi-card kpi-cash">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-check2-circle"></i></span><span class="kpi-label">Purchased paid</span></div>
+        <div class="kpi-value text-success">{{ purchases_paid | money }}</div>
+        <div class="kpi-meta">Stock bought and paid in this period</div>
+    </div>
+    <div class="kpi-card kpi-credit">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-hourglass-split"></i></span><span class="kpi-label">Purchased on credit</span></div>
+        <div class="kpi-value text-warning">{{ purchases_credit | money }}</div>
+        <div class="kpi-meta">Stock bought on credit in this period</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-cash"></i></span><span class="kpi-label">Paid to vendors</span></div>
+        <div class="kpi-value">{{ paid_to_vendors | money }}</div>
+        <div class="kpi-meta">Vendor payments in this period</div>
+    </div>
+</section>
+
+<section class="kpi-grid kpi-grid-main mb-4" aria-label="Liters">
+    <div class="kpi-card kpi-total">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-collection"></i></span><span class="kpi-label">All sales</span></div>
+        <div class="kpi-value">{{ all_sale.amount | money }}</div>
+        <div class="kpi-meta">{{ all_sale.liters | num(2) }} L{% if piece_qty %} · {{ piece_qty | num(0) }} pcs{% endif %} · Cash {{ all_sale.cash_amount | money }} · Credit {{ all_sale.credit_amount | money }}</div>
+    </div>
+    <div class="kpi-card kpi-petrol">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-fuel-pump-fill"></i></span><span class="kpi-label">Petrol</span></div>
+        <div class="kpi-value">{{ stats.petrol_sale | money }}</div>
+        <div class="kpi-meta">{{ petrol_liters | num(2) }} L · Cash {{ petrol_cash_liters | num(2) }} L {{ stats.petrol_cash | money }} · Credit {{ petrol_credit_liters | num(2) }} L {{ stats.petrol_credit | money }}</div>
+    </div>
+    <div class="kpi-card kpi-diesel">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-fuel-pump"></i></span><span class="kpi-label">Diesel</span></div>
+        <div class="kpi-value">{{ stats.diesel_sale | money }}</div>
+        <div class="kpi-meta">{{ diesel_liters | num(2) }} L · Cash {{ diesel_cash_liters | num(2) }} L {{ stats.diesel_cash | money }} · Credit {{ diesel_credit_liters | num(2) }} L {{ stats.diesel_credit | money }}</div>
+    </div>
+    <div class="kpi-card kpi-profit">
+        <div class="kpi-card-top"><span class="kpi-icon"><i class="bi bi-star"></i></span><span class="kpi-label">Best item</span></div>
+        <div class="kpi-value">{% if best_item %}{{ best_item.profit | money }}{% else %}—{% endif %}</div>
+        <div class="kpi-meta">{% if best_item %}{{ best_item.name }} · sale {{ best_item.sale | money }}{% else %}No sales in this period{% endif %}</div>
+    </div>
+</section>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card card-premium list-panel">
+            <div class="card-header-premium">
+                <h2 class="panel-title mb-0">Sales by product</h2>
+                <p class="panel-subtitle mb-0">Liters and amount. All includes petrol, diesel, and every other item.</p>
             </div>
-            
-            <div class="table-responsive table-scroll">
-                <table class="table table-custom table-hover mb-0">
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
                     <thead>
                         <tr>
-                            {% for header in headers %}
-                            <th>{{ header }}</th>
-                            {% endfor %}
+                            <th>Product</th>
+                            <th class="text-end">Liters / qty</th>
+                            <th class="text-end">Sale</th>
+                            <th class="text-end">Cash qty</th>
+                            <th class="text-end">Cash sale</th>
+                            <th class="text-end">Credit qty</th>
+                            <th class="text-end">Credit sale</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% if preview_data %}
-                            {% for row in preview_data %}
-                            <tr>
-                                {% for cell in row %}
-                                <td class="{% if loop.index == 1 %}fw-semibold{% endif %}">{{ cell }}</td>
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
+                        <tr>
+                            <td><strong>All</strong></td>
+                            <td class="text-end">{{ all_sale.liters | num(2) }} L{% if piece_qty %} · {{ piece_qty | num(0) }} pcs{% endif %}</td>
+                            <td class="text-end">{{ all_sale.amount | money }}</td>
+                            <td class="text-end">{{ all_sale.cash_liters | num(2) }} L</td>
+                            <td class="text-end">{{ all_sale.cash_amount | money }}</td>
+                            <td class="text-end">{{ all_sale.credit_liters | num(2) }} L</td>
+                            <td class="text-end text-warning">{{ all_sale.credit_amount | money }}</td>
+                        </tr>
+                        {% for row in sale_products %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            <td class="text-end">{{ row.liters | num(2) }} {{ row.unit }}</td>
+                            <td class="text-end">{{ row.amount | money }}</td>
+                            <td class="text-end">{{ row.cash_liters | num(2) }} {{ row.unit }}</td>
+                            <td class="text-end">{{ row.cash_amount | money }}</td>
+                            <td class="text-end">{{ row.credit_liters | num(2) }} {{ row.unit }}</td>
+                            <td class="text-end text-warning">{{ row.credit_amount | money }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card card-premium list-panel">
+            <div class="card-header-premium">
+                <h2 class="panel-title mb-0">Purchases by product</h2>
+                <p class="panel-subtitle mb-0">Stock bought in this period, split into paid and on credit.</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Purchased</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">On credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>All</strong></td>
+                            <td class="text-end">—</td>
+                            <td class="text-end">{{ purchases | money }}</td>
+                            <td class="text-end text-success">{{ purchases_paid | money }}</td>
+                            <td class="text-end text-warning">{{ purchases_credit | money }}</td>
+                        </tr>
+                        {% for row in purchase_rows %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            <td class="text-end">{{ row.liters | num(2) }} {{ row.unit }}</td>
+                            <td class="text-end">{{ row.amount | money }}</td>
+                            <td class="text-end text-success">{{ row.paid | money }}</td>
+                            <td class="text-end text-warning">{{ row.credit | money }}</td>
+                        </tr>
                         {% else %}
-                            <tr>
-                                <td colspan="{{ headers | length if headers else 1 }}" class="empty-state text-center py-5">
-                                    <div class="empty-state-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
-                                    <p class="text-muted-custom mb-0">No records found for the selected criteria.</p>
-                                </td>
-                            </tr>
-                        {% endif %}
+                        <tr><td colspan="5" class="text-muted-custom">No stock purchased in this period.</td></tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        {% with chart_id='reportPurchaseChart', chart_title='Purchases', chart_subtitle='Cost of stock bought', chart_series=purchase_chart %}
+        {% include "partials/page_line_chart.html" %}
+        {% endwith %}
+    </div>
+    <div class="col-12">
+        {% with chart_id='reportProfitChart', chart_title='Profit', chart_subtitle='Gross profit and net profit', chart_series=profit_chart %}
+        {% include "partials/page_line_chart.html" %}
+        {% endwith %}
+    </div>
+    <div class="col-12">
+        {% with chart_id='reportExpenseChart', chart_title='Net expense', chart_subtitle='Expense after settles', chart_series=expense_chart %}
+        {% include "partials/page_line_chart.html" %}
+        {% endwith %}
+    </div>
+</div>
+
+<section class="chart-insight-grid mb-4" aria-label="Mix charts">
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Cash and credit</h2>
+                    <p class="chart-card-sub">Sales money in this period</p>
+                </div>
+                <ul class="chart-legend" id="legendSaleMix"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieSaleMix"></canvas></div>
+            </div>
+        </div>
+    </article>
+    <article class="chart-card chart-card--split">
+        <div class="chart-split">
+            <div class="chart-split-data">
+                <div class="chart-card-head">
+                    <h2 class="chart-card-title">Fuel liters</h2>
+                    <p class="chart-card-sub">Petrol and diesel sold</p>
+                </div>
+                <ul class="chart-legend" id="legendLiterMix"></ul>
+            </div>
+            <div class="chart-split-viz">
+                <div class="chart-canvas-wrap is-pie"><canvas id="pieLiterMix"></canvas></div>
+            </div>
+        </div>
+    </article>
+</section>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card card-premium list-panel h-100">
+            <div class="card-header-premium">
+                <h2 class="panel-title mb-0">Most profitable</h2>
+                <p class="panel-subtitle mb-0">Sale minus cost</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>Item</th><th class="text-end">Profit</th><th class="text-end">Liters</th></tr></thead>
+                    <tbody>
+                        {% for row in profitable %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            <td class="text-end text-success">{{ row.profit | money }}</td>
+                            <td class="text-end">{{ row.liters | num(2) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-muted-custom">No sales in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card card-premium list-panel h-100">
+            <div class="card-header-premium">
+                <h2 class="panel-title mb-0">Bought the most</h2>
+                <p class="panel-subtitle mb-0">Customer sale amount</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>Customer</th><th class="text-end">Sales</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for row in top_buyers %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            <td class="text-end">{{ row.count }}</td>
+                            <td class="text-end">{{ row.amount | money }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-muted-custom">No customer sales in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card card-premium list-panel h-100">
+            <div class="card-header-premium">
+                <h2 class="panel-title mb-0">Pay us most often</h2>
+                <p class="panel-subtitle mb-0">Payment count and amount recovered</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0">
+                    <thead><tr><th>Customer</th><th class="text-end">Payments</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for row in frequent_payers %}
+                        <tr>
+                            <td>{{ row.name }}</td>
+                            <td class="text-end">{{ row.count }}</td>
+                            <td class="text-end text-success">{{ row.amount | money }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-muted-custom">No payments in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="reportSaleMix-json">{{ sale_mix | tojson }}</script>
+<script type="application/json" id="reportLiterMix-json">{{ liter_mix | tojson }}</script>
 <script>
-    (function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
-        const reportTypeSelect = document.getElementById('report_type');
-        const dateRangeInputs = document.querySelectorAll('.date-range-group');
-        const exportCSVBtn = document.getElementById('exportCSVBtn');
-        const form = document.getElementById('reportsForm');
-        
-        // Hide date fields if report type is customer due aging (which doesn't require date filters)
-        const toggleDateVisibility = () => {
-            if (reportTypeSelect.value === 'due') {
-                dateRangeInputs.forEach(el => el.style.display = 'none');
-            } else {
-                dateRangeInputs.forEach(el => el.style.display = 'block');
-            }
-        };
-        
-        reportTypeSelect.addEventListener('change', toggleDateVisibility);
-        toggleDateVisibility(); // Initial check
-        
-        // CSV Export handler
-        exportCSVBtn.addEventListener('click', () => {
-            const formData = new FormData(form);
-            const queryParams = new URLSearchParams();
-            
-            queryParams.append('export', 'csv');
-            for (const [key, value] of formData.entries()) {
-                queryParams.append(key, value);
-            }
-            
-            // Redirect to download trigger
-            window.location.href = `{{ url_for('dashboard.reports') }}?${queryParams.toString()}`;
-        });
-    });
+(function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); })(function () {
+    const boot = () => {
+        if (!window.OctaneCharts || !window.Chart) return setTimeout(boot, 40);
+        const sale = OctaneCharts.parseJsonScript('reportSaleMix-json') || {};
+        const liters = OctaneCharts.parseJsonScript('reportLiterMix-json') || {};
+        const saleCanvas = document.getElementById('pieSaleMix');
+        const literCanvas = document.getElementById('pieLiterMix');
+        if (saleCanvas) {
+            OctaneCharts.doughnutChart(saleCanvas, {
+                labels: sale.labels || [],
+                values: sale.values || [],
+                legendContainer: document.getElementById('legendSaleMix'),
+                centerText: { title: 'Sales', value: '' },
+            });
+        }
+        if (literCanvas) {
+            OctaneCharts.doughnutChart(literCanvas, {
+                labels: liters.labels || [],
+                values: liters.values || [],
+                legendContainer: document.getElementById('legendLiterMix'),
+                centerText: { title: 'Liters', value: '' },
+            });
+        }
+    };
+    boot();
+});
 </script>
 {% endblock %}
